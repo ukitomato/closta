@@ -4,6 +4,7 @@ import dev.ukitomato.closta.core.models.AgentEvent
 import dev.ukitomato.closta.core.models.ConversationState
 import dev.ukitomato.closta.presenter.tree.JsonBool
 import dev.ukitomato.closta.presenter.tree.JsonObject
+import dev.ukitomato.closta.presenter.tree.JsonRead
 
 /** Where moving a running call to the background is. */
 enum class BackgroundPhase {
@@ -38,17 +39,10 @@ private fun <V> Map<String, V>.newest(): Map<String, V> =
  */
 internal fun OperationRecords.backgroundAsked(input: PresenterInput.ControlRequested): OperationRecords {
     val toolUseId = input.value ?: return this
+    val waiting = BackgroundOffer(BackgroundPhase.WAITING)
     return copy(
         backgroundAsks = (backgroundAsks + (input.requestId to toolUseId)).newest(),
-        backgrounding =
-            (
-                (backgrounding - toolUseId) + (
-                    toolUseId to
-                        BackgroundOffer(
-                            BackgroundPhase.WAITING,
-                        )
-                )
-            ).newest(),
+        backgrounding = ((backgrounding - toolUseId) + (toolUseId to waiting)).newest(),
     )
 }
 
@@ -64,35 +58,44 @@ internal fun OperationRecords.backgroundAnswered(
     id: String,
     event: AgentEvent.ControlResponse,
 ): OperationRecords =
-    backgroundSettled(
-        id,
-        if (event.subtype ==
-            "success"
-        ) {
-            null
-        } else {
-            BackgroundOffer(BackgroundPhase.FAILED, plainSentenceOf(event.error))
-        },
-    )
+    when {
+        event.subtype != "success" -> backgroundSettled(id, refused(event))
+        notMoved(event) -> backgroundSettled(id, null, clear = true)
+        else -> backgroundSettled(id, null)
+    }
+
+private fun refused(event: AgentEvent.ControlResponse) =
+    BackgroundOffer(BackgroundPhase.FAILED, plainSentenceOf(event.error))
 
 /**
- * The request [id] is over. [outcome] goes on its call's line unless a newer request for that call is still waiting
- * (its answer is the one that counts) or the table dropped the call (it is not written back).
+ * Whether a success says the call was not moved (the CLI answers `false` for a call that does not run in front, or not
+ * yet): the response is `false`, or an object whose `backgrounded` is `false`.
+ */
+private fun notMoved(event: AgentEvent.ControlResponse): Boolean {
+    val body = (JsonRead.parse(event.response.text) as? JsonObject)?.get("response")
+    return (body as? JsonBool)?.value == false ||
+        ((body as? JsonObject)?.get("backgrounded") as? JsonBool)?.value == false
+}
+
+/**
+ * The request [id] is over. [outcome] goes on its call's line (with [clear], the line is
+ * cleared) unless a newer request for that call is still waiting (its answer is the one that counts) or the table
+ * dropped the call (it is not written back).
  */
 private fun OperationRecords.backgroundSettled(
     id: String,
     outcome: BackgroundOffer?,
+    clear: Boolean = false,
 ): OperationRecords {
     val toolUseId = backgroundAsks[id] ?: return this
     val rest = backgroundAsks - id
     val settled = copy(backgroundAsks = rest)
     val current = toolUseId in backgrounding && toolUseId !in rest.values
-    return if (outcome == null ||
-        !current
-    ) {
-        settled
-    } else {
-        settled.copy(backgrounding = backgrounding + (toolUseId to outcome))
+    return when {
+        !current -> settled
+        clear -> settled.copy(backgrounding = backgrounding - toolUseId)
+        outcome == null -> settled
+        else -> settled.copy(backgrounding = backgrounding + (toolUseId to outcome))
     }
 }
 
@@ -106,6 +109,8 @@ private const val BASH_TOOL = "Bash"
 internal class BackgroundOffers(
     transcript: Transcript,
     private val live: Boolean,
+    /** The tool use ids of the calls waiting for an answer: they do not run yet, so there is nothing to move. */
+    private val held: Set<String> = emptySet(),
 ) {
     private val asked = transcript.operations.backgrounding
     private val away: Set<String>
@@ -128,6 +133,7 @@ internal class BackgroundOffers(
             !call.streaming &&
             (call.toolName == BASH_TOOL || call.toolName in AGENT_TOOLS) &&
             call.toolUseId !in away &&
+            call.toolUseId !in held &&
             !runsInBackground(call)
 
     private fun runsInBackground(call: ToolCallRecord): Boolean =
@@ -137,9 +143,13 @@ internal class BackgroundOffers(
 /** How many of the newest messages are looked at for a running call: a call in front is part of the turn that runs. */
 private const val RECENT_MESSAGES = 16
 
-/** Whether a call among the newest messages runs in front and can be moved to the background. */
-internal fun hasBackgroundOffer(transcript: Transcript): Boolean {
-    val offers = BackgroundOffers(transcript, live = true)
+/** Whether a call among the newest messages runs in front and can be moved to the background (send all). */
+fun canBackground(
+    transcript: Transcript,
+    conversation: ConversationState,
+    live: Boolean,
+): Boolean {
+    val offers = backgroundOffersOf(transcript, conversation, live, enabled = true)
     return transcript.messages.order
         .asReversed()
         .asSequence()
@@ -154,4 +164,9 @@ internal fun backgroundOffersOf(
     conversation: ConversationState,
     live: Boolean,
     enabled: Boolean,
-): BackgroundOffers = BackgroundOffers(transcript, live && enabled && threadIsRunning(conversation, transcript))
+): BackgroundOffers =
+    BackgroundOffers(
+        transcript,
+        live && enabled && threadIsRunning(conversation, transcript),
+        conversation.pendingApprovals.mapNotNullTo(HashSet()) { it.toolUseId },
+    )

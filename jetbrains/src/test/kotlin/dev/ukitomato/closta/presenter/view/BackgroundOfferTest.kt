@@ -226,4 +226,35 @@ class BackgroundOfferTest {
         val read = none.lines(call("r", "Read", "file_path" to "x"))
         assertFalse(composerState(read.conversation, read.transcript).canBackground)
     }
+
+    @Test
+    fun `type only - a call waiting for an approval is not offered until it is answered`() {
+        val waiting =
+            turn()
+                .lines(call("b", "Bash", "command" to "sleep 9"))
+                .next(PresenterInput.Event(Lines.request("q1", "Bash", "b")))
+        assertNull(waiting.offerOf("b"))
+        assertFalse(composerState(waiting.conversation, waiting.transcript).canBackground)
+    }
+
+    @Test
+    fun `type only - a success that says nothing was moved clears the wait and the offer returns`() {
+        val asked =
+            turn()
+                .lines(call("b", "Bash", "command" to "sleep 9"))
+                .next(PresenterInput.ControlRequested("r1", ControlKind.BACKGROUND, "b"))
+        val notMoved = asked.next(PresenterInput.Event(Lines.controlOk("r1", "false")))
+        assertEquals(BackgroundOffer(BackgroundPhase.OFFER), notMoved.offerOf("b"))
+        val objectForm = asked.next(PresenterInput.Event(Lines.controlOk("r1", """{"backgrounded":false}""")))
+        assertEquals(BackgroundOffer(BackgroundPhase.OFFER), objectForm.offerOf("b"))
+        val moved = asked.next(PresenterInput.Event(Lines.controlOk("r1", "true")))
+        assertEquals(BackgroundOffer(BackgroundPhase.WAITING), moved.offerOf("b"))
+    }
+
+    @Test
+    fun `type only - send all follows the same rule as the lines, and a CLI that is not up cannot`() {
+        val running = turn().lines(call("b", "Bash", "command" to "sleep 9"))
+        assertTrue(canBackground(running.transcript, running.conversation, live = true))
+        assertFalse(canBackground(running.transcript, running.conversation, live = false))
+    }
 }

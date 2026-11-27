@@ -88,6 +88,7 @@ private val SWITCHES_SHOWN = setOf(SwitchKind.MODEL, SwitchKind.MODE, SwitchKind
 fun composerState(
     conversation: ConversationState,
     transcript: Transcript,
+    live: Boolean = true,
 ): ComposerState {
     val operations = transcript.operations
     val records = operations.models
@@ -127,7 +128,7 @@ fun composerState(
         rulesWaiting = operations.rulesWaiting.isNotEmpty(),
         rulesFailure = operations.rulesFailure,
         cache = operations.cache,
-        canBackground = running && hasBackgroundOffer(transcript),
+        canBackground = canBackground(transcript, conversation, live),
     )
 }
 

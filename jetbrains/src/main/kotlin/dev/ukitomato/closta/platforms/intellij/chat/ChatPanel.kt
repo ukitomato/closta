@@ -49,8 +49,8 @@ import dev.ukitomato.closta.platforms.intellij.ui.noHtml
 import dev.ukitomato.closta.platforms.intellij.ui.plainTip
 import dev.ukitomato.closta.presenter.view.ThreadRows
 import dev.ukitomato.closta.presenter.view.askActions
+import dev.ukitomato.closta.presenter.view.canBackground
 import dev.ukitomato.closta.presenter.view.composerState
-import dev.ukitomato.closta.presenter.view.hasBackgroundOffer
 import dev.ukitomato.closta.presenter.view.runningTasks
 import dev.ukitomato.closta.presenter.view.sessionName
 import dev.ukitomato.closta.presenter.view.threadIsRunning
@@ -296,9 +296,7 @@ class ChatPanel(
     /** Whether a call of this conversation runs in front and can be moved to the background. */
     fun canMoveToBackground(): Boolean {
         val view = source.view.value
-        return source.canSend.value &&
-            threadIsRunning(view.conversation, view.transcript) &&
-            hasBackgroundOffer(view.transcript)
+        return canBackground(view.transcript, view.conversation, source.canSend.value)
     }
 
     /** Asks the CLI to move every call that runs in front to the background. */
@@ -654,7 +652,7 @@ class ChatPanel(
             surface.loading(source.opensWithContent && starting && transcript.messages.size == 0)
             surface.show(shown) { transcript.approvals[it] }
             changesBar.show(changesBar(shown, changes.settled))
-            val composerState = composerState(view.conversation, transcript)
+            val composerState = composerState(view.conversation, transcript, sendable)
             composer.show(composerState, sendable, sendBlockOf(sendable, source.starting))
             limitBanner.show(composerState.rateLimit)
             running.show(runningTasks(transcript))
