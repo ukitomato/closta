@@ -1094,3 +1094,16 @@ fn there_are_twenty_three_kinds() {
         last_five
     );
 }
+
+#[test]
+fn json_differences_finds_every_difference_and_the_first_is_the_first() {
+    let expected = serde_json::json!({"a": 1, "b": [1, 2], "c": {"d": true}});
+    let actual = serde_json::json!({"a": 1, "b": [1, 3], "c": {"d": false}});
+    let all = json_differences(&expected, &actual);
+    let pointers: Vec<&str> = all.iter().map(|d| d.pointer.as_str()).collect();
+    assert_eq!(vec!["/b/1", "/c/d"], pointers);
+    assert_eq!(
+        json_first_difference(&expected, &actual),
+        all.into_iter().next()
+    );
+}
