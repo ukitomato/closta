@@ -536,12 +536,9 @@ impl FocusMap {
             gate.focus = Some(self.overlay_layer.clone());
             return gate;
         }
+        // Before the checks below, which would stop Tab and the keys a card swallows: the
+        // popup's keys, and while its field composes every key, are `resume_key`'s to decide.
         if overlay == Overlay::Resume {
-            // While the field composes, every key is the input method's, a held one and Tab
-            // too: nothing below may stop it.
-            if resume.composing {
-                return Gate::default();
-            }
             return resume_gate(key, resume);
         }
         if card_key(&FocusScene::Overlay, key) == CardKeyOutcome::Swallow {
@@ -568,7 +565,8 @@ impl FocusMap {
             (OverlayKey::Confirm, Overlay::CloseSlot) => {
                 gate.action = Some(ShellAction::ConfirmCloseSlot);
             }
-            // The resume popup's keys were taken above.
+            // The closing overlay only waits. The resume popup never gets here (its keys were
+            // taken above); it is named only for the match to cover every overlay.
             (OverlayKey::Cancel | OverlayKey::Confirm, Overlay::Closing | Overlay::Resume) => {}
             (OverlayKey::Pass, _) => gate.stop = false,
         }
