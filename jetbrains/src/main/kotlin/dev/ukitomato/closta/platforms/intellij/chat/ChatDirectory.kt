@@ -81,7 +81,8 @@ class ChatDirectory(
 
     /** The screens that show each session, in every project. */
     val leases =
-        ViewLeases(::visibilityChanged) { sessionId, _ ->
+        ViewLeases(::visibilityChanged) { sessionId, left ->
+            rememberClosed(sessionId, left)
             // The last screen closed: a session that still runs goes on, and says so (not while its project closes).
             val session = registered[sessionId]?.takeIf { it.running && !it.project.isDisposed }
             if (session != null && !session.project.service<ChatSessions>().closing) {

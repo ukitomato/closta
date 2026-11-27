@@ -44,10 +44,14 @@ fun rememberClosed(
     sessionId: String,
     left: LeftView?,
 ) {
-    val project = left?.let { openProjectOf(it.projectHash) }
-    // A project that is closing closes its screens, which is not the user closing a conversation.
-    if (left != null && project != null && !project.service<ChatSessions>().closing) {
-        project.service<ClosedChats>().closed(ClosedChat(sessionId, left.placement, left.title, left.workingDirectory))
+    rememberClosedIn(sessionId, left) { hash ->
+        openProjectOf(hash)?.let { project ->
+            object : ClosedSink {
+                override val closing get() = project.service<ChatSessions>().closing
+
+                override fun closed(chat: ClosedChat) = project.service<ClosedChats>().closed(chat)
+            }
+        }
     }
 }
 

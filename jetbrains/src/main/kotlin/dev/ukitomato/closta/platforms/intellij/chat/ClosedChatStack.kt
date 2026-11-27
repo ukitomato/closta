@@ -33,3 +33,23 @@ class ClosedChatStack private constructor(
         const val DEFAULT_LIMIT = 10
     }
 }
+
+/** Where a project takes the conversations closed in it. */
+interface ClosedSink {
+    /** Whether the project is closing: its screens close then, which is not the user closing a conversation. */
+    val closing: Boolean
+
+    fun closed(chat: ClosedChat)
+}
+
+/** Stacks what the last screen of [sessionId] left in the project [sinkOf] finds, unless that is closing. */
+fun rememberClosedIn(
+    sessionId: String,
+    left: LeftView?,
+    sinkOf: (projectHash: String) -> ClosedSink?,
+) {
+    val sink = left?.let { sinkOf(it.projectHash) }
+    if (left != null && sink != null && !sink.closing) {
+        sink.closed(ClosedChat(sessionId, left.placement, left.title, left.workingDirectory))
+    }
+}
