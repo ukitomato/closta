@@ -15,9 +15,10 @@ import dev.ukitomato.closta.presenter.view.runningTasks
 import dev.ukitomato.closta.presenter.view.threadIsRunning
 import dev.ukitomato.closta.providers.claude.AgentProcess
 import dev.ukitomato.closta.providers.claude.ClaudeSession
+import dev.ukitomato.closta.providers.claude.host.HostAgentProcess
+import dev.ukitomato.closta.providers.claude.host.HostHooks
 import dev.ukitomato.closta.providers.claude.launch.ProcessSpawner
 import dev.ukitomato.closta.providers.claude.launch.launchClaude
-import dev.ukitomato.closta.providers.claude.mcp.McpAgentProcess
 import dev.ukitomato.closta.providers.claude.mcp.SdkMcpServer
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -51,9 +52,10 @@ import kotlin.time.Duration.Companion.seconds
  * the first collection: `withContext` throws away its result when the caller was cancelled meanwhile, and the
  * process it created would otherwise have no owner.
  *
- * With [sdkServers] the started process goes through [McpAgentProcess], which declares the servers in an
- * `initialize` written before anything else and answers the CLI's `mcp_message` requests. With none — the default —
- * nothing is wrapped and no `initialize` is written: the session is a plain one.
+ * Every started process goes through [HostAgentProcess], which writes `initialize` before anything else, declaring the
+ * [sdkServers] and the hooks [hostHooks] brings (both may be empty), and answers the CLI's `mcp_message` and
+ * `hook_callback` requests. Even a session with nothing to answer for is wrapped, so an MCP server's request for
+ * input can be answered.
  *
  * Free of `com.intellij`, so the fast `src/test` suite measures it with fake processes.
  */
@@ -92,6 +94,8 @@ class SessionRuntime(
     private val sandbox: Boolean = false,
     /** The time a `result` is seen at, which the prompt cache's clock counts from. */
     private val clock: Clock = SystemClock(),
+    /** What the host brings besides MCP servers; read once for each process it starts. */
+    private val hostHooks: () -> HostHooks = { HostHooks() },
 ) {
     init {
         // A resumed session is opened by the id it was saved under: the tree's thread, the bridge's checks and the user
@@ -311,7 +315,8 @@ class SessionRuntime(
         relaunch: Boolean,
         switchId: String?,
     ): ProcessEnd {
-        val process = startProcess(planned, switchId)
+        val hooks = hostHooks()
+        val process = startProcess(planned, switchId, hooks)
         val session = ClaudeSession(process, id)
         val sandboxed = planned.spec.sandbox
         // The tree says the effort and the in-process MCP servers' names from its first snapshot on, before the
@@ -338,7 +343,7 @@ class SessionRuntime(
         if (sandboxed) askSettings(commands)
         var ended: ProcessEnd? = null
         coroutineScope {
-            val job = launch { ended = collect(session, commands, sandboxed) }
+            val job = launch { ended = collect(session, commands, sandboxed, hooks) }
             processJob = job
             // A switch marked before this job was known cancels it here: one of the two sides always sees the other.
             if (restartFor != null) job.cancel()
@@ -375,13 +380,14 @@ class SessionRuntime(
     private suspend fun startProcess(
         launch: SessionLaunch,
         switchId: String?,
+        hooks: HostHooks,
     ): AgentProcess {
         val process =
             try {
                 // [current] is set where the process is registered, so a cancellation right after the spawn still
                 // finds it to wait for.
                 withContext(Dispatchers.IO) {
-                    live.track(withServers(launchProcess(launch)), AgentProcess::destroy).also { current = it }
+                    live.track(wrapped(launchProcess(launch), hooks), AgentProcess::destroy).also { current = it }
                 }
             } catch (start: SessionStartException) {
                 if (switchId != null) {
@@ -402,6 +408,7 @@ class SessionRuntime(
         session: ClaudeSession,
         commands: SessionCommands,
         sandboxed: Boolean,
+        hooks: HostHooks,
     ): ProcessEnd {
         val watch = SandboxStartWatch(sandboxed)
         // A sandboxed CLI was asked its settings as it started.
@@ -412,7 +419,12 @@ class SessionRuntime(
                 contextAsked = false,
             )
         try {
-            session.events.collect { line -> watch.pass(line).forEach { foldEvent(it, commands, checks) } }
+            session.events.collect { line ->
+                watch.pass(line).forEach {
+                    foldEvent(it, commands, checks)
+                    if (it is AgentEvent.Result) turnEnded(hooks)
+                }
+            }
         } catch (cancel: CancellationException) {
             throw cancel
         } catch (
@@ -421,6 +433,17 @@ class SessionRuntime(
             if (watch.started) throw failure
         }
         return if (watch.started) ProcessEnd.Ended else ProcessEnd.NotStarted(watch.detail)
+    }
+
+    // A hook's callback is the host's own code: its failure must not end the session, and says only its type.
+    private fun turnEnded(hooks: HostHooks) {
+        try {
+            hooks.turnEnded()
+        } catch (
+            @Suppress("TooGenericExceptionCaught") failure: Exception,
+        ) {
+            log.warn("claude session $id: the end of a turn could not be passed on (${failure.javaClass.name})")
+        }
     }
 
     // What one process was checked for; each process is checked again.
@@ -608,8 +631,10 @@ class SessionRuntime(
         log.info("claude session $id: put back ${read.events.size} lines of the saved record ($read)")
     }
 
-    private fun withServers(process: AgentProcess): AgentProcess =
-        if (sdkServers.isEmpty()) process else McpAgentProcess(process, sdkServers)
+    private fun wrapped(
+        process: AgentProcess,
+        hooks: HostHooks,
+    ): AgentProcess = HostAgentProcess(process, sdkServers, hooks)
 
     private fun launchProcess(launch: SessionLaunch): AgentProcess =
         try {

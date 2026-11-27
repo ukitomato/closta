@@ -8,6 +8,7 @@ import dev.ukitomato.closta.core.models.AgentEvent
 import dev.ukitomato.closta.core.models.ApprovalDecision
 import dev.ukitomato.closta.providers.claude.AgentProcess
 import dev.ukitomato.closta.providers.claude.ClaudeSession
+import dev.ukitomato.closta.providers.claude.host.HostAgentProcess
 import dev.ukitomato.closta.providers.claude.launch.ClaudeLaunchSpec
 import dev.ukitomato.closta.providers.claude.launch.launchClaude
 import kotlinx.coroutines.CompletableDeferred
@@ -30,7 +31,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 
 /**
  * MANUAL end-to-end check: the **real** `claude` on this machine, through
- * [McpAgentProcess], with a fake [Diagnostics] that answers one marked finding. claude is asked to call
+ * [HostAgentProcess], with a fake [Diagnostics] that answers one marked finding. claude is asked to call
  * `mcp__ide-context__getDiagnostics`; the test passes when its final answer contains the marker.
  *
  * Gated on `CLOSTA_LIVE_CLAUDE=1`, so `./gradlew check` skips it (no CLI or sign-in needed). Run it by hand:
@@ -72,7 +73,7 @@ class IdeContextLiveManualTest {
         val sessionId = UUID.randomUUID().toString()
         val real =
             launchClaude(ClaudeLaunchSpec(sessionId = sessionId, cwd = workDir.path, permissionPromptToolStdio = true))
-        val process = McpAgentProcess(Tracing(real), ideContextServers(bridge()))
+        val process = HostAgentProcess(Tracing(real), ideContextServers(bridge()))
         val session = ClaudeSession(process, sessionId)
         var answer = ""
         var cost = Double.NaN

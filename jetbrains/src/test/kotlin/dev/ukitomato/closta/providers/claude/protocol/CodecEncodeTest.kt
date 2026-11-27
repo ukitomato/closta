@@ -1,7 +1,12 @@
+// JSON wire lines are written whole, so that what is measured can be read as sent.
+@file:Suppress("MaxLineLength")
+
 package dev.ukitomato.closta.providers.claude.protocol
 
 import com.google.gson.JsonParser
 import dev.ukitomato.closta.providers.claude.fixtures.CaptureFixtures
+import dev.ukitomato.closta.providers.claude.host.AFTER_EDIT
+import dev.ukitomato.closta.providers.claude.host.BEFORE_FILE_TOOL
 import org.junit.jupiter.api.Assertions.assertAll
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -83,6 +88,54 @@ class CodecEncodeTest {
                 """"hooks":{},"sdkMcpServers":["ide-context","other"],"webSearchIsolationExemptMcpServers":[],""" +
                 """"perTaskStopAffordance":true}}"""
         assertEquals(expected, line)
+    }
+
+    @Test
+    fun `initialize declares each hook with its matcher, callback id and timeout, and none as an empty object`() {
+        val line = StdinEncoder.initialize("r", emptyList(), listOf(BEFORE_FILE_TOOL, AFTER_EDIT))
+        val hooks = json(line).asJsonObject.getAsJsonObject("request").getAsJsonObject("hooks")
+        assertAll(
+            {
+                assertEquals(
+                    """{"matcher":"Edit|Write|NotebookEdit|Read","hookCallbackIds":["closta-before-file-tool"],"timeout":10}""",
+                    hooks.getAsJsonArray("PreToolUse")[0].toString(),
+                )
+            },
+            {
+                assertEquals(
+                    """{"matcher":"Edit|Write|NotebookEdit","hookCallbackIds":["closta-after-edit"],"timeout":10}""",
+                    hooks.getAsJsonArray("PostToolUse")[0].toString(),
+                )
+            },
+            {
+                assertEquals(
+                    "{}",
+                    json(StdinEncoder.initialize("r"))
+                        .asJsonObject
+                        .getAsJsonObject("request")
+                        .get("hooks")
+                        .toString(),
+                )
+            },
+        )
+    }
+
+    @Test
+    fun `a hook answer is a success carrying the answer and an error carries its words`() {
+        assertAll(
+            {
+                assertEquals(
+                    """{"type":"control_response","response":{"subtype":"success","request_id":"h","response":{"continue":true}}}""",
+                    StdinEncoder.hookResponse("h", """{"continue":true}"""),
+                )
+            },
+            {
+                assertEquals(
+                    """{"type":"control_response","response":{"subtype":"error","request_id":"h","error":"unknown hook callback"}}""",
+                    StdinEncoder.controlError("h", "unknown hook callback"),
+                )
+            },
+        )
     }
 
     @Test

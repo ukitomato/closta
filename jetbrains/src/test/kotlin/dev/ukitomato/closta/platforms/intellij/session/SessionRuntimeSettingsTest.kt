@@ -167,9 +167,12 @@ class SessionRuntimeSettingsTest {
             runtime.start()
             val running = runtime.running() as SessionStatus.Running
             running.commands.sendMessage("m1", "hello")
+            val initialize =
+                checkNotNull(withContext(Dispatchers.IO) { process.nextStdinLine(GUARD.inWholeMilliseconds) })
+            assertTrue(initialize.contains("\"subtype\":\"initialize\""), initialize)
             val line = checkNotNull(withContext(Dispatchers.IO) { process.nextStdinLine(GUARD.inWholeMilliseconds) })
             assertTrue(line.contains("\"type\":\"user\"") && line.contains("hello"))
-            assertEquals(listOf("before; lines so far 0"), events)
+            assertEquals(listOf("before; lines so far 1"), events)
             runtime.close()
         }
 

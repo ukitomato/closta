@@ -1,11 +1,14 @@
 package dev.ukitomato.closta.platforms.intellij.session
 
 import com.google.gson.JsonObject
+import dev.ukitomato.closta.core.models.ElicitationAction
+import dev.ukitomato.closta.core.models.ElicitationDecision
 import dev.ukitomato.closta.core.services.FixedClock
 import dev.ukitomato.closta.platforms.intellij.auth.SignInOutcome
 import dev.ukitomato.closta.platforms.intellij.settings.ProviderLaunch
 import dev.ukitomato.closta.platforms.intellij.store.ProviderId
 import dev.ukitomato.closta.providers.claude.fixtures.CaptureFixtures
+import dev.ukitomato.closta.providers.claude.host.HostHooks
 import dev.ukitomato.closta.providers.claude.launch.BedrockConfig
 import dev.ukitomato.closta.providers.claude.launch.ClaudeLaunchSpec
 import dev.ukitomato.closta.providers.claude.launch.ProcessSpawner
@@ -16,6 +19,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.job
 import kotlinx.coroutines.runBlocking
@@ -347,15 +351,16 @@ class SessionRuntimeTest {
             val runtime = runtime(spawner(session))
             runtime.start()
             val running = runtime.running() as SessionStatus.Running
+            // A CLI that refuses initialize: the settings and the context are asked at its first system/init instead.
+            refuseInitialize(session)
             val init = CaptureFixtures.nonBlankLines(CaptureFixtures.textOf(CAPTURE)).first { it.contains(INIT_MARK) }
             session.emit(init)
             val folded = withTimeout(GUARD) { runtime.conversation.first { it.session != null } }
             assertEquals(CAPTURE_VERSION, folded.session?.version)
 
             running.commands.sendMessage("send-1", "hello")
-            // A session with no initialize asks for the settings and the context at its first system/init. Those
-            // requests are written from the fold's own coroutine, so they may reach stdin before or after the user
-            // line sent here.
+            // Those requests are written from the fold's own coroutine, so they may reach stdin before or after the
+            // user line sent here.
             val lines =
                 List(3) {
                     checkNotNull(withContext(Dispatchers.IO) { session.nextStdinLine(GUARD.inWholeMilliseconds) })
@@ -417,6 +422,16 @@ class SessionRuntimeTest {
             runtime.close()
         }
 
+    // Reads the `initialize` the host writes first and answers it with an error, as a CLI that does not take it would.
+    private suspend fun refuseInitialize(session: FakeProcess) {
+        val first = checkNotNull(withContext(Dispatchers.IO) { session.nextStdinLine(GUARD.inWholeMilliseconds) })
+        assertTrue(first.contains("\"subtype\":\"initialize\""), first)
+        val id = checkNotNull(Regex("\"request_id\":\"([^\"]+)\"").find(first)).groupValues[1]
+        session.emit(
+            """{"type":"control_response","response":{"subtype":"error","request_id":"$id","error":"not supported"}}""",
+        )
+    }
+
     // The next context request written, skipping the other lines.
     private suspend fun contextRequest(session: FakeProcess): String =
         withContext(Dispatchers.IO) {
@@ -453,7 +468,7 @@ class SessionRuntimeTest {
 
     @Test
     @Timeout(TIMEOUT_SECONDS)
-    fun `with no servers no initialize is written and the first line is the user's`() =
+    fun `with no servers and no hooks the first line is initialize, then the user's`() =
         runBlocking {
             val session = FakeProcess()
             val runtime = runtimeWith(session, emptyList())
@@ -461,8 +476,60 @@ class SessionRuntimeTest {
             val running = runtime.running() as SessionStatus.Running
             running.commands.sendMessage("send-1", "hello")
             val first = checkNotNull(withContext(Dispatchers.IO) { session.nextStdinLine(GUARD.inWholeMilliseconds) })
-            assertTrue(first.contains("\"type\":\"user\""), first)
-            assertFalse(session.stdinLines().any { it.contains("\"subtype\":\"initialize\"") })
+            assertTrue(first.contains("\"subtype\":\"initialize\""), first)
+            assertTrue(first.contains("\"sdkMcpServers\":[]") && first.contains("\"hooks\":{}"), first)
+            val second = checkNotNull(withContext(Dispatchers.IO) { session.nextStdinLine(GUARD.inWholeMilliseconds) })
+            assertTrue(second.contains("\"type\":\"user\""), second)
+            assertEquals(1, session.stdinLines().count { it.contains("\"subtype\":\"initialize\"") })
+            runtime.close()
+        }
+
+    @Test
+    @Timeout(TIMEOUT_SECONDS)
+    fun `type only - a session with no servers and no hooks holds an elicitation and answers it`() =
+        runBlocking {
+            val session = FakeProcess()
+            val runtime = runtimeWith(session, emptyList())
+            runtime.start()
+            val running = runtime.running() as SessionStatus.Running
+            session.emit(
+                """{"type":"control_request","request_id":"e7","request":{"subtype":"elicitation",""" +
+                    """"mcp_server_name":"files","message":"Name","mode":"form","requested_schema":""" +
+                    """{"type":"object","properties":{"name":{"type":"string"}}}}}""",
+            )
+            val held = withTimeout(GUARD) { runtime.conversation.first { it.pendingApprovals.isNotEmpty() } }
+            assertEquals(listOf("e7"), held.pendingApprovals.map { it.requestId })
+            running.commands.respondToElicitation(ElicitationDecision("e7", ElicitationAction.DECLINE), null)
+            val lines = generateSequence { session.nextStdinLine(GUARD.inWholeMilliseconds) }.take(2).toList()
+            assertTrue(lines.last().contains("\"request_id\":\"e7\"") && lines.last().contains("decline"), "$lines")
+            runtime.close()
+        }
+
+    @Test
+    @Timeout(TIMEOUT_SECONDS)
+    fun `the turn-ended hook is called once after a result is folded`() =
+        runBlocking {
+            val session = FakeProcess()
+            val ended =
+                java.util.concurrent.atomic
+                    .AtomicInteger()
+            val runtime =
+                SessionRuntime(
+                    ID,
+                    childOf(CoroutineScope(SupervisorJob() + Dispatchers.Default)),
+                    planner(spawner(session), emptyMap()),
+                    WORKING_DIR,
+                    RecordingLog(),
+                    versionTimeout = GUARD,
+                    hostHooks = { HostHooks(turnEnded = { ended.incrementAndGet() }) },
+                )
+            runtime.start()
+            runtime.running()
+            assertEquals(0, ended.get())
+            val lines = CaptureFixtures.nonBlankLines(CaptureFixtures.textOf(CAPTURE))
+            session.emit(lines.first { it.contains("\"type\":\"result\"") })
+            withTimeout(GUARD) { while (ended.get() == 0) delay(POLL) }
+            assertEquals(1, ended.get())
             runtime.close()
         }
 
@@ -513,6 +580,7 @@ class SessionRuntimeTest {
         const val WORKING_DIR = "/work/project"
         const val TIMEOUT_SECONDS = 30L
         val GUARD = 10.seconds
+        val POLL = 10.milliseconds
         const val VERSION = "2.1.285 (Claude Code)"
         const val PARSED_VERSION = "2.1.285"
         const val VERSION_FLAG = "--version"

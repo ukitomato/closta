@@ -7,6 +7,7 @@ import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import dev.ukitomato.closta.core.models.Attachment
 import dev.ukitomato.closta.core.models.AttachmentKind
+import dev.ukitomato.closta.providers.claude.host.HookDeclaration
 import java.nio.ByteBuffer
 import java.nio.charset.CharacterCodingException
 import java.nio.charset.CodingErrorAction
@@ -130,20 +131,73 @@ object StdinEncoder {
      * "sdkMcpServers and webSearchIsolationExemptMcpServers must be arrays of strings".
      *
      * [sdkMcpServers] names the in-process MCP servers the host answers for; the default is the empty array,
-     * so a call without it writes the same line as before the parameter existed.
+     * so a call without it writes the same line as before the parameter existed. [hooks] are the hooks the host
+     * answers for, as `{event: [{matcher, hookCallbackIds, timeout}]}`; none is `{}`.
      */
     fun initialize(
         requestId: String,
         sdkMcpServers: List<String> = emptyList(),
+        hooks: List<HookDeclaration> = emptyList(),
     ): String =
         controlRequest(requestId) {
             addProperty("subtype", "initialize")
-            add("hooks", JsonObject())
+            add("hooks", hooksObject(hooks))
             add("sdkMcpServers", JsonArray().apply { sdkMcpServers.forEach(::add) })
             add("webSearchIsolationExemptMcpServers", JsonArray())
             // The host shows a stop control per task, so an interrupt leaves background tasks running
             // (sdk.d.ts 0.3.317).
             addProperty("perTaskStopAffordance", true)
+        }
+
+    /** Answering a `hook_callback`: [payload] (the caller's JSON object, embedded as-is) is what the hook returns. */
+    fun hookResponse(
+        requestId: String,
+        payload: String,
+    ): String =
+        controlResponse(requestId) {
+            JsonParser
+                .parseString(payload)
+                .asJsonObject
+                .entrySet()
+                .forEach { (key, value) -> add(key, value) }
+        }
+
+    /** An error `control_response` (sdk.d.ts `ControlErrorResponse`): the request failed, in the words of [message]. */
+    fun controlError(
+        requestId: String,
+        message: String,
+    ): String =
+        JsonObject()
+            .apply {
+                addProperty("type", "control_response")
+                add(
+                    "response",
+                    JsonObject().apply {
+                        addProperty("subtype", "error")
+                        addProperty("request_id", requestId)
+                        addProperty("error", message)
+                    },
+                )
+            }.toString()
+
+    private fun hooksObject(hooks: List<HookDeclaration>): JsonObject =
+        JsonObject().apply {
+            hooks.groupBy { it.event }.forEach { (event, declared) ->
+                add(
+                    event,
+                    JsonArray().apply {
+                        declared.forEach { hook ->
+                            add(
+                                JsonObject().apply {
+                                    addProperty("matcher", hook.matcher)
+                                    add("hookCallbackIds", JsonArray().apply { add(hook.callbackId) })
+                                    addProperty("timeout", hook.timeoutSeconds)
+                                },
+                            )
+                        }
+                    },
+                )
+            }
         }
 
     /** `interrupt` as a control_request. See also [cancelRequest] for the top-level form. */

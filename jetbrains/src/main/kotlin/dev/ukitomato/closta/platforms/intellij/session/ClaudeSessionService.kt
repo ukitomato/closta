@@ -20,6 +20,7 @@ import dev.ukitomato.closta.platforms.intellij.settings.ProviderSettings
 import dev.ukitomato.closta.platforms.intellij.settings.launchFor
 import dev.ukitomato.closta.platforms.intellij.store.AppSettingsStore
 import dev.ukitomato.closta.providers.claude.history.ProjectTranscripts
+import dev.ukitomato.closta.providers.claude.host.HostHooks
 import dev.ukitomato.closta.providers.claude.launch.WslLocation
 import dev.ukitomato.closta.providers.claude.launch.WslSpawner
 import dev.ukitomato.closta.providers.claude.mcp.ideContextServers
@@ -42,7 +43,8 @@ import java.util.concurrent.ConcurrentHashMap
  * Settings | Tools | Closta; an Amazon Bedrock provider signs in first, over this project's window.
  *
  * What the IDE can tell Claude: the project's [IdeBridgeService] is asked for the in-process MCP servers it
- * can back, and each session is given them. A bridge without diagnostics gives none, and the session is not wrapped.
+ * can back, and each session is given them. A bridge without diagnostics gives none; the process is wrapped all the
+ * same, so the host can answer even when there is nothing to answer for.
  *
  * A light project service: registered by the annotation, not in plugin.xml.
  */
@@ -93,6 +95,7 @@ class ClaudeSessionService(
                 directory,
                 IdeSessionLog,
                 sdkServers = ideContextServers(ide, ide.cliPaths),
+                hostHooks = { HostHooks() },
                 effort = effort,
                 opening = opening,
                 saved = projectTranscripts(directory, wsl, ideWsl),
