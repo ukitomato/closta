@@ -35,8 +35,16 @@ class WasRunningTest {
                 "host" to WasRunningMark("/old"),
                 "plain" to WasRunningMark("/p"),
             )
+        val cleared =
+            mapOf(
+                "host" to ClearedTab("kept", "/k"),
+                "gone" to ClearedTab(null, "/g"),
+                "nodir" to ClearedTab("new", null),
+            )
         assertEquals(TabResume("new", "/w"), tabResume("host", emptyMap(), marks), "after a restart, from the mark")
-        assertEquals(TabResume("kept", null), tabResume("host", mapOf("host" to "kept"), marks), "stopped meanwhile")
+        assertEquals(TabResume("kept", "/k"), tabResume("host", cleared, marks), "from the table")
+        assertEquals(TabResume(null, "/g"), tabResume("gone", cleared, marks), "nothing after the clear")
+        assertEquals(TabResume("new", "/w"), tabResume("nodir", cleared, marks), "the folder from the mark")
         assertEquals(TabResume("plain", "/p"), tabResume("plain", emptyMap(), marks))
         assertEquals(TabResume("none", null), tabResume("none", emptyMap(), marks))
     }

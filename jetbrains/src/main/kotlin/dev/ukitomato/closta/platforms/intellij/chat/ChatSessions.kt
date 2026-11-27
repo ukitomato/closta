@@ -29,14 +29,6 @@ class ChatSessions(
 ) : Disposable {
     private val sources = LinkedHashMap<String, ChatSource>()
 
-    private val stopped = HashMap<String, String>()
-
-    /**
-     * The id each stopped session's conversation was saved under when it stopped, by the session's id, where a `/clear`
-     * made it other than the session's own: a tab still showing it resumes that one.
-     */
-    val stoppedResumeIds: Map<String, String> get() = stopped
-
     /** Whether the project is closing: its screens close then, and a session that runs says nothing of it. */
     @Volatile
     var closing = false
@@ -97,8 +89,8 @@ class ChatSessions(
     /** Stops the session's CLI and takes it out of the list; a screen still showing it shows it ended. */
     fun stop(sessionId: String) {
         directory().unregister(sessionId)
+        sources[sessionId]?.let { rememberClearedTabs(project, listOf(it)) }
         sources.remove(sessionId)?.let { source ->
-            if (source.resumeId != sessionId) stopped[sessionId] = source.resumeId
             Disposer.dispose(source)
         }
     }
@@ -187,6 +179,29 @@ private fun markWasRunning(
             )
         }
     project.saveWasRunningMarks(marksAtClose(project.wasRunningMarks(), open))
+    rememberClearedTabs(project, sources)
+}
+
+/** Keeps what each of [sources] that was cleared with `/clear` showed, so its tab resumes that after a restart. */
+private fun rememberClearedTabs(
+    project: Project,
+    sources: Collection<ChatSource>,
+) {
+    val tabs =
+        sources.fold(project.clearedTabs()) { kept, source ->
+            val transcript = source.view.value.transcript
+            val tab =
+                clearedTabOf(
+                    source.sessionId,
+                    source.resumeId,
+                    transcript.clearedAt,
+                    transcript.sentAfterClear(),
+                    source.workingDirectory,
+                    project.basePath,
+                )
+            if (tab == null) kept else ClearedTabs.withTab(kept, source.sessionId, tab)
+        }
+    project.saveClearedTabs(tabs)
 }
 
 /**

@@ -117,14 +117,11 @@ private class ChatFileEditor(
                     // The conversation now on the tab: after a `/clear`, the CLI's new id, also after the IDE
                     // restarted. A worktree's conversation left a mark under it with its folder: it is resumed there,
                     // as the list resumes it. With no mark, in the project's folder.
-                    val resumed = tabResume(chat.sessionId, sessions.stoppedResumeIds, project.wasRunningMarks())
-                    openNewChat(
-                        project,
-                        Placement.EDITOR_TAB,
-                        SessionOpening.Resume(resumed.savedId),
-                        chat.name,
-                        resumed.workingDirectory,
-                    )
+                    val resumed = tabResume(chat.sessionId, project.clearedTabs(), project.wasRunningMarks())
+                    val opening = resumed.savedId?.let { SessionOpening.Resume(it) } ?: SessionOpening.New
+                    openNewChat(project, Placement.EDITOR_TAB, opening, chat.name, resumed.workingDirectory)
+                    // Dropped only once the chat opened: a failed open keeps what the tab showed.
+                    project.saveClearedTabs(project.clearedTabs() - chat.sessionId)
                 }
             panel =
                 JPanel(GridBagLayout()).apply {
