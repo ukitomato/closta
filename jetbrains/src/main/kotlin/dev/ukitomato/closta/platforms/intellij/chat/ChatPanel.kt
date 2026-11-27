@@ -447,9 +447,15 @@ class ChatPanel(
         composer.onEffort = { level -> scope.launch(failures) { source.switchEffort(level) } }
         composer.onMode = { mode -> scope.launch(failures) { source.switchMode(mode) } }
         composer.onSandbox = { on -> scope.launch(failures) { source.switchSandbox(on) } }
-        composer.onUsage = { scope.launch(failures) { source.requestUsage() } }
-        composer.onContext = { scope.launch(failures) { source.requestContextBreakdown() } }
+        wireRequests()
         limitBanner.onDismiss = { seq -> scope.launch(failures) { source.dismissRateLimit(seq) } }
+    }
+
+    /** The composer's popups ask the CLI for what they show. */
+    private fun wireRequests() {
+        composer.onUsage = { scope.launch(failures) { source.requestUsage() } }
+        composer.onRules = { scope.launch(failures) { source.requestPermissionRules() } }
+        composer.onContext = { scope.launch(failures) { source.requestContextBreakdown() } }
     }
 
     private fun draw() {

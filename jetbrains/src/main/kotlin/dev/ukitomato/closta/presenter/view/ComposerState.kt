@@ -43,6 +43,12 @@ data class ComposerState(
     val usageWaiting: Boolean,
     /** A `get_context_usage` request waits for the CLI's answer. */
     val contextWaiting: Boolean,
+    /** The last answer of `list_permission_rules`; null before the first. */
+    val rules: PermissionRulesRecord?,
+    /** A `list_permission_rules` request waits for the CLI's answer. */
+    val rulesWaiting: Boolean,
+    /** The CLI's sentence when it refused the last request for the rules. */
+    val rulesFailure: String?,
     /** The prompt cache of the last `result`; the screen reads it through [cacheClock]. */
     val cache: CacheRecord?,
 )
@@ -115,6 +121,9 @@ fun composerState(
         usage = operations.usage,
         usageWaiting = operations.usageWaiting.isNotEmpty(),
         contextWaiting = operations.waiting.isNotEmpty(),
+        rules = operations.rules,
+        rulesWaiting = operations.rulesWaiting.isNotEmpty(),
+        rulesFailure = operations.rulesFailure,
         cache = operations.cache,
     )
 }

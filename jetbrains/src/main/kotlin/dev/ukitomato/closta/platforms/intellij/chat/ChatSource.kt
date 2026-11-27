@@ -93,6 +93,9 @@ interface ChatSource : Disposable {
     /** Asks the CLI for the session's cost and the plan's limits; the answer is the composer's usage. */
     suspend fun requestUsage()
 
+    /** Asks the CLI for the permission rules and working directories; the answer is the composer's rules. */
+    suspend fun requestPermissionRules()
+
     /** Asks the CLI for the context's whole breakdown; the answer is the composer's context. */
     suspend fun requestContextBreakdown()
 
@@ -272,6 +275,10 @@ interface ChatSource : Disposable {
 
         override suspend fun requestUsage() {
             commands()?.requestUsage()
+        }
+
+        override suspend fun requestPermissionRules() {
+            commands()?.requestPermissionRules()
         }
 
         override suspend fun requestContextBreakdown() {

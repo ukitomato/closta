@@ -43,6 +43,9 @@ enum class ControlKind {
 
     /** The running session named by the user; the value is the name, which is kept only until the CLI answers. */
     RENAME,
+
+    /** `list_permission_rules`, the rules the session runs with: it waits in a column of its own. */
+    PERMISSION_RULES,
 }
 
 /**
@@ -222,6 +225,12 @@ data class OperationRecords(
     val renameAsks: Map<String, String> = emptyMap(),
     /** The last rename the CLI refused; null before one, and after a launch. */
     val renameFailure: RenameFailure? = null,
+    /** The ids of the `list_permission_rules` requests not answered yet. */
+    val rulesWaiting: List<String> = emptyList(),
+    /** The last `list_permission_rules` answer that could be read; null before the first. */
+    val rules: PermissionRulesRecord? = null,
+    /** The CLI's sentence for the last refused request for the rules; null before one, after an answer or a launch. */
+    val rulesFailure: String? = null,
 )
 
 /** The prompt cache as of the `result` the host saw at [lastAtMs]: it lives [ttlMs] from then. */
@@ -265,6 +274,7 @@ private const val BYPASS_MODE = "bypassPermissions"
 private const val AUTO_MODE = "auto"
 private const val SANDBOX_ON = "true"
 
+@Suppress("CyclomaticComplexMethod") // one branch per kind of request
 internal fun OperationRecords.control(input: PresenterInput.ControlRequested): OperationRecords {
     if (knows(input.requestId)) return this
     return when (input.kind) {
@@ -282,6 +292,7 @@ internal fun OperationRecords.control(input: PresenterInput.ControlRequested): O
         ControlKind.SANDBOX ->
             withSwitch(SwitchRecord(input.requestId, seq + 1, SwitchKind.SANDBOX, input.value.orEmpty()))
         ControlKind.RENAME -> renameAsked(input)
+        ControlKind.PERMISSION_RULES -> copy(rulesWaiting = (rulesWaiting + input.requestId).takeLast(MAX_WAITING))
     }
 }
 
@@ -332,6 +343,8 @@ internal fun OperationRecords.launched(input: PresenterInput.Launched): Operatio
         usageWaiting = emptyList(),
         renameAsks = emptyMap(),
         renameFailure = null,
+        rulesWaiting = emptyList(),
+        rulesFailure = null,
     )
 }
 
@@ -396,6 +409,7 @@ internal fun OperationRecords.sendFailed(requestId: String): OperationRecords =
         requestId in waiting -> copy(waiting = waiting - requestId)
         requestId in usageWaiting -> copy(usageWaiting = usageWaiting - requestId)
         requestId in renameAsks -> copy(renameAsks = renameAsks - requestId)
+        requestId in rulesWaiting -> copy(rulesWaiting = rulesWaiting - requestId)
         // A sandbox check that could not be asked waits for the next settings request.
         requestId in settingsWaiting ->
             copy(
@@ -414,7 +428,8 @@ private fun OperationRecords.knows(requestId: String): Boolean =
         requestId in mcpWaiting ||
         requestId in settingsWaiting ||
         requestId in usageWaiting ||
-        requestId in renameAsks
+        requestId in renameAsks ||
+        requestId in rulesWaiting
 
 /**
  * The CLI's answer to [event]'s request. An id nobody asked with, or an answer to a settled one, changes nothing.
@@ -439,12 +454,27 @@ internal fun OperationRecords.answered(event: AgentEvent.ControlResponse): Opera
         }
         id in settingsWaiting -> settingsAnswered(id, event)
         id in renameAsks -> renameAnswered(id, event)
+        id in rulesWaiting -> rulesAnswered(id, event)
         succeeded -> switchApplied(id)
         else ->
             ended(id) {
                 it.copy(outcome = SwitchOutcome.REJECTED, detail = sentenceOf(event.error, it.kind))
             }
     }
+}
+
+/**
+ * The answer to a `list_permission_rules` request: a success that reads is the rules, and clears the last refusal; a
+ * refusal is kept with the CLI's sentence and leaves the rules. An answer that does not read changes neither.
+ */
+private fun OperationRecords.rulesAnswered(
+    id: String,
+    event: AgentEvent.ControlResponse,
+): OperationRecords {
+    val settled = copy(rulesWaiting = rulesWaiting - id)
+    if (event.subtype != "success") return settled.copy(rulesFailure = plainSentenceOf(event.error))
+    val read = (JsonRead.parse(event.response.text) as? JsonObject)?.obj("response")?.let(::permissionRulesOf)
+    return if (read == null) settled else settled.copy(rules = read, rulesFailure = null)
 }
 
 /** The conversation the breakdown was counted for is over (a clear or a compaction): its rows are no longer true. */

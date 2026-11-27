@@ -125,6 +125,9 @@ class ComposerPanel(
     /** The cost button was pressed: the CLI is asked for the session's cost and the plan's limits. */
     var onUsage: () -> Unit = {}
 
+    /** The permission rules were asked for from the mode menu: the CLI is asked for the rules and folders. */
+    var onRules: () -> Unit = {}
+
     /** The context ring was pressed, or its breakdown asked to count again: the CLI is asked for the whole one. */
     var onContext: () -> Unit = {}
 
@@ -536,6 +539,14 @@ class ComposerPanel(
         openPopup(usage.popup, under, usage::show)
     }
 
+    /** Opens the rules popup above [under], just asked for: it shows the composer's state until it is closed. */
+    private fun openRules(under: JComponent) {
+        val next = state ?: return
+        val rules = RulesPopup(project, next)
+        openPopup(rules.popup, under, rules::show)
+        onRules()
+    }
+
     /**
      * Opens the context's breakdown above [under], just asked for: it shows the composer's state until it is closed,
      * and, when the session runs (so the request was sent), says it is counting from the first frame, before the
@@ -577,7 +588,10 @@ class ComposerPanel(
         next: ComposerState,
         under: JComponent,
     ) {
-        ComposerPopups.showAbove(ComposerPopups.modes(next) { chosen -> chooseMode(chosen) }, under)
+        ComposerPopups.showAbove(
+            ComposerPopups.modes(next, live = sendable, rules = { openRules(under) }) { chosen -> chooseMode(chosen) },
+            under,
+        )
     }
 
     private fun showModels(

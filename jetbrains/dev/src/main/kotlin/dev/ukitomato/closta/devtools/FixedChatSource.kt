@@ -62,6 +62,8 @@ class FixedChatSource(
 
     override suspend fun requestUsage() = Unit
 
+    override suspend fun requestPermissionRules() = Unit
+
     override suspend fun requestContextBreakdown() = Unit
 
     override suspend fun renameSession(title: String) = Unit

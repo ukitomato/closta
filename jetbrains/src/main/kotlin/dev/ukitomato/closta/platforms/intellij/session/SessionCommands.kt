@@ -11,6 +11,7 @@ import dev.ukitomato.closta.core.services.ReconnectMcpServer
 import dev.ukitomato.closta.core.services.RenameSession
 import dev.ukitomato.closta.core.services.RequestContextUsage
 import dev.ukitomato.closta.core.services.RequestMcpStatus
+import dev.ukitomato.closta.core.services.RequestPermissionRules
 import dev.ukitomato.closta.core.services.RequestSettings
 import dev.ukitomato.closta.core.services.RequestUsage
 import dev.ukitomato.closta.core.services.RespondToApproval
@@ -71,6 +72,7 @@ class SessionCommands internal constructor(
     private val modeUseCase = SwitchPermissionMode(session)
     private val usageUseCase = RequestContextUsage(session)
     private val usageOfPlan = RequestUsage(session)
+    private val rulesUseCase = RequestPermissionRules(session)
     private val renameUseCase = RenameSession(session)
     private val settingsUseCase = RequestSettings(session)
     private val effortUseCase = SwitchEffort(session)
@@ -209,6 +211,9 @@ class SessionCommands internal constructor(
 
     /** Asks the CLI for the session's cost and the plan's limits, as [switchModel] does. */
     suspend fun requestUsage() = requested(ControlKind.USAGE, null) { usageOfPlan(it) }
+
+    /** Asks the CLI for the permission rules and working directories the session runs with, as [switchModel] does. */
+    suspend fun requestPermissionRules() = requested(ControlKind.PERMISSION_RULES, null) { rulesUseCase(it) }
 
     /**
      * Names the session [sessionId] (the CLI's own id for it) [title], as [switchModel] does: the name is the view's
