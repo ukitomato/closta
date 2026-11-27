@@ -187,6 +187,37 @@ class ThreadRowsTest {
         assertTrue(after.size > before.size)
     }
 
+    @Test
+    fun anAskRowIsReusedWhileItsExtraStateIsTheSameAndRemadeWhenItChanges() {
+        val view = fold("one", StreamScript().apply { assistant("a1", listOf(StreamScript.text("返事"))) })
+        var extra: Any? = "idle"
+        val rows = ThreadRows(messageExtra = { if (it.role == Role.USER) extra else null })
+        val first = rows.of(view.transcript).filterIsInstance<AskRow>().single()
+        assertSame(first, rows.of(view.transcript).filterIsInstance<AskRow>().single(), "same extra, same row")
+        extra = "idle"
+        assertSame(first, rows.of(view.transcript).filterIsInstance<AskRow>().single(), "an equal extra, same row")
+        extra = "cancellable"
+        val remade = rows.of(view.transcript).filterIsInstance<AskRow>().single()
+        assertTrue(first !== remade, "another extra, a new row")
+        assertEquals(first, remade)
+    }
+
+    @Test
+    fun aToolRowIsReusedWhileItsExtraStateIsTheSameAndRemadeWhenItChanges() {
+        val view = fold("one", tools("Bash" to input("command" to "sleep 9")))
+        var extra: Any? = "none"
+        val rows = ThreadRows(partExtra = { if (it is ToolCallRecord) extra else null })
+        val first = rows.of(view.transcript).filterIsInstance<ToolRow>().single()
+        assertSame(first, rows.of(view.transcript).filterIsInstance<ToolRow>().single(), "same extra, same row")
+        extra = "none"
+        assertSame(first, rows.of(view.transcript).filterIsInstance<ToolRow>().single(), "an equal extra, same row")
+        extra = "offered"
+        val remade = rows.of(view.transcript).filterIsInstance<ToolRow>().single()
+        assertTrue(first !== remade, "another extra, a new row")
+        assertEquals(first, remade)
+        assertSame(remade, rows.of(view.transcript).filterIsInstance<ToolRow>().single())
+    }
+
     private companion object {
         const val NOT_LOGGED_IN = "Not logged in · Please run /login"
     }

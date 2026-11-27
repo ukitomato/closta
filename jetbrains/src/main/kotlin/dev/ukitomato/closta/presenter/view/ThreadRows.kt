@@ -157,10 +157,29 @@ private fun cardKey(
     requestId: String,
 ): String = if (anchor == null) "card:$requestId" else "$anchor/card:$requestId"
 
-/** Turns transcripts into rows, keeping the rows of every message and part that is the same object as last time. */
-class ThreadRows {
-    private var messages = IdentityHashMap<MessageRecord, List<ThreadRow>>()
-    private var parts = IdentityHashMap<PartRecord, ThreadRow?>()
+/**
+ * What a reused row is keyed by: the record, as the same object, and [extra], the state besides the record that the
+ * row shows, as an equal value. A row is reused only while both are as they were.
+ */
+private class RowKey(
+    val record: Any,
+    val extra: Any?,
+) {
+    override fun equals(other: Any?): Boolean = other is RowKey && record === other.record && extra == other.extra
+
+    override fun hashCode(): Int = 31 * System.identityHashCode(record) + extra.hashCode()
+}
+
+/**
+ * Turns transcripts into rows, keeping the rows of every message and part that is the same object as last time and
+ * whose extra state ([messageExtra] for a message, [partExtra] for a part) is equal to what it was.
+ */
+class ThreadRows internal constructor(
+    private val messageExtra: (MessageRecord) -> Any? = { null },
+    private val partExtra: (PartRecord) -> Any? = { null },
+) {
+    private var messages = HashMap<RowKey, List<ThreadRow>>()
+    private var parts = HashMap<RowKey, ThreadRow?>()
     private var groups = HashMap<String, ExploredRow>()
     private var cards = IdentityHashMap<ApprovalRecord, CardRow>()
     private var asks = HashMap<String, CardRow>()
@@ -175,8 +194,8 @@ class ThreadRows {
         transcript: Transcript,
         conversation: ConversationState,
     ): List<ThreadRow> {
-        val nextMessages = IdentityHashMap<MessageRecord, List<ThreadRow>>()
-        val nextParts = IdentityHashMap<PartRecord, ThreadRow?>()
+        val nextMessages = HashMap<RowKey, List<ThreadRow>>()
+        val nextParts = HashMap<RowKey, ThreadRow?>()
         val rows = ArrayList<ThreadRow>()
         val nextCards = IdentityHashMap<ApprovalRecord, CardRow>()
         val nextAsks = HashMap<String, CardRow>()
@@ -188,10 +207,16 @@ class ThreadRows {
         val messageKeys = transcript.messages.order.toHashSet()
         val followed = liveAsks(transcript).dropLast(1).toHashSet()
         for (message in transcript.messages.values()) {
-            val kept = messages[message]
+            val messageKey = RowKey(message, messageExtra(message))
+            // A reply is kept only while every part still has its row (one whose extra state changed is made again).
+            val kept =
+                messages[messageKey]?.takeIf {
+                    message.role == Role.USER ||
+                        message.parts.values().all { parts.containsKey(RowKey(it, partExtra(it))) }
+                }
             if (kept != null) carryParts(message, nextParts)
             val made = kept ?: rowsOf(message, nextParts)
-            nextMessages[message] = made
+            nextMessages[messageKey] = made
             rows += made
             if (message.key == transcript.signIn) rows += SignInRow("${message.key}/sign-in")
             byAnchor[message.key]?.forEach { rows += cardRow(it, nextCards, go) }
@@ -254,14 +279,17 @@ class ThreadRows {
 
     private fun carryParts(
         message: MessageRecord,
-        into: IdentityHashMap<PartRecord, ThreadRow?>,
+        into: HashMap<RowKey, ThreadRow?>,
     ) {
-        message.parts.values().forEach { part -> if (parts.containsKey(part)) into[part] = parts[part] }
+        message.parts.values().forEach { part ->
+            val key = RowKey(part, partExtra(part))
+            if (parts.containsKey(key)) into[key] = parts[key]
+        }
     }
 
     private fun rowsOf(
         message: MessageRecord,
-        into: IdentityHashMap<PartRecord, ThreadRow?>,
+        into: HashMap<RowKey, ThreadRow?>,
     ): List<ThreadRow> {
         val all = message.parts.values()
         if (message.role == Role.USER) {
@@ -271,16 +299,14 @@ class ThreadRows {
         val rows = ArrayList<ThreadRow>()
         for (partKey in message.parts.order) {
             val part = message.parts[partKey] ?: continue
+            val key = RowKey(part, partExtra(part))
             val made =
-                if (parts.containsKey(
-                        part,
-                    )
-                ) {
-                    parts[part]
+                if (parts.containsKey(key)) {
+                    parts[key]
                 } else {
                     rowOf("${message.key}/$partKey", part, rows.isEmpty())
                 }
-            into[part] = made
+            into[key] = made
             if (made != null) rows += made
         }
         return rows
