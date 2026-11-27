@@ -377,7 +377,7 @@ fn a_name_with_a_quote_or_a_newline_stays_one_line_of_one_json_text() {
 // --- capture 25: rewind the files --------------------------------------------------------------
 
 const REWIND: &str = "25-rewind-files";
-const REWOUND_UUID: &str = "b6c26772-59e5-4ff6-b970-284be2777826";
+const REWOUND_UUID: &str = "f6236b45-b026-49b7-ba9a-8d41b1ff77b4";
 
 #[test]
 fn rewind_files_is_the_line_the_recorder_sent_in_capture_25_apart_from_its_request_id() {
@@ -454,12 +454,12 @@ fn sandbox_off_sends_only_enabled_false() {
 
 #[test]
 fn sandbox_off_answer_matches_capture_33() {
-    // Capture 33 kept no stdin lines, so the request is held to what the CLI made of it: line 79
-    // answers the request that turned the sandbox off (req-5); line 80 is the get_settings after it.
+    // Capture 33 kept no stdin lines, so the request is held to what the CLI made of it: line 68
+    // answers the request that turned the sandbox off (req-5); line 69 is the get_settings after it.
     let id = format!("{SANDBOX}-req-5");
     let written = json(&encode::sandbox_off(&id));
-    let answer = &sandbox_line(79)["response"];
-    let settings = sandbox_line(80)["response"]["response"].clone();
+    let answer = &sandbox_line(68)["response"];
+    let settings = sandbox_line(69)["response"]["response"].clone();
     let flag_layers: Vec<&Value> = settings["sources"]
         .as_array()
         .unwrap()

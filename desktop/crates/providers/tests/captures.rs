@@ -600,9 +600,9 @@ fn the_declared_kinds_that_never_arrive_are_left_unmodelled() {
 #[test]
 fn an_init_with_no_scratchpad_path_is_placed_with_the_path_null() {
     for (scenario, line) in [
-        ("16-permission-suggestion-accept", 5),
+        ("16-permission-suggestion-accept", 4),
         ("21-compact", 4),
-        ("21-compact", 21),
+        ("21-compact", 20),
     ] {
         let event = capture_line(scenario, line);
         let AgentEvent::SystemInit {
@@ -617,14 +617,14 @@ fn an_init_with_no_scratchpad_path_is_placed_with_the_path_null() {
 
 #[test]
 fn commands_changed_and_compact_boundary_lines_become_typed_values() {
-    for line in [1, 7, 8] {
-        let event = capture_line("16-permission-suggestion-accept", line);
+    for line in [6, 7] {
+        let event = capture_line("01-baseline-text", line);
         assert!(
             matches!(event, AgentEvent::SystemCommandsChanged { .. }),
             "line {line}: {event:?}"
         );
     }
-    let boundary = capture_line("21-compact", 22);
+    let boundary = capture_line("21-compact", 21);
     let AgentEvent::SystemCompactBoundary {
         compact_metadata,
         logical_parent_uuid,
@@ -636,13 +636,13 @@ fn commands_changed_and_compact_boundary_lines_become_typed_values() {
     assert!(compact_metadata.0.contains("trigger") && compact_metadata.0.contains("pre_tokens"));
     assert!(
         logical_parent_uuid.is_some(),
-        "21 line 22 carries logical_parent_uuid"
+        "21 line 21 carries logical_parent_uuid"
     );
 }
 
 #[test]
 fn the_result_of_a_local_command_is_placed_with_its_optional_fields_absent() {
-    let event = capture_line("21-compact", 25);
+    let event = capture_line("21-compact", 24);
     let AgentEvent::Result {
         local_command,
         stop_reason,
@@ -688,7 +688,7 @@ fn a_model_turn_result_still_carries_its_timing_fields_and_no_local_command() {
 #[test]
 fn a_result_names_every_message_its_turn_took_in_in_order() {
     // 31: the second message, sent while the first ran, was taken into the first's turn.
-    let event = capture_line("31-send-mid-turn", 54);
+    let event = capture_line("31-send-mid-turn", 52);
     let AgentEvent::Result {
         user_message_uuid,
         user_message_uuids,
@@ -704,7 +704,7 @@ fn a_result_names_every_message_its_turn_took_in_in_order() {
 
 #[test]
 fn a_result_without_the_list_has_none_and_one_with_stray_entries_keeps_only_its_strings() {
-    let line = &non_blank_lines(&text_of("31-send-mid-turn.ndjson"))[53];
+    let line = &non_blank_lines(&text_of("31-send-mid-turn.ndjson"))[51];
     let json: Value = serde_json::from_str(line).unwrap();
     let mut without = json.clone();
     without
@@ -738,7 +738,7 @@ fn a_result_without_the_list_has_none_and_one_with_stray_entries_keeps_only_its_
 #[test]
 fn an_error_result_without_a_result_text_says_what_went_wrong_with_its_errors() {
     // sdk.d.ts SDKResultError has errors and no result. 32 was interrupted while a foreground Bash ran.
-    let event = capture_line("32-interrupt-foreground", 80);
+    let event = capture_line("32-interrupt-foreground", 72);
     let AgentEvent::Result {
         subtype,
         is_error,
@@ -786,7 +786,7 @@ fn a_result_written_before_initialize_decodes() {
 #[test]
 fn a_control_response_lifts_request_id_subtype_and_error_and_a_success_lifts_no_error() {
     let rejected = capture_line("07-set-model-and-mode", 9);
-    let accepted = capture_line("07-set-model-and-mode", 4);
+    let accepted = capture_line("07-set-model-and-mode", 5);
     let AgentEvent::ControlResponse {
         request_id: rej_id,
         subtype: rej_sub,

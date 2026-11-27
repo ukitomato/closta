@@ -91,18 +91,23 @@ fn result_for(
 // --- SessionCostTest ----------------------------------------------------------------------
 
 #[test]
-fn capture_10_ends_at_the_last_cost_figure_not_the_sum_of_the_three() {
-    const FINAL_COST: f64 = 0.15600725000000004;
-    let sum_of_three: f64 = 0.11048720000000001 + 0.13129565 + 0.15600725000000004;
+fn capture_10_ends_at_the_last_cost_figure_not_the_sum_of_the_two() {
+    // 10-background-task.ndjson:54 and :112 spell these. The codec reads a cost with serde_json's
+    // default float parse, which can sit one unit of the last place off the spelled double, so the
+    // expectation is read the same way.
+    let record_cost = |literal: &str| -> f64 { serde_json::from_str(literal).unwrap() };
+    let first_cost = record_cost("0.0794802");
+    let final_cost = record_cost("0.21946859999999999");
+    let sum_of_two = first_cost + final_cost;
 
     let state = fold_capture("10-background-task.ndjson");
 
     assert_eq!(
-        FINAL_COST, state.usage.session_cost_usd,
+        final_cost, state.usage.session_cost_usd,
         "session cost is the last total, replaced not summed"
     );
     assert!(
-        (sum_of_three - state.usage.session_cost_usd).abs() > 1e-9,
+        (sum_of_two - state.usage.session_cost_usd).abs() > 1e-9,
         "must not accumulate the running total"
     );
 }
@@ -110,15 +115,15 @@ fn capture_10_ends_at_the_last_cost_figure_not_the_sum_of_the_three() {
 // --- TurnBoundaryTest -----------------------------------------------------------------------
 
 #[test]
-fn capture_10_closes_the_user_started_turn_and_treats_the_two_null_results_as_resumes() {
+fn capture_10_closes_the_user_started_turn_and_treats_the_null_result_as_a_resume() {
     let state = fold_capture("10-background-task.ndjson");
 
     assert_eq!(1, state.turns.len(), "one turn opened");
     assert_eq!(0, open_turns(&state), "no turn left open");
     assert_eq!(1, closed_turns(&state), "the user-started turn is closed");
     assert_eq!(
-        2, state.spontaneous_resume_count,
-        "the two null-uuid results closed nothing"
+        1, state.spontaneous_resume_count,
+        "the null-uuid result closed nothing"
     );
 }
 
@@ -903,7 +908,7 @@ fn capture_05_enqueues_one_approval_then_clears_it_when_the_turn_closes() {
     );
     let pending = &at_request.pending_approvals[0];
     assert_eq!(
-        "fd37592b-7c5a-4653-bb77-f4b22769cdd5", pending.request_id,
+        "e42c7fac-e237-4ee9-a6c1-d19579abb0f3", pending.request_id,
         "keyed by request_id"
     );
     assert_eq!(
@@ -912,7 +917,7 @@ fn capture_05_enqueues_one_approval_then_clears_it_when_the_turn_closes() {
         "Write is a plain tool, not AskUserQuestion"
     );
     assert_eq!(
-        Some("toolu_01FooZHpFpzmDvsr82dzYb33".to_string()),
+        Some("toolu_01S2wEQGaruCBtQJHkwEwrxu".to_string()),
         pending.tool_use_id,
         "tool_use_id rides along"
     );
@@ -1015,9 +1020,9 @@ fn the_ten_approval_free_captures_never_enqueue_an_approval() {
 
 // --- AskResolutionTest ----------------------------------------------------------------------
 
-const REQUEST_13: &str = "9f0891e5-a636-4c70-8a63-c288c7eaf6aa";
-const REQUEST_14: &str = "4008cf14-e949-4846-b552-64e819026208";
-const REQUEST_15: &str = "d0762c7b-dfa5-4b56-b7de-cf86aaede9d9";
+const REQUEST_13: &str = "83bc36d7-6561-4c72-b33f-019b65e4903e";
+const REQUEST_14: &str = "418041f6-58b2-4928-a0ac-cc3bcd97c399";
+const REQUEST_15: &str = "49691af8-f839-4ed3-b8b8-19f7e7d39f59";
 
 /// A virtual clock: elapsed time is computed from it, never from a real one.
 struct VirtualClock {
@@ -1162,7 +1167,7 @@ fn capture_12_attributes_the_approval_to_the_subagent_by_agent_id_matching_a_tas
     assert_eq!(1, at_request.pending_approvals.len());
     let pending = &at_request.pending_approvals[0];
     assert_eq!(
-        Some("ac9bfb270bbfbff94".to_string()),
+        Some("ab3019be48fe1d742".to_string()),
         pending.agent_id,
         "12: the approval is attributed to the subagent by agent_id"
     );
