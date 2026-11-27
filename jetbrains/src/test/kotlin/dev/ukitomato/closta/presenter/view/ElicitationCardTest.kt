@@ -294,4 +294,27 @@ class ElicitationCardTest {
                 .waits,
         )
     }
+
+    @Test
+    fun `a card prints no message, link or form values`() {
+        val state =
+            HostState()
+                .line(link(url = "https://example.com/auth?code=SECRET-CODE"))
+                .answer(ElicitationAction.DECLINE, id = "u1")
+        val text = state.card().toString()
+        assertFalse(text.contains("SECRET-CODE") || text.contains("Sign in"), text)
+        val form = HostState().line(form()).answer(ElicitationAction.ACCEPT, """{"name":"SECRET-VALUE"}""")
+        assertFalse(form.card().toString().contains("SECRET-VALUE"), form.card().toString())
+        assertTrue(text.contains("u1"), text)
+    }
+
+    @Test
+    fun `a request whose process ended does not count as waiting`() {
+        val asked = HostState().line(form())
+        assertEquals(listOf("e1"), waitingElicitations(asked.conversation, asked.transcript).map { it.requestId })
+        val ended = asked.next(PresenterInput.ProcessEnded)
+        assertTrue(waitingElicitations(ended.conversation, ended.transcript).isEmpty())
+        assertFalse(threadIsRunning(ended.conversation, ended.transcript))
+        assertEquals(SessionGroup.OTHER, sessionSummary(ended.conversation, ended.transcript, false).group)
+    }
 }

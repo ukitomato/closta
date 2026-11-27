@@ -1,7 +1,6 @@
 package dev.ukitomato.closta.platforms.intellij.thread
 
 import com.intellij.icons.AllIcons
-import com.intellij.ide.BrowserUtil
 import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.util.SystemInfo
@@ -55,6 +54,7 @@ data class ElicitationAnswer(
     val requestId: String,
     val action: ElicitationAction,
     val content: String?,
+    val openUrl: String? = null,
 )
 
 /**
@@ -133,10 +133,7 @@ internal class ElicitationBody(
 
     private fun openInBrowser() {
         val url = card.url ?: return
-        host.send {
-            BrowserUtil.browse(url)
-            ElicitationAnswer(card.requestId, ElicitationAction.ACCEPT, null)
-        }
+        host.send { ElicitationAnswer(card.requestId, ElicitationAction.ACCEPT, null, openUrl = url) }
     }
 
     private fun content(): JComponent {
@@ -404,11 +401,26 @@ private class RadioInput(
                 addItemListener { edited() }
             } to option
         }
+
+    // An optional choice can go back to no value: the extra button, the one selected while nothing is chosen.
+    private val none =
+        if (field.required) {
+            null
+        } else {
+            JBRadioButton(
+                ClostaBundle.message("thread.elicitation.noChoice"),
+                buttons.none { it.first.isSelected },
+            ).apply {
+                name = "elicitation.${field.key}.none"
+                isOpaque = false
+                addItemListener { edited() }
+            }
+        }
     override val component: JComponent =
         javax.swing.JPanel(java.awt.GridLayout(0, 1)).apply {
             isOpaque = false
             val group = ButtonGroup()
-            buttons.forEach { (button, _) ->
+            (buttons.map { it.first } + listOfNotNull(none)).forEach { button ->
                 group.add(button)
                 add(button)
             }
@@ -419,6 +431,7 @@ private class RadioInput(
     override fun restore(value: ElicitationValue) {
         val chosen = (value as? ElicitationValue.Choices)?.values.orEmpty()
         buttons.forEach { (button, option) -> button.isSelected = option.value in chosen }
+        none?.isSelected = chosen.isEmpty()
     }
 }
 

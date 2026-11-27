@@ -58,7 +58,7 @@ import kotlin.time.Duration.Companion.seconds
  * wrapped process and is not touched here. Writes go through one lock so the session's lines and the answers do not
  * interleave.
  */
-@Suppress("TooManyFunctions", "ReturnCount") // one wrapper: line routing, answering and lifetime belong together
+@Suppress("TooManyFunctions", "ReturnCount", "LongParameterList") // one wrapper: routing, answering and lifetime
 class HostAgentProcess(
     private val inner: AgentProcess,
     private val servers: List<SdkMcpServer>,
@@ -66,6 +66,7 @@ class HostAgentProcess(
     private val initializeRequestId: String = "mcp-init-" + UUID.randomUUID(),
     private val answerTimeout: Duration = DEFAULT_ANSWER_TIMEOUT,
     private val hookTimeout: Duration = DEFAULT_HOOK_TIMEOUT,
+    private val log: (String) -> Unit = {},
 ) : AgentProcess {
     private val writeLock = Mutex()
     private var initialized = false
@@ -260,7 +261,8 @@ class HostAgentProcess(
         } catch (
             @Suppress("TooGenericExceptionCaught", "SwallowedException") failure: Throwable,
         ) {
-            // A failing hook must not stop the CLI's action, and its own words are not ours to vouch for.
+            // A failing hook must not stop the CLI's action, and its words are not ours to vouch for, so only its type.
+            log("hook failed (${failure.javaClass.name})")
             StdinEncoder.hookResponse(requestId, "{}")
         }
 

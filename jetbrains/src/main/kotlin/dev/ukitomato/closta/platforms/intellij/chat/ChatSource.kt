@@ -1,5 +1,6 @@
 package dev.ukitomato.closta.platforms.intellij.chat
 
+import com.intellij.ide.BrowserUtil
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
@@ -234,12 +235,24 @@ interface ChatSource : Disposable {
         }
 
         override suspend fun answerElicitation(answer: ElicitationAnswer) {
-            val commands = commands() ?: return
-            answerOrMarkFailed(
-                { commands.respondToElicitation(ElicitationDecision(answer.requestId, answer.action), answer.content) },
-                { commands.answerFailed(answer.requestId) },
-                { thisLogger().warn(it) },
-            )
+            val commands = commands()
+            if (commands == null) {
+                runtime.elicitationNotSent(answer.requestId)
+                return
+            }
+            val sent =
+                answerOrMarkFailed(
+                    {
+                        commands.respondToElicitation(
+                            ElicitationDecision(answer.requestId, answer.action),
+                            answer.content,
+                        )
+                    },
+                    { commands.answerFailed(answer.requestId) },
+                    { thisLogger().warn(it) },
+                )
+            // The user goes on in the browser only once the CLI has the answer; a failed one is tried again.
+            if (sent) answer.openUrl?.let(BrowserUtil::browse)
         }
 
         override suspend fun interrupt() {

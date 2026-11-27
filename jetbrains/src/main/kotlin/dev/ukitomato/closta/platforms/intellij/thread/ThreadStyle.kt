@@ -122,7 +122,16 @@ object ThreadStyle {
         line.reported?.let { reported ->
             (
                 listOf(
-                    ClostaBundle.message("thread.tool.diagnosticsReported", reported.count.toString()),
+                    ClostaBundle.message(
+                        if (reported.count ==
+                            1
+                        ) {
+                            "thread.tool.diagnosticsReported.one"
+                        } else {
+                            "thread.tool.diagnosticsReported"
+                        },
+                        reported.count.toString(),
+                    ),
                 ) + reported.lines
             ).joinToString("\n")
         }

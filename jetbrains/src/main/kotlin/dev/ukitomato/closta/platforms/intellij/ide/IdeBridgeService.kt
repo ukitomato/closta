@@ -41,7 +41,7 @@ class IdeBridgeService(
     override val editorEdits: EditorEdits = IdeEditorEdits(project)
     override val diagnostics: Diagnostics = IdeDiagnostics(project)
     override val diffViews: DiffViews = IdeDiffViews(project)
-    override val unsavedDocuments: UnsavedDocuments = IdeUnsavedDocuments(project)
+    override val unsavedDocuments: UnsavedDocuments = IdeUnsavedDocuments()
     override val analysisWait: AnalysisWait = IdeAnalysisWait(project)
     override val worktrees: Worktrees? =
         project.basePath?.let { root -> NotifyingWorktrees(GitWorktrees(root), ::announce) }

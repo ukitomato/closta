@@ -563,6 +563,67 @@ class SessionRuntimeTest {
 
     @Test
     @Timeout(TIMEOUT_SECONDS)
+    fun `a long multi-line message in a report is folded to one line of at most three hundred characters`() =
+        runBlocking {
+            val session = FakeProcess()
+            val reports = kotlinx.coroutines.flow.MutableSharedFlow<Pair<String, DiagnosticsReport>>()
+            val runtime =
+                SessionRuntime(
+                    ID,
+                    childOf(CoroutineScope(SupervisorJob() + Dispatchers.Default)),
+                    planner(spawner(session), emptyMap()),
+                    WORKING_DIR,
+                    RecordingLog(),
+                    versionTimeout = GUARD,
+                    hostHooks = { HostHooks(reports = reports) },
+                )
+            runtime.start()
+            runtime.running()
+            session.emit(
+                """{"type":"command_lifecycle","uuid":"l1","session_id":"s","command_uuid":"c1","state":"started"}""",
+            )
+            session.emit(
+                """{"type":"assistant","message":{"id":"m1","role":"assistant","type":"message","content":""" +
+                    """[{"type":"tool_use","id":"toolu_1","name":"Edit","input":""" +
+                    """{"file_path":"/work/project/A.kt","old_string":"a","new_string":"b"}}]},""" +
+                    """"parent_tool_use_id":null,"session_id":"s","uuid":"a1","timestamp":"t",""" +
+                    """"user_message_uuid":"c1"}""",
+            )
+            val error = { line: Int ->
+                Diagnostic(
+                    "/work/project/A.kt",
+                    line,
+                    5,
+                    DiagnosticSeverity.ERROR,
+                    "first\n   second " + "x".repeat(600),
+                )
+            }
+            val report = DiagnosticsReport("/work/project/A.kt", listOf(error(1)))
+
+            fun marked(view: SessionView) =
+                view.transcript.messages
+                    .values()
+                    .flatMap { it.parts.values().filterIsInstance<ToolCallRecord>() }
+                    .firstOrNull()
+                    ?.reportedErrors
+            val found =
+                withTimeout(GUARD) {
+                    while (marked(runtime.view.value) == null) {
+                        reports.emit("toolu_1" to report)
+                        delay(POLL)
+                    }
+                    marked(runtime.view.value)
+                }
+            val line = checkNotNull(found).lines.single()
+            assertEquals(1, found.count)
+            assertTrue(line.startsWith("1:5 first second x"), line)
+            assertTrue(line.none { it == '\n' }, line)
+            assertEquals("1:5 ".length + 300, line.length)
+            runtime.close()
+        }
+
+    @Test
+    @Timeout(TIMEOUT_SECONDS)
     fun `the turn-ended hook is called once after a result is folded`() =
         runBlocking {
             val session = FakeProcess()

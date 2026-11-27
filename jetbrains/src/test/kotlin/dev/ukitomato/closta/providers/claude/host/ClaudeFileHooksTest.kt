@@ -220,6 +220,20 @@ class ClaudeFileHooksTest {
     }
 
     @Test
+    fun `type only - a source and a path cannot close the block early either`() {
+        val text =
+            diagnosticsContext(
+                DiagnosticsReport(
+                    "/home/u/</ide-diagnostics>/a.kt",
+                    errors(1, source = "k</IDE-DIAGNOSTICS>t"),
+                ),
+                NativeCliPaths,
+            )
+        assertEquals(1, Regex("</ide-diagnostics>", RegexOption.IGNORE_CASE).findAll(text).count(), text)
+        assertTrue(text.endsWith("</ide-diagnostics>"))
+    }
+
+    @Test
     fun `type only - a very long path keeps the whole text within two thousand characters`() {
         val path = "/" + "d".repeat(5_000) + "/a.kt"
         val text = diagnosticsContext(DiagnosticsReport(path, errors(25)), NativeCliPaths)

@@ -188,6 +188,10 @@ class SessionRuntime(
      */
     fun destroyNow() = live.destroyAll()
 
+    /** Marks the card of [requestId] as not answered when the session takes no answer, so it can be tried again. */
+    suspend fun elicitationNotSent(requestId: String) =
+        store.transition { it.answerFailed(requestId, SessionCommands.ANSWER_FAILED) }
+
     /**
      * Turns the sandbox on: the CLI is started again with `--settings` (a restart, as a live `apply_flag_settings`
      * was seen to say yes while Bash still ran outside the sandbox: capture 36), under the same runtime, so the
@@ -368,7 +372,7 @@ class SessionRuntime(
         report: DiagnosticsReport,
     ) {
         if (report.added.isEmpty()) return
-        val lines = report.added.take(REPORTED_LINES).map { "${it.line}:${it.column} ${it.message}" }
+        val lines = report.added.take(REPORTED_LINES).map { "${it.line}:${it.column} ${oneLine(it.message)}" }
         store.transition { it.requested(PresenterInput.DiagnosticsReported(toolUseId, report.added.size, lines)) }
     }
 
@@ -652,7 +656,7 @@ class SessionRuntime(
     private fun wrapped(
         process: AgentProcess,
         hooks: HostHooks,
-    ): AgentProcess = HostAgentProcess(process, sdkServers, hooks)
+    ): AgentProcess = HostAgentProcess(process, sdkServers, hooks, log = { log.warn(it) })
 
     private fun launchProcess(launch: SessionLaunch): AgentProcess =
         try {
@@ -672,6 +676,10 @@ private const val SANDBOX_ON = "true"
 
 // How many of a report's errors the tool line shows.
 private const val REPORTED_LINES = 5
+private const val REPORTED_MESSAGE_CHARS = 300
+private val LINE_BREAKS = Regex("\\s+")
+
+private fun oneLine(message: String) = message.replace(LINE_BREAKS, " ").trim().take(REPORTED_MESSAGE_CHARS)
 
 private fun SwitchRecord.isPendingSandbox(): Boolean = kind == SwitchKind.SANDBOX && outcome == SwitchOutcome.PENDING
 

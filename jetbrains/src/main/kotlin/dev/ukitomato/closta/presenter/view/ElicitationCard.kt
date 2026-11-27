@@ -24,7 +24,10 @@ data class ElicitationCard(
     val failure: String?,
     val answerable: Boolean,
     override val answered: ApprovalOutcome?,
-) : ThreadCard
+) : ThreadCard {
+    // The message, the link and what was sent come from a server or the user: a log line never carries them.
+    override fun toString(): String = "ElicitationCard($requestId, $stage, ${sentAction?.wire})"
+}
 
 /**
  * The card for [record]. [pending] is whether core still holds the request as pending. A request that waits and is
@@ -95,3 +98,4 @@ internal fun waitingElicitations(
     conversation.pendingApprovals
         .filter { it.requestId.isNotEmpty() }
         .mapNotNull { transcript.elicitations[it.requestId] }
+        .filterNot { it.ended }

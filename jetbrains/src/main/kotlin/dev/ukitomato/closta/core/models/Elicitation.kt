@@ -53,10 +53,9 @@ internal fun ConversationState.withoutPending(drops: (PendingApproval) -> Boolea
     val (dropped, kept) = pendingApprovals.partition(drops)
     if (dropped.isEmpty()) return this
     val settled =
-        dropped.filter { it.kind == ApprovalKind.ELICITATION }.map { it.requestId }.filterNot {
-            it in
-                settledElicitations
-        }
+        dropped.filter { it.kind == ApprovalKind.ELICITATION }.map { it.requestId }.filterNot(
+            settledElicitations::contains,
+        )
     return copy(
         pendingApprovals = kept,
         settledElicitations = (settledElicitations + settled).takeLast(SETTLED_ELICITATIONS_KEPT),

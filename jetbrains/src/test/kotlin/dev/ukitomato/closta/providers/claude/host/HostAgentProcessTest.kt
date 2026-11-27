@@ -59,12 +59,14 @@ class HostAgentProcessTest {
         }
     }
 
+    @Suppress("LongParameterList") // each is something a test changes
     private fun CoroutineScope.start(
         servers: List<SdkMcpServer>,
         timeout: kotlin.time.Duration = 10.seconds,
         process: ChannelProcess = ChannelProcess(),
         hooks: HostHooks = HostHooks(),
         hookTimeout: kotlin.time.Duration = 9.seconds,
+        log: (String) -> Unit = {},
     ): Run {
         val wrapper =
             HostAgentProcess(
@@ -74,6 +76,7 @@ class HostAgentProcessTest {
                 initializeRequestId = INIT_ID,
                 answerTimeout = timeout,
                 hookTimeout = hookTimeout,
+                log = log,
             )
         val seen = Channel<String>(Channel.UNLIMITED)
         val job = launch { wrapper.stdoutLines.collect { seen.send(it) } }
@@ -401,7 +404,8 @@ class HostAgentProcessTest {
                         else -> null
                     }
                 }
-            val run = start(listOf(ScriptedServer()), hooks = hooks)
+            val logged = java.util.concurrent.CopyOnWriteArrayList<String>()
+            val run = start(listOf(ScriptedServer()), hooks = hooks, log = { logged += it })
             run.process.nextWrite()
             run.process.emit(hookRequest("H2", callbackId = "stranger"))
             val unknown = answerOf(withTimeout(guard) { run.process.nextWrite() })
@@ -414,6 +418,8 @@ class HostAgentProcessTest {
             assertEquals("H3", failed.get("request_id").asString)
             assertEquals(0, failed.getAsJsonObject("response").size())
             assertFalse(run.process.written.any { it.contains("SECRET-CANARY") })
+            assertEquals(listOf("hook failed (java.io.IOException)"), logged)
+            assertFalse(logged.any { it.contains("SECRET-CANARY") })
             run.process.end()
             run.job.join()
         }

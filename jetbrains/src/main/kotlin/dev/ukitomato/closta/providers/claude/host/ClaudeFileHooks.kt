@@ -94,6 +94,8 @@ private fun shortPath(path: String): String =
 private val BLOCK_MARK = Regex("</?ide-diagnostics>", RegexOption.IGNORE_CASE)
 private val WHITESPACE = Regex("\\s+")
 
+private fun defused(text: String): String = text.replace(BLOCK_MARK, "[ide-diagnostics]")
+
 // A message is plain text: nothing is decoded or stripped, only the words that would close the block are defused.
 private fun plain(message: String): String =
     message
@@ -112,7 +114,7 @@ fun diagnosticsContext(
 ): String {
     val lines =
         report.added.map { found ->
-            val source = found.source?.let { " ($it)" }.orEmpty()
+            val source = found.source?.let { " (${plain(it)})" }.orEmpty()
             "  ${found.line}:${found.column} ${plain(found.message)}$source"
         }
     val total = lines.size
@@ -121,7 +123,7 @@ fun diagnosticsContext(
     fun render(shown: Int): String =
         buildList {
             add("<ide-diagnostics>")
-            add("The edit added $noun in ${shortPath(paths.toCli(report.path))}:")
+            add("The edit added $noun in ${shortPath(defused(paths.toCli(report.path)))}:")
             addAll(lines.take(shown))
             if (shown < total) add("  …and ${total - shown} more")
             add("</ide-diagnostics>")
