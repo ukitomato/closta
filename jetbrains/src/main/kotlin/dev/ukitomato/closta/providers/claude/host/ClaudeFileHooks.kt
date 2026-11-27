@@ -19,6 +19,7 @@ private val PATH_KEYS =
  * The file tool call a hook input describes, with its path in the IDE's form; null when the input names no file tool,
  * no path or no `tool_use_id` (taken from [toolUseId], else from the input).
  */
+@Suppress("ReturnCount") // each missing part ends the read early
 fun fileToolCall(
     input: JsonObject,
     toolUseId: String?,
@@ -28,14 +29,14 @@ fun fileToolCall(
         when (input.text("hook_event_name")) {
             "PreToolUse" -> HookPhase.BEFORE
             "PostToolUse" -> HookPhase.AFTER
-            else -> null
+            else -> return null
         }
-    val tool = input.text("tool_name")
-    val key = PATH_KEYS[tool]
-    val path = if (key == null) null else (input.get("tool_input") as? JsonObject)?.text(key)
-    val id = toolUseId ?: input.text("tool_use_id")
-    val complete = phase != null && tool != null && !path.isNullOrEmpty() && id != null
-    return if (complete) FileToolCall(phase!!, tool!!, paths.toIde(path!!), id!!, input.text("agent_id")) else null
+    val tool = input.text("tool_name") ?: return null
+    val key = PATH_KEYS[tool] ?: return null
+    val path = (input.get("tool_input") as? JsonObject)?.text(key)
+    if (path.isNullOrEmpty()) return null
+    val id = toolUseId ?: input.text("tool_use_id") ?: return null
+    return FileToolCall(phase, tool, paths.toIde(path), id, input.text("agent_id"))
 }
 
 private fun JsonObject.text(key: String): String? = get(key)?.takeIf { it.isStringPrimitive() }?.asString

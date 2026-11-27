@@ -129,6 +129,6 @@ class ClaudeFileHooksTest {
             val answer = hooks.answer("closta-before-file-tool", input(tool = "Edit"), "t1")
             val tookMillis = (System.nanoTime() - start) / 1_000_000
             assertEquals(JsonObject(), answer)
-            assertEquals(true, tookMillis < 1_000, "took $tookMillis ms")
+            assertEquals(true, tookMillis in 95..150, "took $tookMillis ms, limit 100 ms plus 50 ms")
         }
 }

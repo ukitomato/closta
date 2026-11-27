@@ -94,13 +94,35 @@ class FileToolHooksTest {
             val start = System.nanoTime()
             hooks(documents, limit = 100).before(call)
             val tookMillis = (System.nanoTime() - start) / 1_000_000
-            assertTrue(tookMillis in 90..1_000, "went on after $tookMillis ms")
+            assertTrue(tookMillis in 95..150, "went on after $tookMillis ms, limit 100 ms plus 50 ms")
             assertEquals(1, logged.size)
             assertTrue(logged.single().contains("100 ms"))
             assertFalse(finished.isCompleted)
             release.complete(Unit)
             withTimeout(2_000) { finished.await() }
         }
+
+    @Test
+    fun `type only - many calls for one file while its save is blocked start one save`() =
+        runBlocking {
+            val release = CompletableDeferred<Unit>()
+            val documents =
+                Recording {
+                    release.await()
+                    SaveResult.SAVED
+                }
+            val hooks = hooks(documents, limit = 50)
+            repeat(20) { hooks.before(call) }
+            assertEquals(1, documents.saved.size)
+            hooks.before(call.copy(path = "/p/other.kt"))
+            assertEquals(2, documents.saved.size)
+            release.complete(Unit)
+            withTimeout(2_000) { while (documents.saved.size < 2 || !hooksIdle(hooks)) kotlinx.coroutines.delay(10) }
+            hooks.before(call)
+            assertEquals(3, documents.saved.size)
+        }
+
+    private fun hooksIdle(hooks: FileToolHooks) = hooks.pendingSaves() == 0
 
     @Test
     fun `the default limit is two seconds`() {
