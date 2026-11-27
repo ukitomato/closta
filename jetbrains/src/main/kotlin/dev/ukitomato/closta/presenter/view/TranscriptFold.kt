@@ -32,6 +32,8 @@ fun foldTranscript(
         is PresenterInput.AnswerFailed -> foldAnswerFailed(transcript, input, before)
         is PresenterInput.ElicitationDecided -> foldElicitationDecided(transcript, input, before)
         PresenterInput.ProcessEnded -> transcript.withProcessEnded()
+        is PresenterInput.DiagnosticsReported ->
+            transcript.markReported(Keys.ofCliId(input.toolUseId), ReportedErrors(input.count, input.lines))
         is PresenterInput.FilesFound,
         is PresenterInput.SelectionCaptured,
         is PresenterInput.CodeApplied,

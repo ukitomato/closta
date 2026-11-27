@@ -117,6 +117,16 @@ object ThreadStyle {
             ToolLineState.DENIED -> ClostaBundle.message("thread.tool.denied")
         }
 
+    /** What Claude was told of the call's new IDE errors, with the first of them; null when it was told none. */
+    fun reportedText(line: ToolLine): String? =
+        line.reported?.let { reported ->
+            (
+                listOf(
+                    ClostaBundle.message("thread.tool.diagnosticsReported", reported.count.toString()),
+                ) + reported.lines
+            ).joinToString("\n")
+        }
+
     /** [line]'s state in words; for a refused call, why it was refused. */
     fun stateWord(line: ToolLine): String =
         if (line.state == ToolLineState.DENIED) deniedText(line.denial) else stateWord(line.state)
@@ -127,6 +137,7 @@ object ThreadStyle {
             add(line.label to SimpleTextAttributes.REGULAR_ATTRIBUTES)
             line.added?.let { add(" +$it" to SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, added)) }
             line.removed?.let { add(" −$it" to SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, removed)) }
+            line.reported?.let { add(" ⚠${it.count}" to SimpleTextAttributes.ERROR_ATTRIBUTES) }
         }
 }
 

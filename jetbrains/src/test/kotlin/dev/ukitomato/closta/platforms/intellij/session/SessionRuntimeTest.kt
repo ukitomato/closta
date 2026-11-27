@@ -1,6 +1,8 @@
 package dev.ukitomato.closta.platforms.intellij.session
 
 import com.google.gson.JsonObject
+import dev.ukitomato.closta.core.interfaces.Diagnostic
+import dev.ukitomato.closta.core.interfaces.DiagnosticSeverity
 import dev.ukitomato.closta.core.models.ElicitationAction
 import dev.ukitomato.closta.core.models.ElicitationDecision
 import dev.ukitomato.closta.core.services.DiagnosticsReport
@@ -8,6 +10,8 @@ import dev.ukitomato.closta.core.services.FixedClock
 import dev.ukitomato.closta.platforms.intellij.auth.SignInOutcome
 import dev.ukitomato.closta.platforms.intellij.settings.ProviderLaunch
 import dev.ukitomato.closta.platforms.intellij.store.ProviderId
+import dev.ukitomato.closta.presenter.view.ReportedErrors
+import dev.ukitomato.closta.presenter.view.ToolCallRecord
 import dev.ukitomato.closta.providers.claude.fixtures.CaptureFixtures
 import dev.ukitomato.closta.providers.claude.host.HostHooks
 import dev.ukitomato.closta.providers.claude.launch.BedrockConfig
@@ -508,11 +512,10 @@ class SessionRuntimeTest {
 
     @Test
     @Timeout(TIMEOUT_SECONDS)
-    fun `a report the hooks produce reaches the consumer while the process runs`() =
+    fun `a report the hooks produce reaches the presenter and marks the tool row while the process runs`() =
         runBlocking {
             val session = FakeProcess()
             val reports = kotlinx.coroutines.flow.MutableSharedFlow<Pair<String, DiagnosticsReport>>()
-            val got = CompletableDeferred<Pair<String, DiagnosticsReport>>()
             val runtime =
                 SessionRuntime(
                     ID,
@@ -522,18 +525,39 @@ class SessionRuntimeTest {
                     RecordingLog(),
                     versionTimeout = GUARD,
                     hostHooks = { HostHooks(reports = reports) },
-                    reported = { toolUseId, report -> got.complete(toolUseId to report) },
                 )
             runtime.start()
             runtime.running()
-            val report = DiagnosticsReport("/work/project/A.kt", emptyList())
-            withTimeout(GUARD) {
-                while (!got.isCompleted) {
-                    reports.emit("toolu_1" to report)
-                    delay(POLL)
-                }
+            session.emit(
+                """{"type":"command_lifecycle","uuid":"l1","session_id":"s","command_uuid":"c1","state":"started"}""",
+            )
+            session.emit(
+                """{"type":"assistant","message":{"id":"m1","role":"assistant","type":"message","content":""" +
+                    """[{"type":"tool_use","id":"toolu_1","name":"Edit","input":""" +
+                    """{"file_path":"/work/project/A.kt","old_string":"a","new_string":"b"}}]},""" +
+                    """"parent_tool_use_id":null,"session_id":"s","uuid":"a1","timestamp":"t",""" +
+                    """"user_message_uuid":"c1"}""",
+            )
+            val error = { line: Int ->
+                Diagnostic("/work/project/A.kt", line, 5, DiagnosticSeverity.ERROR, "bad $line")
             }
-            assertEquals("toolu_1" to report, got.await())
+            val report = DiagnosticsReport("/work/project/A.kt", (1..7).map(error))
+
+            fun marked(view: SessionView) =
+                view.transcript.messages
+                    .values()
+                    .flatMap { it.parts.values().filterIsInstance<ToolCallRecord>() }
+                    .firstOrNull()
+                    ?.reportedErrors
+            val found =
+                withTimeout(GUARD) {
+                    while (marked(runtime.view.value) == null) {
+                        reports.emit("toolu_1" to report)
+                        delay(POLL)
+                    }
+                    marked(runtime.view.value)
+                }
+            assertEquals(ReportedErrors(7, (1..5).map { "$it:5 bad $it" }), found)
             runtime.close()
         }
 

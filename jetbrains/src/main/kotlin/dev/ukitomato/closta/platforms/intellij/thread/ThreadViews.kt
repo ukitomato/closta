@@ -708,11 +708,16 @@ class ThreadRowViews(
             EllipsizedLine(
                 ThreadStyle.pieces(line),
                 ThreadStyle.stateIcon(line.state),
-                note = listOfNotNull(what, ThreadStyle.stateWord(line)).joinToString(" — "),
+                note = listOfNotNull(what, ThreadStyle.stateWord(line)).joinToString(" — ").withReported(line),
             ).apply { getAccessibleContext().accessibleName = toolName(line) }
 
+        private fun String.withReported(line: ToolLine): String =
+            ThreadStyle.reportedText(line)?.let { "$this\n$it" } ?: this
+
         /** What a screen reader says of a tool line: what it is, then its state in words. */
-        fun toolName(line: ToolLine): String = "${line.label} ${ThreadStyle.stateWord(line)}"
+        fun toolName(line: ToolLine): String =
+            listOfNotNull(line.label, ThreadStyle.stateWord(line), ThreadStyle.reportedText(line)?.lines()?.first())
+                .joinToString(" ")
 
         /**
          * Monospaced [text] in a soft box, not wrapped: no taller than [CODE_LINES] lines (the rest scrolls inside with

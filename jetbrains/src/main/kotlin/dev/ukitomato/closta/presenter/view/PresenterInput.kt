@@ -242,6 +242,19 @@ sealed interface PresenterInput {
         val reason: ResumeRefusal = ResumeRefusal.TURN,
     ) : PresenterInput
 
+    /**
+     * The host told Claude about the new IDE errors an edit introduced: [count] of them, and the first of them as
+     * [lines] (`12:5 message`), for the tool call [toolUseId]. Core does not change.
+     */
+    data class DiagnosticsReported(
+        val toolUseId: String,
+        val count: Int,
+        val lines: List<String>,
+    ) : PresenterInput {
+        // The messages are the IDE's findings about the user's code: never in a log.
+        override fun toString(): String = "DiagnosticsReported($count errors)"
+    }
+
     /** The user closed the banner of the limit [seq] ([RateLimitRecord.seq]). Core does not change. */
     data class RateLimitDismissed(
         val seq: Int,

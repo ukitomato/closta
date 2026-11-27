@@ -97,8 +97,6 @@ class SessionRuntime(
     private val clock: Clock = SystemClock(),
     /** What the host brings besides MCP servers; read once for each process it starts. */
     private val hostHooks: () -> HostHooks = { HostHooks() },
-    /** Receives each report the hooks produce, with the id of the tool call it belongs to. */
-    private val reported: suspend (String, DiagnosticsReport) -> Unit = { _, _ -> },
 ) {
     init {
         // A resumed session is opened by the id it was saved under: the tree's thread, the bridge's checks and the user
@@ -347,7 +345,12 @@ class SessionRuntime(
         coroutineScope {
             val job = launch { ended = collect(session, commands, sandboxed, hooks) }
             // The hooks' reports are taken for as long as this process runs, and no longer.
-            val reporting = launch { hooks.reports.collect { (toolUseId, report) -> reported(toolUseId, report) } }
+            val reporting =
+                launch {
+                    hooks.reports.collect { (toolUseId, report) ->
+                        reportDiagnostics(toolUseId, report)
+                    }
+                }
             processJob = job
             // A switch marked before this job was known cancels it here: one of the two sides always sees the other.
             if (restartFor != null) job.cancel()
@@ -357,6 +360,16 @@ class SessionRuntime(
         // Whatever the process asked can no longer be answered; a start after a restart says it runs again.
         store.transition { it.requested(PresenterInput.ProcessEnded) }
         return settled(process, ended, switchId)
+    }
+
+    /** Puts a report on the line of its call: the count, and the first errors as `12:5 message`. */
+    private suspend fun reportDiagnostics(
+        toolUseId: String,
+        report: DiagnosticsReport,
+    ) {
+        if (report.added.isEmpty()) return
+        val lines = report.added.take(REPORTED_LINES).map { "${it.line}:${it.column} ${it.message}" }
+        store.transition { it.requested(PresenterInput.DiagnosticsReported(toolUseId, report.added.size, lines)) }
     }
 
     // How the process whose collection is over ended, with the records that says: a CLI that did not start in the
@@ -656,6 +669,9 @@ internal val CLOSE_WAIT: Duration = 5.seconds
 internal val KILL_WAIT: Duration = 2.seconds
 
 private const val SANDBOX_ON = "true"
+
+// How many of a report's errors the tool line shows.
+private const val REPORTED_LINES = 5
 
 private fun SwitchRecord.isPendingSandbox(): Boolean = kind == SwitchKind.SANDBOX && outcome == SwitchOutcome.PENDING
 

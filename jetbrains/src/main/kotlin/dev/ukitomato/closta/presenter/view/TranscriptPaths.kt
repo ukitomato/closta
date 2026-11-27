@@ -107,17 +107,9 @@ private fun Transcript.withCall(
         } else {
             this
         }
-    val denial = routed.denials[key].takeIf { record is ToolCallRecord }
-    return if (denial == null) routed else routed.copy(denials = routed.denials - key).markDenied(key, denial)
-}
-
-/** Marks the call [key] as refused for [denial]; remembers it when the call has no line yet. */
-internal fun Transcript.markDenied(
-    key: String,
-    denial: Denial,
-): Transcript {
-    val at = routing.tools[key] ?: return copy(denials = denials.plusEntry(key, denial))
-    return updatePart(at, key) { part ->
-        if (part is ToolCallRecord && part.denied != denial) part.copy(denied = denial) else part
-    }
+    if (record !is ToolCallRecord) return routed
+    val denial = routed.denials[key]
+    val report = routed.reports[key]
+    val settled = if (denial == null) routed else routed.copy(denials = routed.denials - key).markDenied(key, denial)
+    return if (report == null) settled else settled.copy(reports = settled.reports - key).markReported(key, report)
 }

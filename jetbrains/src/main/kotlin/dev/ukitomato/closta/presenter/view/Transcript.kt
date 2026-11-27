@@ -59,6 +59,8 @@ data class Transcript(
     val clearedAt: Int? = null,
     /** Refusals whose call has no line yet, by the call's key; each is put on its line when the line is made. */
     val denials: Map<String, Denial> = emptyMap(),
+    /** Reports whose call has no line yet, by the call's key; each is put on its line when the line is made. */
+    val reports: Map<String, ReportedErrors> = emptyMap(),
     /** The uuid of the status that said a compaction did not succeed, until the boundary or the `result` shows it. */
     val compactFailure: String? = null,
 )
@@ -138,6 +140,8 @@ data class ToolCallRecord(
     val streaming: Boolean = false,
     /** Set when the CLI refused this call on its own (`permission_denied`), without asking. */
     val denied: Denial? = null,
+    /** Set when the host told Claude about the new IDE errors this call introduced. */
+    val reportedErrors: ReportedErrors? = null,
 ) : PartRecord
 
 /** Why the CLI refused a call: the kind of decision (`mode`, `rule`, `classifier`...) and its own words, if given. */
