@@ -90,7 +90,6 @@ import java.nio.charset.CharacterCodingException
 import java.nio.charset.CodingErrorAction
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
-import java.util.Locale
 import javax.imageio.ImageIO
 import javax.swing.JComponent
 import javax.swing.JPanel
@@ -345,13 +344,10 @@ class ComposerPanel(
         val whole = listOfNotNull(next.model.label, effort?.let(::effortText)).joinToString(" · ")
         model.accessibleLabel = ClostaBundle.message("composer.model.accessible", whole)
         model.toolTipText = listOfNotNull(whole, next.model.resolved?.takeIf { it != whole }).joinToString(" — ")
-        val spent = next.costUsd
-        cost.isVisible = spent != null
-        if (spent != null) {
-            val amount = "%.2f".format(Locale.ROOT, spent)
-            cost.text = ClostaBundle.message("composer.usage.button", amount)
-            cost.accessibleLabel = ClostaBundle.message("composer.usage.accessible", amount)
-        }
+        cost.isVisible = sendable || next.costUsd != null
+        val amount = costLabel(next.costUsd)
+        cost.text = ClostaBundle.message("composer.usage.button", amount)
+        cost.accessibleLabel = ClostaBundle.message("composer.usage.accessible", amount)
         showCache(next)
         val used = next.context
         context.isVisible = used != null
