@@ -113,6 +113,8 @@ class ExtraRootsPlannerTest {
         )
     }
 
+    private val log = RecordingLog()
+
     private fun planner(
         on: Boolean,
         launched: MutableList<Pair<String, Set<String>>> = mutableListOf(),
@@ -124,6 +126,7 @@ class ExtraRootsPlannerTest {
         projectBase = "/work/proj",
         paths = NativeCliPaths,
         launched = { id, _, set -> launched += id to set },
+        log = log,
     )
 
     @Test
@@ -153,5 +156,21 @@ class ExtraRootsPlannerTest {
         kotlinx.coroutines.runBlocking {
             val launch = planner(true) { listOf("/work/proj", "/data/a") }.plan("s1", "/work/wt")
             assertEquals(listOf("/data/a"), launch.spec.additionalDirectories)
+        }
+
+    @Test
+    fun `the log says how many folders the CLI cannot reach, and no path`() =
+        kotlinx.coroutines.runBlocking {
+            val wsl = cliPathsFor("""\\wsl.localhost\Ubuntu\home\u\proj""", ideOnWindows = true)
+            val roots =
+                listOf(
+                    """\\wsl.localhost\Other\secret-a""",
+                    """\\wsl.localhost\Ubuntu\home\u\lib""",
+                    "//server/secret-b",
+                )
+            ExtraRootsPlanner(Inner(), { true }, { roots }, null, wsl, { _, _, _ -> }, log).plan("s1", "/home/u/proj")
+            assertEquals(1, log.lines.size)
+            assertEquals(true, log.lines.single().contains("2 content roots"), log.lines.single())
+            assertEquals(false, log.lines.any { it.contains("secret") })
         }
 }

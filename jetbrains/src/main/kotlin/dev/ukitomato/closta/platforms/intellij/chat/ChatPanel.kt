@@ -6,6 +6,7 @@ import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
@@ -39,6 +40,7 @@ import dev.ukitomato.closta.platforms.intellij.session.SessionNotice
 import dev.ukitomato.closta.platforms.intellij.session.SessionOpening
 import dev.ukitomato.closta.platforms.intellij.session.SessionRelaunch
 import dev.ukitomato.closta.platforms.intellij.session.SessionView
+import dev.ukitomato.closta.platforms.intellij.session.afterJob
 import dev.ukitomato.closta.platforms.intellij.settings.ProvidersConfigurable
 import dev.ukitomato.closta.platforms.intellij.thread.SwingThreadSurface
 import dev.ukitomato.closta.platforms.intellij.thread.ThreadStyle
@@ -589,6 +591,13 @@ class ChatPanel(
                 project.service<ChatSessions>().stopFromScreen(old)
             },
             workingDirectory = source.workingDirectory,
+            current = { source.resumeId },
+            afterClosed = { open ->
+                // The record is the old CLI's until its process is gone; the new one opens on the EDT after that.
+                afterJob(project.service<ClaudeSessionService>().closing(old)) {
+                    ApplicationManager.getApplication().invokeLater(open)
+                }
+            },
         ).relaunch(null, opening)
     }
 

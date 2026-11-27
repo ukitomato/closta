@@ -54,11 +54,13 @@ import java.util.concurrent.ConcurrentHashMap
  * A light project service: registered by the annotation, not in plugin.xml.
  */
 @Service(Service.Level.PROJECT)
+@Suppress("TooManyFunctions") // the project's sessions: open, close, list, and what each needs
 class ClaudeSessionService(
     private val project: Project,
     private val scope: CoroutineScope,
 ) : Disposable {
     private val sessions = ConcurrentHashMap<String, SessionRuntime>()
+    private val closing = ConcurrentHashMap<String, Job>()
 
     /**
      * Opens a new session and starts it; returns at once (spawning and the version check run off the calling thread).
@@ -91,7 +93,12 @@ class ClaudeSessionService(
                 { WslSpawner(it, ideWsl::runnerFor) },
                 IdeSessionLog,
             )
-        val withRoots = project.service<ContentRoots>().planner(wslAware) { behaviour().addContentRoots }
+        val withRoots =
+            project.service<ContentRoots>().planner(
+                wslAware,
+                { behaviour().addContentRoots },
+                IdeSessionLog,
+            )
         val gated = TrustGatedPlanner({ TrustedProjects.isProjectTrusted(project) }, withRoots)
         val runtimeScope = scope.childScope("Claude session $id")
         val runtime =
@@ -119,7 +126,14 @@ class ClaudeSessionService(
      * Closes the session [id]; its process ends with its scope. The [Job] is complete when the process has ended or the
      * wait for it ran out; null for an unknown id, which is not touched.
      */
-    fun close(id: String): Job? = sessions.remove(id)?.closeJob()
+    fun close(id: String): Job? =
+        sessions.remove(id)?.closeJob()?.also { job ->
+            closing[id] = job
+            job.invokeOnCompletion { closing.remove(id, job) }
+        }
+
+    /** The close of the session [id] that has not finished: its process may still be writing its record. */
+    fun closing(id: String): Job? = closing[id]
 
     /**
      * The project's saved sessions, read from the CLI's record without starting a CLI (the sessions list names the

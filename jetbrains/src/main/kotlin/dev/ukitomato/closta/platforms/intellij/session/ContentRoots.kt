@@ -33,11 +33,12 @@ class ContentRoots(
     fun planner(
         inner: SessionLaunchPlanner,
         enabled: () -> Boolean,
+        log: SessionLog,
     ): SessionLaunchPlanner =
-        ExtraRootsPlanner(inner, enabled, ::roots, project.basePath, ide.cliPaths) { id, cwd, given ->
+        ExtraRootsPlanner(inner, enabled, ::roots, project.basePath, ide.cliPaths, { id, cwd, given ->
             watch.launched(id, cwd, given)
             listen()
-        }
+        }, log)
 
     /** The session [id] is gone. */
     fun forget(id: String) = watch.forget(id)

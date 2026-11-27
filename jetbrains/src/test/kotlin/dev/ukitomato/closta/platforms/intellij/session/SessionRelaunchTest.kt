@@ -272,6 +272,29 @@ class SessionRelaunchTest {
     }
 
     @Test
+    fun `a resume of this tab's own session opens only inside afterClosed, once the old CLI has ended`() {
+        val relaunch = relaunchWaiting()
+        relaunch.relaunch(null, SessionOpening.Resume("mine"))
+
+        assertEquals(listOf("close", "wait"), calls, "the same record is not opened while the old CLI may write it")
+        waiting.single()()
+        assertEquals(listOf("close", "wait", "open null mine fork=false"), calls)
+    }
+
+    @Test
+    fun `an open waits for the job of the closed session to end, and is not made if there is none`() {
+        val job = kotlinx.coroutines.Job()
+        var opened = 0
+        afterJob(job) { opened++ }
+        assertEquals(0, opened)
+        job.complete()
+        assertEquals(1, opened)
+        afterJob(null) { opened++ }
+        afterJob(job) { opened++ }
+        assertEquals(3, opened, "no job, or one already over, opens at once")
+    }
+
+    @Test
     fun `a second fork of the same id while the first waits waits too, and the first never opens`() {
         var shown: String? = "mine"
         val relaunch =
@@ -301,10 +324,10 @@ class SessionRelaunchTest {
     }
 
     @Test
-    fun `a fork of another session, a resume and a restart open at once, without afterClosed`() {
+    fun `a fork of another session, a resume of another and a restart open at once, without afterClosed`() {
         val relaunch = relaunchWaiting()
         relaunch.relaunch(null, SessionOpening.Fork("free"))
-        relaunch.relaunch(null, SessionOpening.Resume("mine"))
+        relaunch.relaunch(null, SessionOpening.Resume("free"))
         relaunch.relaunch(null)
         relaunch.restart()
         relaunch.start()
@@ -314,7 +337,7 @@ class SessionRelaunchTest {
                 "close",
                 "open null free fork=true",
                 "close",
-                "open null mine fork=false",
+                "open null free fork=false",
                 "close",
                 "open null - fork=false",
                 "close",

@@ -77,6 +77,7 @@ fun rootsNotice(
  * told which
  * folders the session got, with the session's folder, so a later change of the roots can be compared with them.
  */
+@Suppress("LongParameterList") // each is one input of the launch
 class ExtraRootsPlanner(
     private val inner: SessionLaunchPlanner,
     private val enabled: () -> Boolean,
@@ -84,6 +85,7 @@ class ExtraRootsPlanner(
     private val projectBase: String?,
     private val paths: CliPaths,
     private val launched: (sessionId: String, cwd: String?, roots: Set<String>) -> Unit,
+    private val log: SessionLog,
 ) : SessionLaunchPlanner {
     override suspend fun plan(
         sessionId: String,
@@ -91,13 +93,18 @@ class ExtraRootsPlanner(
     ): SessionLaunch {
         val launch = inner.plan(sessionId, workingDirectory)
         if (!enabled()) return launch
-        val roots = rootsFor(workingDirectory)
+        val ide = contentRoots()
+        // The count only: a path holds the user's name.
+        val unreachable = ide.count { cliRootOf(paths, it) == null }
+        if (unreachable >
+            0
+        ) {
+            log.info("claude session $sessionId: $unreachable content roots cannot be reached by the CLI")
+        }
+        val roots = extraRootsFor(workingDirectory, projectBase, ide, paths)
         launched(sessionId, workingDirectory, roots.toSet())
         return SessionLaunch(launch.spawner, launch.spec.copy(additionalDirectories = roots))
     }
-
-    private fun rootsFor(workingDirectory: String?) =
-        extraRootsFor(workingDirectory, projectBase, contentRoots(), paths)
 }
 
 /**

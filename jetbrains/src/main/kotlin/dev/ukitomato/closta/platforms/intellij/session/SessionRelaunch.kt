@@ -8,8 +8,8 @@ import dev.ukitomato.closta.presenter.view.ResumeRefusal
  * window starts with it too, and a restart that fails to open still remembers it.
  *
  * The order is fixed: the effort is remembered first, then the old session is closed (its process ends with it),
- * then the new one is opened. The one exception is a fork of this tab's own session: it is
- * opened after the close has finished, inside [afterClosed], which is called synchronously right after [close]
+ * then the new one is opened. The one exception is a fork or a resume of this tab's own session (its record is the
+ * one the closing CLI may still be writing): it is opened after the close has finished, inside [afterClosed], which is called synchronously right after [close]
  * returns (the default runs it at once); every other start opens right after [close], without waiting. Nothing is
  * carried from one session to the next but the effort: the new session has a new id, an empty conversation, and the
  * CLI's own model and permission mode. A saved session to open is the one other thing a new session is given,
@@ -79,7 +79,7 @@ class SessionRelaunch(
         if (newEffort != null) effort = newEffort
         generation++
         closing = null
-        val own = opening is SessionOpening.Fork && mine
+        val own = opening is SessionOpening.Saved && mine
         close()
         if (own) {
             val held = generation
@@ -114,3 +114,14 @@ fun sessionIdFor(
     opening: SessionOpening,
     newId: String,
 ): String = if (opening is SessionOpening.Resume) opening.id else newId
+
+/**
+ * Runs [open] once [job] (the close of a session) is over, at once when there is none or it already is. The thread it
+ * runs on is the one that completes the job: the caller moves it to the thread it needs.
+ */
+fun afterJob(
+    job: kotlinx.coroutines.Job?,
+    open: () -> Unit,
+) {
+    if (job == null || job.isCompleted) open() else job.invokeOnCompletion { open() }
+}
