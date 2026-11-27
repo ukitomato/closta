@@ -63,13 +63,18 @@ class FileToolHooks(
         val copy = wantsCopy(call)
         if (save == null && !copy) return
         var taken: List<Diagnostic>? = null
+        var reading = false
         val done =
             withTimeoutOrNull(saveLimitMillis) {
                 save?.join()
-                if (copy) taken = errorsOf(call.path)
+                reading = true
+                if (copy && analysis?.canAnalyse(call.path) == true) taken = errorsOf(call.path)
                 true
             }
-        if (done == null) log("file hook: saving a file did not finish in $saveLimitMillis ms; going on")
+        if (done == null) {
+            val what = if (reading) "reading a file's errors" else "saving a file"
+            log("file hook: $what did not finish in $saveLimitMillis ms; going on")
+        }
         taken?.let { remember(call.toolUseId, it) }
     }
 
@@ -101,8 +106,7 @@ class FileToolHooks(
     private suspend fun analysedErrors(path: String): List<Diagnostic>? =
         if (analysis?.refreshAndAwait(path, analysisLimitMillis) == true) errorsOf(path) else null
 
-    private fun wantsCopy(call: FileToolCall): Boolean =
-        call.toolName in EDIT_TOOLS && canReport() && analysis?.canAnalyse(call.path) == true
+    private fun wantsCopy(call: FileToolCall): Boolean = call.toolName in EDIT_TOOLS && canReport()
 
     // The errors of one file; null when the IDE gives none (a file it has not opened) or fails.
     private suspend fun errorsOf(path: String): List<Diagnostic>? =

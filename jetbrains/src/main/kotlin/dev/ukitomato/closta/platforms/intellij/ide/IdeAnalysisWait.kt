@@ -3,7 +3,6 @@ package dev.ukitomato.closta.platforms.intellij.ide
 import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer
 import com.intellij.codeInsight.daemon.impl.DaemonCodeAnalyzerEx
 import com.intellij.openapi.application.readAction
-import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.FileEditor
@@ -39,8 +38,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 class IdeAnalysisWait(
     private val project: Project,
 ) : AnalysisWait {
-    override fun canAnalyse(path: String): Boolean =
-        runReadAction {
+    override suspend fun canAnalyse(path: String): Boolean =
+        readAction {
             val file = LocalFileSystem.getInstance().findFileByPath(path)
             file != null && FileEditorManager.getInstance(project).selectedEditors.any { it.file == file }
         }
@@ -92,7 +91,7 @@ class IdeAnalysisWait(
         file: VirtualFile,
         document: Document,
     ): Boolean {
-        val onDisk = withContext(Dispatchers.IO) { String(file.contentsToByteArray(), file.charset) }
+        val onDisk = withContext(Dispatchers.IO) { String(file.contentsToByteArray(), file.charset).removePrefix(BOM) }
         return readAction { document.immutableCharSequence.toString() == StringUtil.convertLineSeparators(onDisk) }
     }
 
@@ -101,5 +100,6 @@ class IdeAnalysisWait(
 
     private companion object {
         const val POLL_MILLIS = 50L
+        const val BOM = "\uFEFF"
     }
 }

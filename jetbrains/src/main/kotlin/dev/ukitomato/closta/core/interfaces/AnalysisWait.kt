@@ -6,7 +6,7 @@ package dev.ukitomato.closta.core.interfaces
  */
 interface AnalysisWait {
     /** True when a visible editor shows the file at [path], so the IDE keeps analysing it. */
-    fun canAnalyse(path: String): Boolean
+    suspend fun canAnalyse(path: String): Boolean
 
     /**
      * Makes the IDE read the file at [path] again; true once its analysis has finished, false when [limitMillis] ran

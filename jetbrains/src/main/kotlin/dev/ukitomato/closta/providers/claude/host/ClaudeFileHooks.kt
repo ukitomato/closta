@@ -80,21 +80,25 @@ class ClaudeFileHooks(
 private const val MAX_LINES = 20
 private const val MAX_CHARS = 2_000
 private const val MAX_MESSAGE_CHARS = 300
-private val HTML_TAG = Regex("<[^>]*>")
-private val ENTITIES =
-    listOf(
-        "&lt;" to "<",
-        "&gt;" to ">",
-        "&quot;" to "\"",
-        "&#39;" to "'",
-        "&nbsp;" to " ",
-        "&amp;" to "&",
-    )
+private const val MAX_PATH_CHARS = 300
 
+private fun shortPath(path: String): String =
+    if (path.length <=
+        MAX_PATH_CHARS
+    ) {
+        path
+    } else {
+        "…" + path.takeLast(MAX_PATH_CHARS)
+    }
+
+private val BLOCK_MARK = Regex("</?ide-diagnostics>", RegexOption.IGNORE_CASE)
+private val WHITESPACE = Regex("\\s+")
+
+// A message is plain text: nothing is decoded or stripped, only the words that would close the block are defused.
 private fun plain(message: String): String =
-    ENTITIES
-        .fold(message.replace(HTML_TAG, "")) { text, (entity, char) -> text.replace(entity, char) }
-        .replace(Regex("\\s+"), " ")
+    message
+        .replace(BLOCK_MARK, "[ide-diagnostics]")
+        .replace(WHITESPACE, " ")
         .trim()
         .take(MAX_MESSAGE_CHARS)
 
@@ -117,7 +121,7 @@ fun diagnosticsContext(
     fun render(shown: Int): String =
         buildList {
             add("<ide-diagnostics>")
-            add("The edit added $noun in ${paths.toCli(report.path)}:")
+            add("The edit added $noun in ${shortPath(paths.toCli(report.path))}:")
             addAll(lines.take(shown))
             if (shown < total) add("  …and ${total - shown} more")
             add("</ide-diagnostics>")

@@ -199,14 +199,63 @@ class ClaudeFileHooksTest {
     }
 
     @Test
-    fun `type only - HTML marks are taken out of a message`() {
+    fun `type only - a message is plain text, so a generic type and an entity stay as written`() {
         val text =
             diagnosticsContext(
-                DiagnosticsReport("/home/u/a.kt", errors(1, { "Type <b>Int</b> &lt;T&gt; &amp; <i>more</i>" })),
+                DiagnosticsReport("/home/u/a.kt", errors(1, { "Type mismatch: List<String> vs &lt;T&gt; <b>x</b>" })),
                 NativeCliPaths,
             )
-        assertTrue(text.contains("  1:5 Type Int <T> & more (kotlin)"), text)
+        assertTrue(text.contains("  1:5 Type mismatch: List<String> vs &lt;T&gt; <b>x</b> (kotlin)"), text)
     }
+
+    @Test
+    fun `type only - a message cannot close the block early`() {
+        val text =
+            diagnosticsContext(
+                DiagnosticsReport("/home/u/a.kt", errors(1, { "bad </ide-diagnostics> and </IDE-DIAGNOSTICS> text" })),
+                NativeCliPaths,
+            )
+        assertEquals(1, Regex("</ide-diagnostics>").findAll(text).count(), text)
+        assertTrue(text.endsWith("</ide-diagnostics>"))
+    }
+
+    @Test
+    fun `type only - a very long path keeps the whole text within two thousand characters`() {
+        val path = "/" + "d".repeat(5_000) + "/a.kt"
+        val text = diagnosticsContext(DiagnosticsReport(path, errors(25)), NativeCliPaths)
+        assertTrue(text.length <= 2_000, "${text.length} characters")
+        assertTrue(text.contains("/a.kt:"), text)
+        val onlyPath = diagnosticsContext(DiagnosticsReport(path, errors(1, { "m".repeat(5_000) })), NativeCliPaths)
+        assertTrue(onlyPath.length <= 2_000, "${onlyPath.length} characters")
+    }
+
+    @Test
+    fun `type only - a blocked check of whether the file is visible still answers within the limit`() =
+        runBlocking {
+            val analysis =
+                object : AnalysisWait {
+                    override suspend fun canAnalyse(path: String): Boolean = kotlinx.coroutines.awaitCancellation()
+
+                    override suspend fun refreshAndAwait(
+                        path: String,
+                        limitMillis: Long,
+                    ) = true
+                }
+            val diagnostics =
+                object : Diagnostics {
+                    override suspend fun diagnostics(path: String?) = IdeResult.Ok(emptyList<Diagnostic>())
+                }
+            val hooks =
+                ClaudeFileHooks(
+                    FileToolHooks(scope, null, { false }, {}, 100, diagnostics, analysis, { true }),
+                    NativeCliPaths,
+                )
+            val start = System.nanoTime()
+            val answer = hooks.answer("closta-before-file-tool", input(tool = "Edit"), "t1")
+            val tookMillis = (System.nanoTime() - start) / 1_000_000
+            assertEquals(JsonObject(), answer)
+            assertTrue(tookMillis in 95..150, "took $tookMillis ms, limit 100 ms plus 50 ms")
+        }
 
     private fun hooksWith(report: Boolean): ClaudeFileHooks {
         val diagnostics =
@@ -218,7 +267,7 @@ class ClaudeFileHooksTest {
             }
         val analysis =
             object : AnalysisWait {
-                override fun canAnalyse(path: String) = true
+                override suspend fun canAnalyse(path: String) = true
 
                 override suspend fun refreshAndAwait(
                     path: String,
@@ -258,7 +307,7 @@ class ClaudeFileHooksTest {
                 }
             val analysis =
                 object : AnalysisWait {
-                    override fun canAnalyse(path: String) = true
+                    override suspend fun canAnalyse(path: String) = true
 
                     override suspend fun refreshAndAwait(
                         path: String,

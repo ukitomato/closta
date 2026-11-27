@@ -151,7 +151,7 @@ class FileToolHooksTest {
         private val visible: Boolean = true,
         private val refresh: suspend (String, Long) -> Boolean = { _, _ -> true },
     ) : AnalysisWait {
-        override fun canAnalyse(path: String) = visible
+        override suspend fun canAnalyse(path: String) = visible
 
         override suspend fun refreshAndAwait(
             path: String,
@@ -283,6 +283,7 @@ class FileToolHooksTest {
             assertTrue(tookMillis in 95..150, "went on after $tookMillis ms, limit 100 ms plus 50 ms")
             assertEquals(0, hooks.snapshots())
             assertNull(hooks.after(post))
+            assertTrue(logged.single().contains("reading a file's errors"), logged.toString())
         }
 
     @Test
