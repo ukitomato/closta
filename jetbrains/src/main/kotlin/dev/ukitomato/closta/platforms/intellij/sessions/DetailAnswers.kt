@@ -27,6 +27,7 @@ import dev.ukitomato.closta.platforms.intellij.thread.cardButton
 import dev.ukitomato.closta.platforms.intellij.thread.cardKeys
 import dev.ukitomato.closta.platforms.intellij.thread.diffBox
 import dev.ukitomato.closta.platforms.intellij.thread.diffNote
+import dev.ukitomato.closta.platforms.intellij.thread.draftOf
 import dev.ukitomato.closta.platforms.intellij.thread.enterNeverPresses
 import dev.ukitomato.closta.platforms.intellij.thread.headlineOf
 import dev.ukitomato.closta.platforms.intellij.thread.inputRows
@@ -38,7 +39,6 @@ import dev.ukitomato.closta.platforms.intellij.ui.plainTip
 import dev.ukitomato.closta.presenter.view.ApprovalRecord
 import dev.ukitomato.closta.presenter.view.ElicitationCard
 import dev.ukitomato.closta.presenter.view.ElicitationRecord
-import dev.ukitomato.closta.presenter.view.ElicitationValue
 import dev.ukitomato.closta.presenter.view.PermissionCard
 import dev.ukitomato.closta.presenter.view.PermissionChoice
 import dev.ukitomato.closta.presenter.view.PlanCard
@@ -348,8 +348,7 @@ internal class ElicitationPane(
 
     override fun draft(): Any? = body.draft()
 
-    @Suppress("UNCHECKED_CAST")
     override fun restore(draft: Any?) {
-        (draft as? Map<String, ElicitationValue>)?.let(body::restore)
+        draftOf(draft)?.let(body::restore)
     }
 }

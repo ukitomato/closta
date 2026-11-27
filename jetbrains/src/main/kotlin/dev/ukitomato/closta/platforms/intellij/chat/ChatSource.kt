@@ -235,10 +235,9 @@ interface ChatSource : Disposable {
 
         override suspend fun answerElicitation(answer: ElicitationAnswer) {
             val commands = commands() ?: return
-            // The commands write the failure on the request themselves; here only its type is logged.
             answerOrMarkFailed(
                 { commands.respondToElicitation(ElicitationDecision(answer.requestId, answer.action), answer.content) },
-                {},
+                { commands.answerFailed(answer.requestId) },
                 { thisLogger().warn(it) },
             )
         }

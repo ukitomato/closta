@@ -42,6 +42,7 @@ import dev.ukitomato.closta.presenter.view.elicitationContent
 import dev.ukitomato.closta.presenter.view.elicitationProblems
 import dev.ukitomato.closta.presenter.view.rebuildsElicitationCard
 import java.awt.BorderLayout
+import java.awt.KeyboardFocusManager
 import java.awt.datatransfer.StringSelection
 import javax.swing.ButtonGroup
 import javax.swing.JButton
@@ -55,9 +56,6 @@ data class ElicitationAnswer(
     val action: ElicitationAction,
     val content: String?,
 )
-
-/** What the form values the user typed so far are, by the field's key. The screen keeps them only while typing. */
-internal typealias ElicitationDraft = Map<String, ElicitationValue>
 
 /**
  * How a form's host sends and guards its buttons: [send] builds the answer only when an answer can go now and tells
@@ -493,8 +491,8 @@ internal class ElicitationCardView(
     private val answer: (ElicitationAnswer) -> Unit,
     private val resized: (JComponent) -> Unit = {},
     private val letGo: () -> Unit = {},
-    private var typed: ElicitationDraft = emptyMap(),
-    private val keep: (String, ElicitationDraft) -> Unit = { _, _ -> },
+    private val drafts: ElicitationDrafts = ElicitationDrafts(),
+    private val focusScope: () -> JComponent? = { null },
 ) : CardPanel(ThreadStyle.pendingLine, ThreadStyle.pendingFill, watchesKeyboard = true) {
     private var sent = false
     private val guarded = ArrayList<Pair<JButton, () -> Boolean>>()
@@ -524,8 +522,7 @@ internal class ElicitationCardView(
 
     /** The card as it is now; the body is made again only when it has to be. */
     fun show(next: ElicitationCard) {
-        val rebuild = rebuildsElicitationCard(card, next)
-        if (rebuild) typed = body.draft()
+        val rebuild = drafts.redraw(card, next) { body.draft() }
         card = next
         if (!rebuild) return
         sent = false
@@ -541,8 +538,8 @@ internal class ElicitationCardView(
             ElicitationBody(
                 card,
                 ElicitationHost(::send, { button, ready -> guard(button, ready) }, { resized(this) }),
-            ) { values -> keep(card.requestId, values) }
-        if (card.stage == ElicitationStage.WAITING) body.restore(typed)
+            ) { values -> drafts.keep(card.requestId, values) }
+        body.restore(drafts.draftFor(card))
         add(body.component, BorderLayout.CENTER)
         getAccessibleContext().accessibleName = card.heading
         revalidate()
@@ -568,7 +565,12 @@ internal class ElicitationCardView(
 
     private fun takeFocusIfHere(target: JComponent) {
         SwingUtilities.invokeLater {
-            if (target.isShowing && card.answerable) target.requestFocusInWindow()
+            val owner = KeyboardFocusManager.getCurrentKeyboardFocusManager().focusOwner
+            val scope = focusScope() ?: return@invokeLater
+            // Never from the composer or another waiting card: what is typed there is not for this form.
+            if (target.isShowing && card.answerable && cardMayTakeFocus(owner, scope, target)) {
+                target.requestFocusInWindow()
+            }
         }
     }
 }
