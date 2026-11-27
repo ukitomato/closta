@@ -1,5 +1,6 @@
 package dev.ukitomato.closta.presenter.view
 
+import dev.ukitomato.closta.providers.claude.protocol.StreamJsonCodec
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
@@ -148,4 +149,55 @@ class TaskOutputTest {
         assertEquals(OutputPoll.STOP, outputPoll(asking = false, live = false, lastAsked = true, failed = false))
         assertEquals(OutputPoll.STOP, outputPoll(asking = false, live = true, lastAsked = false, failed = true))
     }
+
+    @Test
+    fun `type only - a stopped CLI stops the clock whatever else holds`() {
+        assertEquals(
+            OutputPoll.STOP,
+            outputPoll(asking = true, live = true, lastAsked = false, failed = false, stopped = true),
+        )
+        assertEquals(
+            OutputPoll.STOP,
+            outputPoll(asking = false, live = true, lastAsked = false, failed = false, stopped = true),
+        )
+    }
+
+    @Test
+    fun `type only - the process ending drops the wait and the running list, and a launch counts a new CLI`() {
+        val running =
+            HostState()
+                .with(PresenterInput.Launched(null))
+                .with(PresenterInput.Event(StreamJsonCodec.decode(changedLine("t1"))))
+                .ask("o1", "t1")
+        assertEquals(
+            listOf("t1"),
+            running.transcript.background.live
+                .map { it.taskId },
+        )
+        assertFalse(running.ops().processEnded)
+        val ended = running.with(PresenterInput.ProcessEnded)
+        assertTrue(ended.ops().processEnded)
+        assertNull(ended.ops().outputAsk)
+        assertTrue(
+            ended.transcript.background.live
+                .isEmpty(),
+        )
+        val relaunched = running.with(PresenterInput.Launched(null))
+        assertEquals(running.ops().launches + 1, relaunched.ops().launches)
+        assertTrue(
+            relaunched.transcript.background.live
+                .isEmpty(),
+        )
+        assertFalse(
+            relaunched
+                .with(PresenterInput.ProcessEnded)
+                .with(PresenterInput.Launched(null))
+                .ops()
+                .processEnded,
+        )
+    }
+
+    private fun changedLine(id: String) =
+        """{"type":"system","subtype":"background_tasks_changed","tasks":[""" +
+            """{"task_id":"$id","task_type":"local_bash","description":"d"}],"uuid":"u-ch","session_id":"s"}"""
 }

@@ -33,12 +33,18 @@ fun foldTranscript(
         is PresenterInput.Decided -> foldDecided(transcript, input, before)
         is PresenterInput.AnswerFailed -> foldAnswerFailed(transcript, input, before)
         is PresenterInput.ElicitationDecided -> foldElicitationDecided(transcript, input, before)
-        PresenterInput.ProcessEnded -> transcript.withProcessEnded().queueEnded()
+        PresenterInput.ProcessEnded ->
+            transcript
+                .withProcessEnded()
+                .withOperations(transcript.operations.processEnded())
+                .withoutTasks()
+                .queueEnded()
         is PresenterInput.Launched ->
             transcript
                 .withOperations(
                     foldOperation(transcript.operations, input),
-                ).queueEnded()
+                ).withoutTasks()
+                .queueEnded()
         is PresenterInput.DiagnosticsReported ->
             transcript.markReported(Keys.ofCliId(input.toolUseId), ReportedErrors(input.count, input.lines))
         is PresenterInput.FilesFound,

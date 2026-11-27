@@ -62,6 +62,13 @@ private fun outputOf(
     }
 }
 
+/** The CLI process ended: its tasks are gone with it, and nothing waits for an answer from it. */
+internal fun OperationRecords.processEnded(): OperationRecords = copy(outputAsk = null, processEnded = true)
+
+/** The tasks of the CLI that ended or was replaced are not running: its list is not the next one's. */
+internal fun Transcript.withoutTasks(): Transcript =
+    if (background.live.isEmpty()) this else copy(background = background.copy(live = emptyList()))
+
 /** What a poll of a task's output does at a tick of the clock. */
 enum class OutputPoll {
     /** The last request is not answered yet: nothing is sent. */
@@ -79,6 +86,7 @@ enum class OutputPoll {
 
 /**
  * What the next tick does. Only one request is ever out ([asking]); a refusal ([failed]) stops the clock; once the
+ * CLI is gone or replaced ([stopped]) nothing is asked; once the
  * task is no longer running ([live]), one more request ([lastAsked] says it was sent) reads what it wrote at the end.
  */
 fun outputPoll(
@@ -86,9 +94,10 @@ fun outputPoll(
     live: Boolean,
     lastAsked: Boolean,
     failed: Boolean,
+    stopped: Boolean = false,
 ): OutputPoll =
     when {
-        failed -> OutputPoll.STOP
+        stopped || failed -> OutputPoll.STOP
         asking -> OutputPoll.WAIT
         live -> OutputPoll.ASK
         !lastAsked -> OutputPoll.ASK_LAST

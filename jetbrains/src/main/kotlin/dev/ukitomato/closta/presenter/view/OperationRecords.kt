@@ -255,6 +255,10 @@ data class OperationRecords(
     val outputAsk: Pair<String, String>? = null,
     /** The last `get_task_output` answer (or refusal) that could be read; it is of the task it names. */
     val output: TaskOutputRecord? = null,
+    /** How many CLIs were launched: a task id belongs to the one it was read on. */
+    val launches: Int = 0,
+    /** The CLI process ended and no new one was launched: nothing can be asked of it. */
+    val processEnded: Boolean = false,
     /** The ids of the `reload_plugins` requests not answered yet. */
     val reloadWaiting: List<String> = emptyList(),
     /** The plugins the CLI last listed (`system/init`, or the answer to a reload); null before the first. */
@@ -386,6 +390,8 @@ internal fun OperationRecords.launched(input: PresenterInput.Launched): Operatio
         backgrounding = emptyMap(),
         outputAsk = null,
         output = null,
+        launches = launches + 1,
+        processEnded = false,
         reloadWaiting = emptyList(),
         reloadFailure = null,
         // The new CLI says it in its own init.

@@ -40,6 +40,11 @@ class TaskOutputPopup(
 ) : Disposable {
     private val title = JBLabel().noHtml().apply { border = JBUI.Borders.emptyBottom(GAP) }
     private val truncated = JBLabel().noHtml().apply { foreground = UIUtil.getContextHelpForeground() }
+    private val stopped =
+        JBLabel(ClostaBundle.message("chat.taskOutput.stopped")).noHtml().apply {
+            foreground = UIUtil.getContextHelpForeground()
+            isVisible = false
+        }
     private val area =
         JBTextArea().apply {
             isEditable = false
@@ -56,6 +61,7 @@ class TaskOutputPopup(
                     isOpaque = false
                     add(title, BorderLayout.NORTH)
                     add(truncated, BorderLayout.CENTER)
+                    add(stopped, BorderLayout.SOUTH)
                 },
                 BorderLayout.NORTH,
             )
@@ -65,6 +71,7 @@ class TaskOutputPopup(
     private var popup: JBPopup? = null
     private var taskId: String? = null
     private var lastAsked = false
+    private var launchesAtOpen = 0
     private var shown: String? = null
 
     /** Opens the output of [task], or moves the open one to it. */
@@ -73,6 +80,8 @@ class TaskOutputPopup(
         taskId = task.taskId
         lastAsked = false
         shown = null
+        launchesAtOpen = view().transcript.operations.launches
+        stopped.isVisible = false
         title.text = ClostaBundle.message("chat.taskOutput.title", visible(task.title.ifBlank { task.kind }).text)
         truncated.isVisible = false
         area.text = ClostaBundle.message("chat.taskOutput.waiting")
@@ -109,18 +118,21 @@ class TaskOutputPopup(
     private fun tick() {
         val id = taskId ?: return clock.stop()
         val now = view()
-        val output =
-            now.transcript.operations.output
-                ?.takeIf { it.taskId == id }
+        val operations = now.transcript.operations
+        val output = operations.output?.takeIf { it.taskId == id }
         draw(output)
+        // The task id is the CLI's own: once that CLI is gone or replaced, nothing is asked of the next one with it.
+        val gone = operations.processEnded || operations.launches != launchesAtOpen
+        stopped.isVisible = gone
         val step =
             outputPoll(
-                asking = now.transcript.operations.outputAsk != null,
+                asking = operations.outputAsk != null,
                 live =
                     now.transcript.background.live
                         .any { it.taskId == id },
                 lastAsked = lastAsked,
                 failed = output?.failure != null,
+                stopped = gone,
             )
         when (step) {
             OutputPoll.ASK -> ask(id)
