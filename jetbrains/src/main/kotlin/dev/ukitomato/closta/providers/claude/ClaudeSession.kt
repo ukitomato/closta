@@ -116,11 +116,10 @@ class ClaudeSession(
     ) {
         val line =
             when (decision) {
-                // allow / answered / afk-timeout all reply with `allow`; the difference is in the opaque
-                // updatedInput (answers / afkTimeoutMs), which core passes through verbatim.
+                // allow / answered both reply with `allow`; the difference is in the opaque
+                // updatedInput (answers), which core passes through verbatim.
                 is ApprovalDecision.Allow,
                 is ApprovalDecision.Answered,
-                is ApprovalDecision.AfkTimeout,
                 -> StdinEncoder.allow(decision.requestId, payload ?: "{}", updatedPermissions)
                 is ApprovalDecision.Deny -> StdinEncoder.deny(decision.requestId, payload ?: "")
             }

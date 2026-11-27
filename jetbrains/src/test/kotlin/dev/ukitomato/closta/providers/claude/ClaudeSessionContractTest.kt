@@ -41,8 +41,6 @@ class ClaudeSessionContractTest : AgentSessionContract() {
         return ClaudeSession(process, SESSION_ID).also { processes[it] = process }
     }
 
-    override fun afkPayload(): String = AFK_PAYLOAD
-
     override fun updatedPermissionsGiven(session: AgentSession): List<String?> =
         processes.getValue(session).writtenStdin.filter { it.contains("control_response") }.map { line ->
             JsonParser
@@ -114,7 +112,6 @@ class ClaudeSessionContractTest : AgentSessionContract() {
             Scenario.SEND_TURN -> straightReplay(rawLines(BASELINE))
             Scenario.APPROVAL_ALLOW, Scenario.APPROVAL_DENY, Scenario.INTERRUPT, Scenario.UNANSWERED ->
                 awaitingAfterControlRequest(rawLines(PERMISSION))
-            Scenario.AFK_TIMEOUT -> awaitingAfterControlRequest(rawLines(ASK_AFK))
             Scenario.DROPPED_CONNECTION ->
                 straightReplay(
                     rawLines(BASELINE),
@@ -268,8 +265,6 @@ class ClaudeSessionContractTest : AgentSessionContract() {
         const val SESSION_ID = "test-session"
         const val BASELINE = "01-baseline-text.ndjson"
         const val PERMISSION = "05-permission-can-use-tool.ndjson"
-        const val ASK_AFK = "15-ask-afktimeout-updatedinput.ndjson"
-        const val AFK_PAYLOAD = """{"afkTimeoutMs":5000}"""
         const val TIMEOUT_SECONDS = 30L
     }
 }

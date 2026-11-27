@@ -426,12 +426,10 @@ class ApprovalProjectionTest {
         val allow = { id: String -> ApprovalDecision.Allow(id) }
         val deny = { id: String -> ApprovalDecision.Deny(id) }
         val answered = { id: String -> ApprovalDecision.Answered(id) }
-        val afk = { id: String -> ApprovalDecision.AfkTimeout(id) }
         assertEquals("true" to null, outcome("Write", allow, 0))
         assertEquals("true" to null, outcome("Write", allow, 5_000))
         assertEquals("false" to null, outcome("Write", deny, 5_000))
         assertEquals("true" to null, outcome("Write", answered, 5_000))
-        assertEquals("-" to "expired", outcome("Write", afk, 5_000))
         assertEquals("-" to "cancelled", outcome("AskUserQuestion", allow, 0))
         assertEquals(
             "-" to "cancelled",
@@ -440,7 +438,22 @@ class ApprovalProjectionTest {
         )
         assertEquals("false" to null, outcome("AskUserQuestion", deny, 0))
         assertEquals("true" to null, outcome("AskUserQuestion", answered, 0))
-        assertEquals("-" to "expired", outcome("AskUserQuestion", afk, 5_000))
+    }
+
+    @Test
+    fun `skipping a question denies it with an empty sentence and shows it as not answered`() {
+        val session = Session()
+        session.turn("c1")
+        session.events(
+            Lines.assistant("m1", Lines.toolUse("toolu_q", "AskUserQuestion")),
+            Lines.request("r1", "AskUserQuestion", "toolu_q"),
+        )
+        val skip = ApprovalDecision.Deny("r1")
+        assertEquals(ApprovalOutcome.DENIED, outcomeOf(ask = true, decision = skip))
+        session.decide(skip, 0)
+        val approval = approvalOf(session.thread.message("c1").part("toolu_q"))
+        assertEquals(JsonBool.FALSE, approval["approved"])
+        assertNull(approval.str("resolution"))
     }
 
     @Test

@@ -274,7 +274,7 @@ private fun foldAnswerFailed(
 /**
  * The meaning of the host's answer. An `Allow` without answers leaves a question unanswered,
  * however long the host held it: the CLI settles it as "did not answer" at once, and only `updatedInput.answers`
- * (Answered) or `afkTimeoutMs` (AfkTimeout) say otherwise.
+ * (Answered) says otherwise.
  */
 internal fun outcomeOf(
     ask: Boolean,
@@ -283,6 +283,5 @@ internal fun outcomeOf(
     when (decision) {
         is ApprovalDecision.Answered -> ApprovalOutcome.APPROVED
         is ApprovalDecision.Deny -> ApprovalOutcome.DENIED
-        is ApprovalDecision.AfkTimeout -> ApprovalOutcome.EXPIRED
         is ApprovalDecision.Allow -> if (ask) ApprovalOutcome.CANCELLED else ApprovalOutcome.APPROVED
     }

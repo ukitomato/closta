@@ -171,7 +171,6 @@ class CardViews(
             ApprovalOutcome.DENIED ->
                 ClostaBundle.message(if (card is QuestionCard) "thread.card.notAnswered" else "thread.card.denied")
             ApprovalOutcome.CANCELLED -> ClostaBundle.message("thread.card.cancelled")
-            ApprovalOutcome.EXPIRED -> ClostaBundle.message("thread.card.expired")
             ApprovalOutcome.WITHDRAWN -> ClostaBundle.message("thread.card.withdrawn")
         }
 

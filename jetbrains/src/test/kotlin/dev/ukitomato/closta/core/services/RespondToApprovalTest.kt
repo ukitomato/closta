@@ -42,7 +42,6 @@ class RespondToApprovalTest {
                 ApprovalDecision.Allow("A"),
                 ApprovalDecision.Deny("A"),
                 ApprovalDecision.Answered("A"),
-                ApprovalDecision.AfkTimeout("A"),
             )
         return variants.map { decision ->
             DynamicTest.dynamicTest(decision::class.simpleName) {
@@ -162,7 +161,7 @@ class RespondToApprovalTest {
             val next =
                 RespondToApproval(session, clock)(
                     twoPending(),
-                    ApprovalDecision.AfkTimeout("A"),
+                    ApprovalDecision.Answered("A"),
                     requestedAt,
                 )
 

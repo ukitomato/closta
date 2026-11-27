@@ -48,7 +48,7 @@ interface AgentSession {
      * Returns the host's decision about a pending approval to the agent. [decision] carries the outcome
      * kind ([ApprovalDecision]); [payload] is the host's raw, provider-shaped response body
      * (answers / updatedInput) passed through opaquely — core never builds or reads it — and is null for
-     * a plain allow/deny/afk. Its precise framing is the provider's.
+     * a plain allow/deny. Its precise framing is the provider's.
      *
      * [updatedPermissions] is the permission suggestions the user accepted along with an allow: a JSON array
      * string in the provider's own shape, passed through opaquely like [payload]. Null leaves the

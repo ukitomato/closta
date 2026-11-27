@@ -50,9 +50,6 @@ abstract class AgentSessionContract {
         /** Must emit a control request, block on it, then resume to a result once the host denies. */
         APPROVAL_DENY,
 
-        /** Must emit a control request, block on it, then resume to a result once the host times out (AFK). */
-        AFK_TIMEOUT,
-
         /** Must emit a control request, block on it, then end when the host interrupts (never answered). */
         INTERRUPT,
 
@@ -68,9 +65,6 @@ abstract class AgentSessionContract {
 
     /** The system under test for [scenario]: a [FakeAgentSession], or a `ClaudeSession`. */
     protected abstract fun sessionFor(scenario: Scenario): AgentSession
-
-    /** The opaque body the host attaches to an AFK timeout (`updatedInput.afkTimeoutMs`); null by default. */
-    protected open fun afkPayload(): String? = null
 
     /**
      * The accepted permissions [session] was given with each allow, in order, as the JSON text it passed on (null for
@@ -257,20 +251,6 @@ abstract class AgentSessionContract {
     @Timeout(TIMEOUT_SECONDS)
     fun `deny completes an approval round trip and drops only its pending`() =
         roundTrip(Scenario.APPROVAL_DENY) { ApprovalDecision.Deny(it) }
-
-    @Test
-    @Timeout(TIMEOUT_SECONDS)
-    fun `an afk timeout resolves the question with no waiting`() =
-        runBlocking {
-            val session = sessionFor(Scenario.AFK_TIMEOUT)
-            val received = mutableListOf<AgentEvent>()
-            val collector = launch { session.events.collect { received += it } }
-            val request = awaitControlRequest(received)
-            session.respondToApproval(ApprovalDecision.AfkTimeout(request.requestId), afkPayload())
-            collector.join()
-            assertTrue(received.any { it is AgentEvent.Result }) { "the turn should resume after the afk timeout" }
-            assertDropsOnly(request.requestId, ApprovalDecision.AfkTimeout(request.requestId))
-        }
 
     @Test
     @Timeout(TIMEOUT_SECONDS)

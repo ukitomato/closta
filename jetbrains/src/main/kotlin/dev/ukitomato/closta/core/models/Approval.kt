@@ -17,7 +17,7 @@ package dev.ukitomato.closta.core.models
  * and [agentId] is null for a main-conversation approval and carries
  * the spawning subagent's `task_id` for a subagent one.
  *
- * There is deliberately no terminal state (approved/denied/answers/afkTimeout) and no
+ * There is deliberately no terminal state (approved/denied/answers) and no
  * assistant-ui `resolution`: a resolved request is *removed* from [ConversationState.pendingApprovals]
  * rather than kept, so the invariant "the approval queue is empty at the end" measures presence alone
  * alone. The presenter projects the terminal look onto the tool-call
@@ -59,7 +59,7 @@ enum class ApprovalKind {
  *
  * The host's reply travels on stdin, not on the CLI's stdout, so it is not an [AgentEvent] and cannot
  * be folded. This type carries only the *outcome kind*; the reply's payload —
- * the chosen answers, the `afkTimeoutMs` value — is `RawJson`/stdin territory and core never holds it.
+ * the chosen answers — is `RawJson`/stdin territory and core never holds it.
  * Every variant removes the [requestId]'s pending in the same way, because core keeps
  * no terminal state; the variant is what a downstream presenter reads to render the outcome.
  */
@@ -68,9 +68,9 @@ sealed interface ApprovalDecision {
 
     /**
      * The host returned a `control_response` for the request. For an [ApprovalKind.ASK] answered with
-     * neither `answers` nor `afkTimeoutMs` this is the "no-answer" path: the CLI concludes the question
+     * no `answers` this is the "no-answer" path: the CLI concludes the question
      * went unanswered the moment it receives the reply, however long the host held it
-     * (captures 13 and 15). See
+     * (capture 13). See
      * [resolveApproval].
      */
     data class Allow(
@@ -84,11 +84,6 @@ sealed interface ApprovalDecision {
 
     /** The host injected answers for an `AskUserQuestion` (capture 14). */
     data class Answered(
-        override val requestId: String,
-    ) : ApprovalDecision
-
-    /** The host let the request expire on an AFK timeout (capture 15). */
-    data class AfkTimeout(
         override val requestId: String,
     ) : ApprovalDecision
 }

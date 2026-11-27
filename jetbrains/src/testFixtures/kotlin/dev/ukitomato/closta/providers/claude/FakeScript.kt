@@ -9,7 +9,7 @@ import dev.ukitomato.closta.core.models.ElicitationDecision
  * A recorded scenario for [FakeAgentSession]: the events to stream and how the stream ends. No CLI, no
  * process, no clock.
  *
- * An AFK timeout is modelled as a host *decision*, not a duration: a [Beat.AwaitResponse] blocks the
+ * A wait for the user is modelled as a host *decision*, not a duration: a [Beat.AwaitResponse] blocks the
  * stream on an outstanding request until the host answers it via [FakeAgentSession.respondToApproval],
  * and the answer arrives as a value — so a test crosses the "waiting" window without spending real or
  * virtual time.
