@@ -344,6 +344,8 @@ class SessionRuntime(
             if (restartFor != null) job.cancel()
             job.join()
         }
+        // Whatever the process asked can no longer be answered; a start after a restart says it runs again.
+        store.transition { it.requested(PresenterInput.ProcessEnded) }
         return settled(process, ended, switchId)
     }
 

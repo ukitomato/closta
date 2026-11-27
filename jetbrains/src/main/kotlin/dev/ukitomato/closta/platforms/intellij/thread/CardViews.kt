@@ -22,6 +22,7 @@ import dev.ukitomato.closta.platforms.intellij.ui.noHtml
 import dev.ukitomato.closta.platforms.intellij.ui.plainTip
 import dev.ukitomato.closta.presenter.view.ApprovalOutcome
 import dev.ukitomato.closta.presenter.view.ApprovalRecord
+import dev.ukitomato.closta.presenter.view.ElicitationCard
 import dev.ukitomato.closta.presenter.view.PassedOn
 import dev.ukitomato.closta.presenter.view.PermissionCard
 import dev.ukitomato.closta.presenter.view.PermissionChoice
@@ -114,6 +115,7 @@ class CardViews(
                 } ?: card.subject
             is QuestionCard -> card.questions.firstOrNull()?.text
             is PlanCard -> null
+            is ElicitationCard -> card.heading
         }
 
     /**

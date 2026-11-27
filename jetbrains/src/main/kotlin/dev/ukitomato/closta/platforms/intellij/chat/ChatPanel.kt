@@ -564,7 +564,7 @@ class ChatPanel(
             val start = System.nanoTime()
             val transcript = view.transcript
             drafts.seed(draft, source)
-            val shown = rows.of(transcript)
+            val shown = rows.of(transcript, view.conversation)
             val sendable = source.canSend.value
             // A resume reads its earlier conversation before the CLI is up: until then the thread is loading.
             val starting = sendBlockOf(sendable, source.starting) == SendBlock.STARTING

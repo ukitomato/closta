@@ -30,6 +30,10 @@ fun foldTranscript(
         PresenterInput.StopRequested -> foldStop(transcript, after)
         is PresenterInput.Decided -> foldDecided(transcript, input, before)
         is PresenterInput.AnswerFailed -> foldAnswerFailed(transcript, input, before)
+        is PresenterInput.ElicitationDecided -> foldElicitationDecided(transcript, input, before)
+        PresenterInput.ProcessEnded -> transcript.withProcessEnded(true)
+        is PresenterInput.Launched ->
+            transcript.withProcessEnded(false).let { it.withOperations(foldOperation(it.operations, input)) }
         is PresenterInput.FilesFound,
         is PresenterInput.SelectionCaptured,
         is PresenterInput.CodeApplied,
@@ -38,7 +42,6 @@ fun foldTranscript(
         is PresenterInput.ControlRequested,
         is PresenterInput.ControlSendFailed,
         is PresenterInput.EffortRefused,
-        is PresenterInput.Launched,
         is PresenterInput.SandboxRefused,
         is PresenterInput.SandboxNotStarted,
         is PresenterInput.RewindRequested,
@@ -76,7 +79,11 @@ private fun foldEvent(
         -> foldTurnSignals(transcript, event)
         is AgentEvent.Assistant -> foldSignIn(foldAssistant(transcript, event), event)
         is AgentEvent.User -> foldUser(transcript, event)
-        is AgentEvent.ControlRequest, is AgentEvent.ControlCancel -> foldRequestLine(transcript, event, before, after)
+        is AgentEvent.ControlRequest,
+        is AgentEvent.ControlCancel,
+        is AgentEvent.Elicitation,
+        is AgentEvent.SystemElicitationComplete,
+        -> foldRequestLine(transcript, event, before, after)
         is AgentEvent.ControlResponse ->
             foldCommandsOfResponse(transcript.withOperations(transcript.operations.answered(event)), event)
         is AgentEvent.SystemCommandsChanged -> foldCommandsOfChange(transcript, event)
@@ -189,9 +196,6 @@ internal fun foldRequest(
     if (event.requestId.isEmpty()) return transcript
     val existing = transcript.approvals[event.requestId]
     val held = after.pendingApprovals.firstOrNull { it.requestId == event.requestId }
-    val routing = transcript.routing
-    val messages = transcript.messages
-    val lastAssistant = messages.order.lastOrNull { messages[it]?.role == Role.ASSISTANT }
     val request = JsonRead.parse(event.request.text) as? JsonObject
     val record =
         ApprovalRecord(
@@ -202,7 +206,7 @@ internal fun foldRequest(
             input = request?.get("input"),
             unreadable = if (request == null) event.request.text else null,
             ask = held?.let { it.kind == ApprovalKind.ASK } ?: existing?.ask ?: false,
-            anchor = routing.currentTurn ?: routing.openResume ?: lastAssistant,
+            anchor = transcript.anchor(),
             suggestions = suggestionsOf(request),
         )
     val same = existing == record
@@ -256,11 +260,14 @@ private fun foldAnswerFailed(
     input: PresenterInput.AnswerFailed,
     before: ConversationState,
 ): Transcript {
-    val record = transcript.approvals[input.approvalId]
+    val record = transcript.approvals[input.approvalId] ?: return foldElicitationFailed(transcript, input, before)
     val held = before.pendingApprovals.any { it.requestId == input.approvalId }
-    if (record == null || record.outcome != null || !held) return transcript
     val failed = record.copy(failure = input.message, failures = record.failures + 1)
-    return transcript.copy(approvals = transcript.approvals.put(record.requestId, failed))
+    return if (record.outcome != null || !held) {
+        transcript
+    } else {
+        transcript.copy(approvals = transcript.approvals.put(record.requestId, failed))
+    }
 }
 
 /**

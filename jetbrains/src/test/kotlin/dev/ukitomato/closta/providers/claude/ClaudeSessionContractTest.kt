@@ -77,6 +77,7 @@ class ClaudeSessionContractTest : AgentSessionContract() {
             .writtenStdin
             .map { JsonParser.parseString(it).asJsonObject }
             .filter { it["type"].asString == "control_response" }
+            .filter { it["response"].asJsonObject["response"]?.asJsonObject?.has("action") == true }
             .map { line ->
                 val response = line["response"].asJsonObject
                 val body = response["response"].asJsonObject

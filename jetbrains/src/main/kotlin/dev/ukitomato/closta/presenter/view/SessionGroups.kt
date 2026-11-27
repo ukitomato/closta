@@ -28,6 +28,11 @@ sealed interface WaitReason {
         val subject: String?,
     ) : WaitReason
 
+    /** An MCP server asks for input; [heading] is what its request is titled. */
+    data class Elicitation(
+        val heading: String,
+    ) : WaitReason
+
     data object Other : WaitReason
 }
 
@@ -37,8 +42,10 @@ fun sessionSummary(
     unread: Boolean,
 ): SessionSummary {
     val first = waitingApprovals(conversation, transcript).firstOrNull()
+    val asked = waitingElicitations(conversation, transcript).firstOrNull()
     return when {
         first != null -> SessionSummary(SessionGroup.WAITING, reasonOf(first, planGoOf(transcript.operations)))
+        asked != null -> SessionSummary(SessionGroup.WAITING, WaitReason.Elicitation(asked.heading))
         threadIsRunning(conversation, transcript) -> SessionSummary(SessionGroup.RUNNING, null)
         unread -> SessionSummary(SessionGroup.UNREAD, null)
         else -> SessionSummary(SessionGroup.OTHER, null)
@@ -74,7 +81,7 @@ data class FinishedAlert(
     override val key: String,
 ) : SessionAlert
 
-enum class AlertKind { PLAN, QUESTION, EDIT }
+enum class AlertKind { PLAN, QUESTION, EDIT, ELICITATION }
 
 /** The notifications to raise, and the keys of those to take back. */
 data class AlertChange(
@@ -93,16 +100,19 @@ fun alertsBetween(
 ): AlertChange {
     val now = waitingApprovals(after.first, after.second)
     val then = before?.let { waitingApprovals(it.first, it.second) }.orEmpty()
-    val thenIds = then.mapTo(HashSet()) { it.requestId }
-    val nowIds = now.mapTo(HashSet()) { it.requestId }
+    val asked = waitingElicitations(after.first, after.second).map { it.requestId }
+    val askedBefore = before?.let { waitingElicitations(it.first, it.second) }.orEmpty().map { it.requestId }
+    val thenIds = (then.map { it.requestId } + askedBefore).toHashSet()
+    val nowIds = (now.map { it.requestId } + asked).toHashSet()
     val go = planGoOf(after.second.operations)
     val raised = now.filter { it.requestId !in thenIds }.map { alertOf(it, go) }.toMutableList<SessionAlert>()
+    asked.filter { it !in thenIds }.mapTo(raised) { OpenOnlyAlert(it, it, AlertKind.ELICITATION) }
     val finished =
         before != null &&
             threadIsRunning(before.first, before.second) &&
             !threadIsRunning(after.first, after.second)
     if (finished) raised += FinishedAlert("$FINISHED${after.first.turns.size}")
-    return AlertChange(raised, then.map { it.requestId }.filter { it !in nowIds })
+    return AlertChange(raised, (then.map { it.requestId } + askedBefore).filter { it !in nowIds })
 }
 
 private const val FINISHED = "finished:"

@@ -2,6 +2,7 @@ package dev.ukitomato.closta.presenter.view
 
 import dev.ukitomato.closta.core.models.AgentEvent
 import dev.ukitomato.closta.core.models.ApprovalDecision
+import dev.ukitomato.closta.core.models.ElicitationAction
 import dev.ukitomato.closta.core.models.SavedSessionSummary
 import dev.ukitomato.closta.presenter.tree.JsonObject
 import dev.ukitomato.closta.presenter.tree.TreeRules
@@ -102,6 +103,23 @@ sealed interface PresenterInput {
         override fun toString(): String =
             "Decided(${decision.javaClass.simpleName}, $elapsedMs ms, ${passedOn.acceptedSuggestions.size} suggestions)"
     }
+
+    /**
+     * The host answered the pending elicitation [requestId]: [action], with [content] (the form's values as JSON) for
+     * an accept of a form. The first two are the arguments the caller gives core's `resolveElicitation`. A link
+     * accepted goes on in the browser; any other answer is sent.
+     */
+    data class ElicitationDecided(
+        val requestId: String,
+        val action: ElicitationAction,
+        val content: String?,
+    ) : PresenterInput {
+        // The form's values are the user's: never in a log.
+        override fun toString(): String = "ElicitationDecided($requestId, ${action.wire})"
+    }
+
+    /** The CLI process ended: what it asked can no longer be answered. The next [Launched] says it runs again. */
+    data object ProcessEnded : PresenterInput
 
     /**
      * The host could not pass its answer for [approvalId] on to the CLI. [message] is the host's own fixed sentence,

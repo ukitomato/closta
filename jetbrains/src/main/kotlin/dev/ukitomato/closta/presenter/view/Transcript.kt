@@ -1,5 +1,6 @@
 package dev.ukitomato.closta.presenter.view
 
+import dev.ukitomato.closta.core.models.ElicitationAction
 import dev.ukitomato.closta.presenter.tree.JsonObject
 import dev.ukitomato.closta.presenter.tree.JsonValue
 
@@ -20,6 +21,10 @@ data class Transcript(
     val messages: Keyed<MessageRecord> = Keyed.empty(),
     /** Every approval and question the CLI asked, by `request_id`, in arrival order. */
     val approvals: Keyed<ApprovalRecord> = Keyed.empty(),
+    /** Every request for input an MCP server made, by `request_id`, in arrival order. */
+    val elicitations: Keyed<ElicitationRecord> = Keyed.empty(),
+    /** Whether the CLI process that asked them has ended, so nothing it asked can be answered any more. */
+    val processEnded: Boolean = false,
     val routing: Routing = Routing(),
     /** The slash commands the CLI has. */
     val commands: SlashCommands = SlashCommands(),
@@ -241,6 +246,51 @@ data class SuggestionRecord(
 ) {
     // [raw] holds what the CLI sent (directories, rules): never in a log.
     override fun toString(): String = "SuggestionRecord($id, $kind, ${destination ?: "no destination"})"
+}
+
+/** How far an [ElicitationRecord] has come. */
+enum class ElicitationStage {
+    /** Asked, and no answer has gone out. */
+    WAITING,
+
+    /** The host's answer went to the CLI. */
+    SENT,
+
+    /** The user accepted a link, and the server has not yet said they finished there. */
+    IN_BROWSER,
+
+    /** The server said the user finished what the link asked. */
+    COMPLETED,
+
+    /** The CLI took the request back before it was answered. */
+    WITHDRAWN,
+}
+
+/**
+ * One `elicitation` request: what the MCP server [serverName] asks the user for. [heading] is the request's title, else
+ * its display name, else the server's name. [fields] are the form's fields, null when the schema is one Closta cannot
+ * fill in; a link ([isUrl]) has none. [anchor] is where it sits in the thread, as for an [ApprovalRecord].
+ * [sentAction] and [sentContent] are what the host answered; [failure] is the host's sentence for the last answer it
+ * could not pass on.
+ */
+data class ElicitationRecord(
+    val requestId: String,
+    val serverName: String,
+    val heading: String,
+    val message: String,
+    val description: String?,
+    val url: String?,
+    val elicitationId: String?,
+    val fields: List<ElicitationField>?,
+    val isUrl: Boolean,
+    val anchor: String?,
+    val stage: ElicitationStage = ElicitationStage.WAITING,
+    val sentAction: ElicitationAction? = null,
+    val sentContent: String? = null,
+    val failure: String? = null,
+) {
+    // The message, the address and the form's values are the server's and the user's: never in a log.
+    override fun toString(): String = "ElicitationRecord($requestId, $serverName, $stage)"
 }
 
 enum class ApprovalOutcome {

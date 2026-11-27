@@ -34,6 +34,7 @@ import dev.ukitomato.closta.platforms.intellij.ui.noHtml
 import dev.ukitomato.closta.platforms.intellij.ui.plainHtml
 import dev.ukitomato.closta.platforms.intellij.ui.plainTip
 import dev.ukitomato.closta.presenter.view.ApprovalRecord
+import dev.ukitomato.closta.presenter.view.ElicitationCard
 import dev.ukitomato.closta.presenter.view.PermissionCard
 import dev.ukitomato.closta.presenter.view.PermissionChoice
 import dev.ukitomato.closta.presenter.view.PlanCard
@@ -69,6 +70,7 @@ internal fun answerView(
         is PermissionCard -> PermissionPane(card, context)
         is QuestionCard -> QuestionPane(card, context)
         is PlanCard -> PlanPane(card, context)
+        is ElicitationCard -> object : AnswerView(context) {}
     }
 
 /**

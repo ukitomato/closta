@@ -22,7 +22,7 @@ class AlertTextTest {
     @Test
     fun whatMustBeReadOnlyOpens() {
         assertEquals(
-            listOf("t: Plan approval", "t: Question", "t: Edit permission"),
+            listOf("t: Plan approval", "t: Question", "t: Edit permission", "t: Input requested"),
             AlertKind.entries.map { alertText("t", OpenOnlyAlert("r", "r", it)).title },
         )
         assertEquals(false, alertText("t", OpenOnlyAlert("r", "r", AlertKind.EDIT)).answerable)

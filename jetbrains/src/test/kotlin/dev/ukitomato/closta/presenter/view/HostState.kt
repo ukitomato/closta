@@ -1,8 +1,10 @@
 package dev.ukitomato.closta.presenter.view
 
 import dev.ukitomato.closta.core.models.ConversationState
+import dev.ukitomato.closta.core.models.ElicitationDecision
 import dev.ukitomato.closta.core.models.fold
 import dev.ukitomato.closta.core.models.resolveApproval
+import dev.ukitomato.closta.core.models.resolveElicitation
 
 /**
  * What the host holds for one thread, and the one place the tests fold an input the way the host does: core
@@ -18,10 +20,13 @@ data class HostState(
             when (input) {
                 is PresenterInput.Event -> fold(conversation, input.event)
                 is PresenterInput.Decided -> resolveApproval(conversation, input.decision, input.elapsedMs)
+                is PresenterInput.ElicitationDecided ->
+                    resolveElicitation(conversation, ElicitationDecision(input.requestId, input.action))
                 is PresenterInput.Restored -> fold(conversation, input.event)
                 // What only the host knows: core's state does not change for it.
                 is PresenterInput.UserSent,
                 PresenterInput.StopRequested,
+                PresenterInput.ProcessEnded,
                 is PresenterInput.AnswerFailed,
                 is PresenterInput.FilesFound,
                 is PresenterInput.SelectionCaptured,

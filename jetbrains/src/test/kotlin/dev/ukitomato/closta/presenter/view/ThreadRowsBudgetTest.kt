@@ -1,5 +1,7 @@
 package dev.ukitomato.closta.presenter.view
 
+import dev.ukitomato.closta.core.models.AgentEvent
+import dev.ukitomato.closta.core.models.RawJson
 import dev.ukitomato.closta.platforms.intellij.session.SessionView
 import dev.ukitomato.closta.providers.claude.protocol.StreamJsonCodec
 import dev.ukitomato.closta.providers.claude.synthetic.ReplayScript
@@ -16,7 +18,7 @@ import org.junit.jupiter.api.Test
  */
 class ThreadRowsBudgetTest {
     private val history: SessionView by lazy {
-        SyntheticSession.turns().foldIndexed(SessionView()) { index, view, turn ->
+        SyntheticSession.turns().foldIndexed(asked()) { index, view, turn ->
             turn.lines.fold(view.sent(PresenterInput.UserSent("u$index", turn.prompt))) { next, line ->
                 next.event(PresenterInput.Event(StreamJsonCodec.decode(line)))
             }
@@ -24,12 +26,26 @@ class ThreadRowsBudgetTest {
     }
 
     private val todoHistory: SessionView by lazy {
-        SyntheticSession.turns(SyntheticSession.LARGEST_WITH_TODOS).foldIndexed(SessionView()) { index, view, turn ->
+        SyntheticSession.turns(SyntheticSession.LARGEST_WITH_TODOS).foldIndexed(asked()) { index, view, turn ->
             turn.lines.fold(view.sent(PresenterInput.UserSent("u$index", turn.prompt))) { next, line ->
                 next.event(PresenterInput.Event(StreamJsonCodec.decode(line)))
             }
         }
     }
+
+    // An MCP server's request for input that the first turn's result takes away, so the rows carry one card.
+    private fun asked(): SessionView =
+        SessionView().event(
+            PresenterInput.Event(
+                AgentEvent.Elicitation(
+                    requestId = "ask1",
+                    serverName = "files",
+                    mode = "form",
+                    elicitationId = null,
+                    request = RawJson("""{"subtype":"elicitation","mcp_server_name":"files","message":"Name?"}"""),
+                ),
+            ),
+        )
 
     private fun millis(block: () -> Unit): Double {
         val start = System.nanoTime()

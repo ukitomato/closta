@@ -1,5 +1,6 @@
 package dev.ukitomato.closta.presenter.view
 
+import dev.ukitomato.closta.core.models.ConversationState
 import dev.ukitomato.closta.presenter.tree.JsonArray
 import dev.ukitomato.closta.presenter.tree.JsonNumber
 import dev.ukitomato.closta.presenter.tree.JsonObject
@@ -151,23 +152,39 @@ private val TASK_TOOLS = setOf(TASK_CREATE, TASK_UPDATE)
 /** What a `TaskCreate` result says first: `Task #1 created successfully: write tests`. */
 private val TASK_CREATED = Regex("""Task #(\d+) created""")
 
+private fun cardKey(
+    anchor: String?,
+    requestId: String,
+): String = if (anchor == null) "card:$requestId" else "$anchor/card:$requestId"
+
 /** Turns transcripts into rows, keeping the rows of every message and part that is the same object as last time. */
 class ThreadRows {
     private var messages = IdentityHashMap<MessageRecord, List<ThreadRow>>()
     private var parts = IdentityHashMap<PartRecord, ThreadRow?>()
     private var groups = HashMap<String, ExploredRow>()
     private var cards = IdentityHashMap<ApprovalRecord, CardRow>()
+    private var asks = HashMap<String, CardRow>()
     private var ends = HashMap<String, TurnEndRow>()
     private val tasks = TaskTodos()
 
-    fun of(transcript: Transcript): List<ThreadRow> {
+    /**
+     * The rows of [transcript]. [conversation] says which requests for input core still holds as pending: a card that
+     * waits is answerable only while it does.
+     */
+    fun of(
+        transcript: Transcript,
+        conversation: ConversationState = ConversationState(),
+    ): List<ThreadRow> {
         val nextMessages = IdentityHashMap<MessageRecord, List<ThreadRow>>()
         val nextParts = IdentityHashMap<PartRecord, ThreadRow?>()
         val rows = ArrayList<ThreadRow>()
         val nextCards = IdentityHashMap<ApprovalRecord, CardRow>()
+        val nextAsks = HashMap<String, CardRow>()
+        val pending = conversation.pendingApprovals.mapTo(HashSet()) { it.requestId }
         val nextEnds = HashMap<String, TurnEndRow>()
         val go = planGoOf(transcript.operations)
         val byAnchor = transcript.approvals.values().groupBy { it.anchor }
+        val asksByAnchor = transcript.elicitations.values().groupBy { it.anchor }
         val messageKeys = transcript.messages.order.toHashSet()
         val followed = liveAsks(transcript).dropLast(1).toHashSet()
         for (message in transcript.messages.values()) {
@@ -178,6 +195,7 @@ class ThreadRows {
             rows += made
             if (message.key == transcript.signIn) rows += SignInRow("${message.key}/sign-in")
             byAnchor[message.key]?.forEach { rows += cardRow(it, nextCards, go) }
+            asksByAnchor[message.key]?.forEach { rows += askRow(it, nextAsks, pending, transcript.processEnded) }
             turnEndRow(transcript, message.key, followed)?.let {
                 nextEnds[it.key] = it
                 rows += it
@@ -188,9 +206,13 @@ class ThreadRows {
             rows +=
                 cardRow(it, nextCards, go)
         }
+        asksByAnchor.filterKeys { it == null || it !in messageKeys }.values.flatten().forEach {
+            rows += askRow(it, nextAsks, pending, transcript.processEnded)
+        }
         messages = nextMessages
         parts = nextParts
         cards = nextCards
+        asks = nextAsks
         ends = nextEnds
         return tasks.folded(grouped(rows), transcript)
     }
@@ -213,13 +235,23 @@ class ThreadRows {
         go: PlanGo,
     ): CardRow {
         val kept = cards[approval]?.takeIf { (it.card as? PlanCard)?.go.let { held -> held == null || held == go } }
-        val made = kept ?: CardRow(cardKey(approval), cardOf(approval, go), opens = false)
+        val made = kept ?: CardRow(cardKey(approval.anchor, approval.requestId), cardOf(approval, go), opens = false)
         into[approval] = made
         return made
     }
 
-    private fun cardKey(approval: ApprovalRecord): String =
-        if (approval.anchor == null) "card:${approval.requestId}" else "${approval.anchor}/card:${approval.requestId}"
+    private fun askRow(
+        record: ElicitationRecord,
+        into: HashMap<String, CardRow>,
+        pending: Set<String>,
+        processEnded: Boolean,
+    ): CardRow {
+        val card = elicitationCardOf(record, record.requestId in pending, processEnded)
+        val kept = asks[record.requestId]?.takeIf { it.card == card }
+        val made = kept ?: CardRow(cardKey(record.anchor, record.requestId), card, opens = false)
+        into[record.requestId] = made
+        return made
+    }
 
     private fun carryParts(
         message: MessageRecord,

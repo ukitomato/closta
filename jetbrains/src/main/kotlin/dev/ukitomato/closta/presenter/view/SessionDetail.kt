@@ -35,10 +35,19 @@ fun sessionDetail(
     transcript: Transcript,
 ): SessionDetail {
     val waiting = waitingApprovals(conversation, transcript)
+    val asked = waitingElicitations(conversation, transcript)
     val askKey = transcript.messages.order.lastOrNull { transcript.messages[it]?.role == Role.USER }
     return when {
         waiting.isNotEmpty() ->
-            SessionDetail.Waiting(cardOf(waiting.first(), planGoOf(transcript.operations)), waiting.size - 1)
+            SessionDetail.Waiting(
+                cardOf(waiting.first(), planGoOf(transcript.operations)),
+                waiting.size + asked.size - 1,
+            )
+        asked.isNotEmpty() ->
+            SessionDetail.Waiting(
+                elicitationCardOf(asked.first(), pending = true, processEnded = transcript.processEnded),
+                asked.size - 1,
+            )
         threadIsRunning(
             conversation,
             transcript,
