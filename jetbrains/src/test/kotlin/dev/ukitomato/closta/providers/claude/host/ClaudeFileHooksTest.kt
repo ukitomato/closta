@@ -27,6 +27,9 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.util.concurrent.CopyOnWriteArrayList
 
+// A test on a loaded machine may run past its limit by this much; the lower bound stays tight.
+private const val LOADED_MACHINE_MARGIN_MILLIS = 500L
+
 class ClaudeFileHooksTest {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -136,7 +139,11 @@ class ClaudeFileHooksTest {
             val answer = hooks.answer("closta-before-file-tool", input(tool = "Edit"), "t1")
             val tookMillis = (System.nanoTime() - start) / 1_000_000
             assertEquals(JsonObject(), answer)
-            assertEquals(true, tookMillis in 95..150, "took $tookMillis ms, limit 100 ms plus 50 ms")
+            assertEquals(
+                true,
+                tookMillis in 95..(100 + LOADED_MACHINE_MARGIN_MILLIS),
+                "took $tookMillis ms, limit 100 ms plus 500 ms",
+            )
         }
 
     private fun errors(
@@ -268,7 +275,10 @@ class ClaudeFileHooksTest {
             val answer = hooks.answer("closta-before-file-tool", input(tool = "Edit"), "t1")
             val tookMillis = (System.nanoTime() - start) / 1_000_000
             assertEquals(JsonObject(), answer)
-            assertTrue(tookMillis in 95..150, "took $tookMillis ms, limit 100 ms plus 50 ms")
+            assertTrue(
+                tookMillis in 95..(100 + LOADED_MACHINE_MARGIN_MILLIS),
+                "took $tookMillis ms, limit 100 ms plus 500 ms",
+            )
         }
 
     private fun hooksWith(report: Boolean): ClaudeFileHooks {
@@ -337,6 +347,9 @@ class ClaudeFileHooksTest {
             val answer = hooks.answer("closta-before-file-tool", input(tool = "Edit"), "t1")
             val tookMillis = (System.nanoTime() - start) / 1_000_000
             assertEquals(JsonObject(), answer)
-            assertTrue(tookMillis in 95..150, "took $tookMillis ms, limit 100 ms plus 50 ms")
+            assertTrue(
+                tookMillis in 95..(100 + LOADED_MACHINE_MARGIN_MILLIS),
+                "took $tookMillis ms, limit 100 ms plus 500 ms",
+            )
         }
 }

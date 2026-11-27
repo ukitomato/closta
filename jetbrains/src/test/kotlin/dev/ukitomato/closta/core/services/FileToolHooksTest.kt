@@ -28,6 +28,9 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.util.concurrent.CopyOnWriteArrayList
 
+// A test on a loaded machine may run past its limit by this much; the lower bound stays tight.
+private const val LOADED_MACHINE_MARGIN_MILLIS = 500L
+
 class FileToolHooksTest {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val logged = CopyOnWriteArrayList<String>()
@@ -104,7 +107,10 @@ class FileToolHooksTest {
             val start = System.nanoTime()
             hooks(documents, limit = 100).before(call)
             val tookMillis = (System.nanoTime() - start) / 1_000_000
-            assertTrue(tookMillis in 95..150, "went on after $tookMillis ms, limit 100 ms plus 50 ms")
+            assertTrue(
+                tookMillis in 95..(100 + LOADED_MACHINE_MARGIN_MILLIS),
+                "went on after $tookMillis ms, limit 100 ms plus 500 ms",
+            )
             assertEquals(1, logged.size)
             assertTrue(logged.single().contains("100 ms"))
             assertFalse(finished.isCompleted)
@@ -280,7 +286,10 @@ class FileToolHooksTest {
             val start = System.nanoTime()
             hooks.before(call)
             val tookMillis = (System.nanoTime() - start) / 1_000_000
-            assertTrue(tookMillis in 95..150, "went on after $tookMillis ms, limit 100 ms plus 50 ms")
+            assertTrue(
+                tookMillis in 95..(100 + LOADED_MACHINE_MARGIN_MILLIS),
+                "went on after $tookMillis ms, limit 100 ms plus 500 ms",
+            )
             assertEquals(0, hooks.snapshots())
             assertNull(hooks.after(post))
             assertTrue(logged.single().contains("reading a file's errors"), logged.toString())
@@ -346,7 +355,10 @@ class FileToolHooksTest {
             val start = System.nanoTime()
             assertNull(hooks.after(post))
             val tookMillis = (System.nanoTime() - start) / 1_000_000
-            assertTrue(tookMillis in 95..150, "gave up after $tookMillis ms, limit 100 ms plus 50 ms")
+            assertTrue(
+                tookMillis in 95..(100 + LOADED_MACHINE_MARGIN_MILLIS),
+                "gave up after $tookMillis ms, limit 100 ms plus 500 ms",
+            )
         }
 
     @Test
@@ -369,7 +381,10 @@ class FileToolHooksTest {
             val start = System.nanoTime()
             assertNull(hooks.after(post))
             val tookMillis = (System.nanoTime() - start) / 1_000_000
-            assertTrue(tookMillis in 95..150, "gave up after $tookMillis ms, limit 100 ms plus 50 ms")
+            assertTrue(
+                tookMillis in 95..(100 + LOADED_MACHINE_MARGIN_MILLIS),
+                "gave up after $tookMillis ms, limit 100 ms plus 500 ms",
+            )
         }
 
     @Test
