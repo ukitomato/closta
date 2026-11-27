@@ -70,6 +70,7 @@ pub enum Key {
     Right,
     N,
     O,
+    Tab,
     Other,
 }
 
@@ -475,6 +476,7 @@ mod tests {
             assert_eq!(card_key(&scene, &plain(Key::Enter)), Swallow);
             assert_eq!(card_key(&scene, &plain(Key::Space)), Swallow);
             assert_eq!(card_key(&scene, &plain(Key::Other)), Pass);
+            assert_eq!(card_key(&scene, &plain(Key::Tab)), Pass);
         }
     }
 
@@ -484,6 +486,7 @@ mod tests {
             assert_eq!(card_key(&FocusScene::NeedsYou, &plain(key)), Swallow);
         }
         assert_eq!(card_key(&FocusScene::NeedsYou, &plain(Key::Other)), Pass);
+        assert_eq!(card_key(&FocusScene::NeedsYou, &plain(Key::Tab)), Pass);
         for scene in [
             FocusScene::Composer,
             FocusScene::FileEditor,
@@ -620,6 +623,7 @@ mod tests {
         assert_eq!(card_key(&FocusScene::Nav, &plain(Key::Space)), Swallow);
         assert_eq!(card_key(&FocusScene::Nav, &plain(Key::Digit(2))), Swallow);
         assert_eq!(card_key(&FocusScene::Nav, &plain(Key::Other)), Pass);
+        assert_eq!(card_key(&FocusScene::Nav, &plain(Key::Tab)), Pass);
     }
 
     #[test]
@@ -664,5 +668,39 @@ mod tests {
             (card_kind(&question), card_choices(&question)),
             (CardKind::Question, 0)
         );
+    }
+
+    #[test]
+    fn tab_does_what_any_other_key_does_around_cards() {
+        let mut scenes = vec![
+            FocusScene::Composer,
+            FocusScene::FileEditor,
+            FocusScene::Thread,
+            FocusScene::QuestionOption,
+            FocusScene::NeedsYou,
+            FocusScene::Overlay,
+            FocusScene::Nav,
+            FocusScene::Other,
+        ];
+        for kind in KINDS {
+            scenes.push(card(kind, 3));
+            scenes.push(FocusScene::CardText { kind });
+        }
+        for scene in scenes {
+            for shift in [false, true] {
+                for held in [false, true] {
+                    let key = |key| CardKey {
+                        shift,
+                        held,
+                        ..plain(key)
+                    };
+                    assert_eq!(
+                        card_key(&scene, &key(Key::Tab)),
+                        card_key(&scene, &key(Key::Other)),
+                        "{scene:?} shift {shift} held {held}"
+                    );
+                }
+            }
+        }
     }
 }

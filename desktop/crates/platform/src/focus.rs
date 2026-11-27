@@ -540,7 +540,8 @@ impl FocusMap {
             (OverlayKey::Confirm, Overlay::CloseSlot) => {
                 gate.action = Some(ShellAction::ConfirmCloseSlot);
             }
-            (OverlayKey::Cancel | OverlayKey::Confirm, Overlay::Closing) => {}
+            // The resume popup takes its keys once it is drawn.
+            (OverlayKey::Cancel | OverlayKey::Confirm, Overlay::Closing | Overlay::Resume) => {}
             (OverlayKey::Pass, _) => gate.stop = false,
         }
         gate
@@ -753,7 +754,8 @@ fn hub_gate(scene: &FocusScene, key: &CardKey) -> Gate {
         HubKeyOutcome::Move(delta) => ShellAction::NavMove { delta },
         HubKeyOutcome::Left => ShellAction::NavLeft,
         HubKeyOutcome::Right => ShellAction::NavRight,
-        HubKeyOutcome::Pass => return Gate::default(),
+        // The resume popup is not drawn yet.
+        HubKeyOutcome::OpenResume | HubKeyOutcome::Pass => return Gate::default(),
     };
     Gate {
         stop: true,
@@ -802,7 +804,7 @@ pub(crate) fn on_screen(following_tail: bool, at: usize, len: usize, visible: us
 }
 
 /// A key as the card table names it: the digits 0 to 9 (the numpad's come with the same names),
-/// Escape, Enter, Space, the arrows, N, O and W, any other key as `Other`; `None` for a
+/// Escape, Enter, Space, Tab, the arrows, N, O and W, any other key as `Other`; `None` for a
 /// modifier pressed alone. It is never held: the gate tells that from the keys still down.
 pub(crate) fn to_card_key(keystroke: &Keystroke) -> Option<CardKey> {
     if keystroke.is_modifier_key() {
@@ -819,6 +821,7 @@ pub(crate) fn to_card_key(keystroke: &Keystroke) -> Option<CardKey> {
         "right" => Key::Right,
         "n" => Key::N,
         "o" => Key::O,
+        "tab" => Key::Tab,
         digit => match digit.parse::<u8>() {
             Ok(n @ 0..=9) => Key::Digit(n),
             _ => Key::Other,

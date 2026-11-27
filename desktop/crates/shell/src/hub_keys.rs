@@ -1,5 +1,5 @@
-//! The keys that reach beyond a card: to the left list, to a new session, and along the list.
-//! Only a key `card_key` passed is asked here.
+//! The keys that reach beyond a card: to the left list, to a new session or the resume popup, and
+//! along the list. Only a key `card_key` passed is asked here.
 
 use crate::card_keys::{CardKey, FocusScene, Key};
 
@@ -9,6 +9,8 @@ pub enum HubKeyOutcome {
     ToList,
     /// Open the new-session dialog on the folder of the project at hand.
     NewSessionHere,
+    /// Open the resume popup on the project at hand.
+    OpenResume,
     /// Move the list's cursor by this many rows.
     Move(i32),
     Left,
@@ -19,7 +21,7 @@ pub enum HubKeyOutcome {
 /// What a key does beyond the cards in `scene`. Inside a card, a card's text field and a
 /// question's option the key is left alone, as it is behind an overlay.
 pub fn hub_key(scene: &FocusScene, key: &CardKey) -> HubKeyOutcome {
-    use HubKeyOutcome::{Left, Move, NewSessionHere, Pass, Right, ToList};
+    use HubKeyOutcome::{Left, Move, NewSessionHere, OpenResume, Pass, Right, ToList};
 
     let in_card = matches!(
         scene,
@@ -28,8 +30,11 @@ pub fn hub_key(scene: &FocusScene, key: &CardKey) -> HubKeyOutcome {
     let on_list = matches!(scene, FocusScene::NeedsYou | FocusScene::Nav);
     let only =
         |ctrl: bool, alt: bool| key.ctrl == ctrl && key.alt == alt && !key.shift && !key.platform;
+    let ctrl_shift = key.ctrl && key.shift && !key.alt && !key.platform;
+    let open_scene = !in_card && *scene != FocusScene::Overlay;
     match key.key {
-        Key::N if only(true, false) && !in_card && *scene != FocusScene::Overlay => NewSessionHere,
+        Key::N if only(true, false) && open_scene => NewSessionHere,
+        Key::O if ctrl_shift && open_scene => OpenResume,
         Key::Digit(1) if only(false, true) => {
             if in_card || matches!(scene, FocusScene::FileEditor | FocusScene::Overlay) {
                 Pass
@@ -47,7 +52,7 @@ pub fn hub_key(scene: &FocusScene, key: &CardKey) -> HubKeyOutcome {
 
 #[cfg(test)]
 mod tests {
-    use super::HubKeyOutcome::{Left, Move, NewSessionHere, Pass, Right, ToList};
+    use super::HubKeyOutcome::{Left, Move, NewSessionHere, OpenResume, Pass, Right, ToList};
     use super::*;
     use crate::card_keys::{CardKey, CardKind, FocusScene, Key};
 
@@ -145,10 +150,34 @@ mod tests {
     }
 
     #[test]
-    fn ctrl_shift_o_does_nothing_yet() {
+    fn ctrl_shift_o_opens_the_resume_popup_outside_cards_and_overlays() {
         let key = with(Key::O, true, false, true);
-        for scene in [FocusScene::Composer, FocusScene::Nav, FocusScene::Other] {
+        for scene in [
+            FocusScene::Composer,
+            FocusScene::FileEditor,
+            FocusScene::Thread,
+            FocusScene::NeedsYou,
+            FocusScene::Nav,
+            FocusScene::Other,
+        ] {
+            assert_eq!(hub_key(&scene, &key), OpenResume, "{scene:?}");
+        }
+        let mut refused = inside().to_vec();
+        refused.push(FocusScene::Overlay);
+        for scene in refused {
             assert_eq!(hub_key(&scene, &key), Pass, "{scene:?}");
+        }
+        for other in [
+            with(Key::O, true, false, false),
+            with(Key::O, false, false, true),
+            with(Key::O, true, true, true),
+            CardKey {
+                platform: true,
+                ..key
+            },
+            CardKey::plain(Key::O),
+        ] {
+            assert_eq!(hub_key(&FocusScene::Composer, &other), Pass, "{other:?}");
         }
     }
 }

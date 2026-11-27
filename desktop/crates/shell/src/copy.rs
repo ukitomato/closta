@@ -97,6 +97,11 @@ const MINUTE_S: i64 = 60;
 const MCP_PREFIX: &str = "mcp__";
 const EDITS: [&str; 3] = ["Edit", "MultiEdit", "NotebookEdit"];
 
+/// The resume popup's title, with the project's name.
+pub fn resume_title(name: &str) -> String {
+    format!("Resume a session · {name}")
+}
+
 pub fn tool_state(state: ToolLineState) -> &'static str {
     match state {
         ToolLineState::Running => TOOL_RUNNING,
@@ -340,6 +345,14 @@ pub const NEEDS_YOU: &str = "NEEDS YOU";
 /// The left pane's tree: its heading and the heading of the sessions in no project.
 pub const PROJECTS_HEADING: &str = "PROJECTS";
 pub const OTHER_HEADING: &str = "OTHER";
+/// The resume popup.
+pub const RESUME_SEARCH: &str = "Search";
+pub const RESUME_LOADING: &str = "Loading…";
+pub const RESUME_NONE: &str = "No saved sessions";
+pub const RESUME_UNREADABLE: &str = "The saved sessions could not be read";
+pub const RESUME_NO_MATCHES: &str = "No matches";
+pub const RESUME_OPEN: &str = "Open";
+pub const RESUME_CLOSING: &str = "Closing…";
 pub const REMOVE_FROM_LIST: &str = "Remove from list";
 pub const CLOSE_ITS_SESSIONS: &str = "Close its sessions first.";
 pub const LIST_ALLOW: &str = "Allow";
@@ -1380,8 +1393,16 @@ mod tests {
             (SESSION_ENDED, "Session ended"),
             (CLOSING, "Closing sessions…"),
             (CLOSE, "Close"),
+            (RESUME_SEARCH, "Search"),
+            (RESUME_LOADING, "Loading…"),
+            (RESUME_NONE, "No saved sessions"),
+            (RESUME_UNREADABLE, "The saved sessions could not be read"),
+            (RESUME_NO_MATCHES, "No matches"),
+            (RESUME_OPEN, "Open"),
+            (RESUME_CLOSING, "Closing…"),
         ] {
             assert_eq!(text, spec);
         }
+        assert_eq!(resume_title("closta"), "Resume a session · closta");
     }
 }

@@ -326,6 +326,8 @@ pub struct FakeSavedFor {
     fakes: Mutex<Vec<(String, Arc<FakeSavedSessions>)>>,
     started: Arc<AtomicUsize>,
     asked: AtomicUsize,
+    /// The `stop` of each list asked for, in order.
+    stops: Mutex<Vec<Arc<AtomicBool>>>,
 }
 
 impl FakeSavedFor {
@@ -338,6 +340,28 @@ impl FakeSavedFor {
     /// How many lists were polled.
     pub fn lists_started(&self) -> usize {
         self.started.load(Ordering::SeqCst)
+    }
+
+    /// Makes `fake` the saved sessions of `folder`, before anything asks for them.
+    pub fn put(&self, folder: &str, fake: FakeSavedSessions) -> Arc<FakeSavedSessions> {
+        let fake = Arc::new(fake);
+        let mut fakes = self.fakes.lock().unwrap_or_else(PoisonError::into_inner);
+        assert!(fakes.iter().all(|(kept, _)| kept != folder), "put once");
+        fakes.push((folder.to_owned(), Arc::clone(&fake)));
+        fake
+    }
+
+    /// How many lists were asked for, polled or not.
+    pub fn lists_asked(&self) -> usize {
+        self.stops
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .len()
+    }
+
+    /// Whether the `stop` of list `n` (0 is the first asked for) is true.
+    pub fn stopped(&self, n: usize) -> bool {
+        self.stops.lock().unwrap_or_else(PoisonError::into_inner)[n].load(Ordering::SeqCst)
     }
 
     /// How many times `saved` was called.
@@ -364,6 +388,10 @@ impl SavedFor for FakeSavedFor {
 
     fn list(&self, folder: &str, stop: Arc<AtomicBool>) -> future::Boxed<Option<SavedListing>> {
         let fake = self.fake_of(folder);
+        self.stops
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push(Arc::clone(&stop));
         let started = Arc::clone(&self.started);
         Box::pin(async move {
             started.fetch_add(1, Ordering::SeqCst);

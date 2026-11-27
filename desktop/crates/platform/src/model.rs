@@ -440,6 +440,8 @@ impl ShellModel {
             removed,
             clipboard,
             focus,
+            // The resume popup is not drawn yet.
+            listing: _,
         } = self.shell.act(action);
         let selects = self.shell.selected() != selected_before;
         // Whatever opened or shut a pane — its button, or the key that goes to the list.
@@ -726,7 +728,7 @@ impl ShellModel {
                 None => return,
             },
             Overlay::CloseWindow | Overlay::CloseSlot => self.focus.overlay_cancel.clone(),
-            Overlay::Closing => self.focus.overlay_layer.clone(),
+            Overlay::Closing | Overlay::Resume => self.focus.overlay_layer.clone(),
         };
         window.focus(&handle, cx);
         window.on_next_frame(move |window, cx| window.focus(&handle, cx));

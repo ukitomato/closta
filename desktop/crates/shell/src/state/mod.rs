@@ -18,7 +18,7 @@ use closta_presenter::sessions::groups::{
 use closta_presenter::sessions::window::{GroupSince, group_since_after};
 use closta_presenter::text::take_utf16;
 use closta_presenter::thread_running::thread_is_running;
-use closta_session::history::SessionOpening;
+use closta_session::history::{SavedListing, SessionOpening};
 use closta_session::log::SessionLog;
 use closta_session::runtime::{SessionConfig, SessionRuntime};
 use closta_session::status::SessionStatus;
@@ -39,6 +39,7 @@ use crate::new_session::{
 };
 use crate::panes::{Pane, Panes};
 use crate::projects::{Project, ProjectKey};
+use crate::resume::{ResumeListing, ResumePicker};
 use crate::rows::{RowChange, row_changes};
 use crate::settings::{Settings, SettingsSink};
 use crate::slot::{
@@ -54,6 +55,7 @@ mod needs_you;
 mod new_in_project;
 mod overlays;
 mod projects;
+mod resume;
 
 pub use new_in_project::ProjectCheck;
 pub use projects::ProjectSummary;
@@ -254,6 +256,26 @@ pub enum ShellAction {
     NavLeft,
     /// A project's row opens it.
     NavRight,
+    /// Opens the resume popup on the project and reads its saved sessions in the background.
+    OpenResume {
+        project: ProjectKey,
+    },
+    /// The resume popup, on the project the New Session dialog would take.
+    OpenResumeHere,
+    /// The answer of the popup's reading `generation`; `None` is a reading that was stopped.
+    SavedListed {
+        generation: u64,
+        listing: Option<SavedListing>,
+    },
+    /// `text` is the user's: this action is never logged.
+    EditResumeQuery {
+        text: String,
+    },
+    /// Moves the popup's pick; it stops at both ends.
+    MoveResume {
+        delta: i32,
+    },
+    CloseResume,
 }
 
 /// The one thing that holds the window's attention; what is behind it takes no answer.
@@ -263,6 +285,7 @@ pub enum Overlay {
     CloseWindow,
     CloseSlot,
     Closing,
+    Resume,
 }
 
 /// Where the keyboard goes once an action is done.
@@ -323,6 +346,8 @@ pub struct Acted {
     pub clipboard: Option<String>,
     /// Where the keyboard is to go.
     pub focus: Option<FocusTarget>,
+    /// The resume popup's reading, to run in the background.
+    pub listing: Option<ResumeListing>,
 }
 
 /// What the composer's second line shows of the session.
@@ -467,6 +492,9 @@ pub struct ShellState {
     closing: CloseStage,
     slot_close: Option<(SlotId, CloseQuestion)>,
     shown_title: Option<String>,
+    resume: Option<ResumePicker>,
+    /// The number of the resume popup's last reading; it only goes up.
+    last_listing: u64,
 }
 
 impl ShellState {
@@ -496,6 +524,8 @@ impl ShellState {
             closing: CloseStage::Open,
             slot_close: None,
             shown_title: None,
+            resume: None,
+            last_listing: 0,
         }
     }
 
@@ -1060,6 +1090,9 @@ impl ShellState {
                     | ShellAction::SendNote { .. }
                     | ShellAction::AnswerQuestion { .. }
                     | ShellAction::RemoveProject { .. }
+                    | ShellAction::OpenResume { .. }
+                    | ShellAction::OpenResumeHere
+                    | ShellAction::SavedListed { .. }
             )
         {
             return Acted::default();
@@ -1286,6 +1319,15 @@ impl ShellState {
             ShellAction::NavLeave => self.nav_leave(),
             ShellAction::NavLeft => self.nav_left(),
             ShellAction::NavRight => self.nav_right(),
+            ShellAction::OpenResume { project } => self.open_resume(&project),
+            ShellAction::OpenResumeHere => self.open_resume_here(),
+            ShellAction::SavedListed {
+                generation,
+                listing,
+            } => self.saved_listed(generation, listing),
+            ShellAction::EditResumeQuery { text } => self.edit_resume_query(text),
+            ShellAction::MoveResume { delta } => self.move_resume(delta),
+            ShellAction::CloseResume => self.close_resume(),
         }
     }
 
@@ -1413,7 +1455,12 @@ fn behind_overlay(action: &ShellAction, overlay: Overlay) -> bool {
         | ShellAction::NavEnter
         | ShellAction::NavLeave
         | ShellAction::NavLeft
-        | ShellAction::NavRight => true,
+        | ShellAction::NavRight
+        | ShellAction::OpenResume { .. }
+        | ShellAction::OpenResumeHere => true,
+        ShellAction::EditResumeQuery { .. }
+        | ShellAction::MoveResume { .. }
+        | ShellAction::CloseResume => overlay != Overlay::Resume,
         ShellAction::OpenNewSession
         | ShellAction::OpenNewSessionHere
         | ShellAction::StartSession { .. } => overlay != Overlay::NewSession,

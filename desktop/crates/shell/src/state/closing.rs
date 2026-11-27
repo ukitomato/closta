@@ -115,6 +115,9 @@ impl ShellState {
         }
         self.closing = CloseStage::Closing;
         self.pending_new = None;
+        if let Some(picker) = self.resume.take() {
+            picker.halt();
+        }
         Acted {
             close: true,
             ..Acted::default()
