@@ -270,4 +270,28 @@ class ElicitationCardTest {
         assertTrue(rebuildsElicitationCard(shown, shown.copy(failure = "could not send")))
         assertTrue(rebuildsElicitationCard(shown, shown.copy(answerable = false)))
     }
+
+    @Test
+    fun `type only - a card waits by whether it can be answered, not by having no outcome`() {
+        val asked = HostState().line(link())
+        assertTrue(asked.card().waits)
+        val browser = asked.answer(ElicitationAction.ACCEPT, id = "u1")
+        assertNull(browser.card().answered)
+        assertFalse(browser.card().waits, "a link followed in the browser has no outcome and waits for nothing")
+        assertFalse(browser.line(done("x1")).card().waits)
+        assertFalse(
+            HostState()
+                .line(form())
+                .answer(ElicitationAction.DECLINE)
+                .card()
+                .waits,
+        )
+        assertFalse(
+            HostState()
+                .line(form())
+                .next(PresenterInput.ProcessEnded)
+                .card()
+                .waits,
+        )
+    }
 }

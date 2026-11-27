@@ -5,6 +5,7 @@ import dev.ukitomato.closta.platforms.intellij.chat.ChatSource
 import dev.ukitomato.closta.platforms.intellij.session.SessionNotice
 import dev.ukitomato.closta.platforms.intellij.session.SessionView
 import dev.ukitomato.closta.platforms.intellij.thread.CardAnswer
+import dev.ukitomato.closta.platforms.intellij.thread.ElicitationAnswer
 import dev.ukitomato.closta.presenter.view.RewindRecord
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -50,6 +51,8 @@ class FixedChatSource(
     override suspend fun switchSandbox(on: Boolean) = Unit
 
     override suspend fun respond(answer: CardAnswer) = answered(answer)
+
+    override suspend fun answerElicitation(answer: ElicitationAnswer) = Unit
 
     override suspend fun interrupt() = Unit
 

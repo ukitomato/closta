@@ -5,6 +5,7 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
 import dev.ukitomato.closta.core.models.Attachment
+import dev.ukitomato.closta.core.models.ElicitationDecision
 import dev.ukitomato.closta.platforms.intellij.session.ClaudeSessionService
 import dev.ukitomato.closta.platforms.intellij.session.SandboxMemory
 import dev.ukitomato.closta.platforms.intellij.session.SessionNotice
@@ -14,6 +15,7 @@ import dev.ukitomato.closta.platforms.intellij.session.SessionView
 import dev.ukitomato.closta.platforms.intellij.session.resumeIdOf
 import dev.ukitomato.closta.platforms.intellij.store.AppSettingsStore
 import dev.ukitomato.closta.platforms.intellij.thread.CardAnswer
+import dev.ukitomato.closta.platforms.intellij.thread.ElicitationAnswer
 import dev.ukitomato.closta.presenter.view.RewindOutcome
 import dev.ukitomato.closta.presenter.view.RewindRecord
 import dev.ukitomato.closta.presenter.view.appliedSandbox
@@ -76,6 +78,9 @@ interface ChatSource : Disposable {
     suspend fun switchSandbox(on: Boolean)
 
     suspend fun respond(answer: CardAnswer)
+
+    /** Answers an MCP server's request for input; a write that fails is written on the request, not thrown. */
+    suspend fun answerElicitation(answer: ElicitationAnswer)
 
     suspend fun interrupt()
 
@@ -224,6 +229,16 @@ interface ChatSource : Disposable {
             answerOrMarkFailed(
                 { commands.respondToApproval(answer.decision, asked, answer.payload, answer.passedOn) },
                 { commands.answerFailed(answer.requestId) },
+                { thisLogger().warn(it) },
+            )
+        }
+
+        override suspend fun answerElicitation(answer: ElicitationAnswer) {
+            val commands = commands() ?: return
+            // The commands write the failure on the request themselves; here only its type is logged.
+            answerOrMarkFailed(
+                { commands.respondToElicitation(ElicitationDecision(answer.requestId, answer.action), answer.content) },
+                {},
                 { thisLogger().warn(it) },
             )
         }

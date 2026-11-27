@@ -211,6 +211,7 @@ class ChatPanel(
             BorderLayout.SOUTH,
         )
         wire()
+        wireElicitation()
         draw()
         watchVisibility(parent)
     }
@@ -384,6 +385,10 @@ class ChatPanel(
             .setItemChosenCallback { moveToOtherPlace() }
             .createPopup()
             .show(RelativePoint(under, Point(0, under.height)))
+    }
+
+    private fun wireElicitation() {
+        surface.onElicitationAnswer = { answer -> scope.launch(failures) { source.answerElicitation(answer) } }
     }
 
     private fun wire() {

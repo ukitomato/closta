@@ -67,6 +67,12 @@ fun elicitationCardOf(
 }
 
 /**
+ * Whether the card waits for the user. An elicitation waits while it can be answered: a link followed in the browser or
+ * finished has no outcome and waits for nothing. Any other card waits until it has an outcome.
+ */
+val ThreadCard.waits: Boolean get() = if (this is ElicitationCard) answerable else answered == null
+
+/**
  * Whether the card has to be built again to show [next], where [shown] is on the screen: only when the request, its
  * stage, its answer, its failure or whether it can be answered changed. Anything else (the words, say) leaves the
  * fields as the user is typing in them.

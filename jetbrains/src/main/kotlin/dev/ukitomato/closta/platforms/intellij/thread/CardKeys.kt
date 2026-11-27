@@ -11,7 +11,7 @@ import javax.swing.KeyStroke
 import javax.swing.text.JTextComponent
 
 /** The kinds of waiting card, each with its own keys. */
-enum class CardKind { PERMISSION, PLAN, QUESTION }
+enum class CardKind { PERMISSION, PLAN, QUESTION, ELICITATION }
 
 /** What a key pressed on a waiting card does. */
 sealed interface CardKey {
@@ -86,7 +86,7 @@ fun cardKey(
     return when {
         jumps(keyCode, held) -> CardKey.ToComposer
         keyCode == KeyEvent.VK_ESCAPE && held == 0 -> if (inText) CardKey.LeaveText else CardKey.Deny
-        kind == CardKind.QUESTION -> CardKey.Answer.takeIf { ctrlEnter }
+        kind.takesText -> CardKey.Answer.takeIf { ctrlEnter }
         inText || held != 0 -> null
         else -> digit(keyCode)?.takeIf { it < choices }?.let { CardKey.Choose(it) }
     }
@@ -122,7 +122,7 @@ internal fun cardKeys(
     val actions = card.actionMap
     val strokes = ArrayList<Pair<Int, Int>>()
     strokes += Pair(KeyEvent.VK_ESCAPE, 0)
-    if (kind == CardKind.QUESTION) {
+    if (kind.takesText) {
         strokes += Pair(KeyEvent.VK_ENTER, InputEvent.CTRL_DOWN_MASK)
         strokes += Pair(KeyEvent.VK_ENTER, InputEvent.META_DOWN_MASK)
     } else {
@@ -146,6 +146,9 @@ internal fun cardKeys(
         )
     }
 }
+
+// A question and a form are answered with Ctrl+Enter (Cmd+Enter), and their digits are for typing.
+private val CardKind.takesText: Boolean get() = this == CardKind.QUESTION || this == CardKind.ELICITATION
 
 private fun inText(): Boolean {
     val owner = KeyboardFocusManager.getCurrentKeyboardFocusManager().focusOwner

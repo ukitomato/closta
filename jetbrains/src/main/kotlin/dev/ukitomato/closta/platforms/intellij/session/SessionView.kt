@@ -2,6 +2,7 @@ package dev.ukitomato.closta.platforms.intellij.session
 
 import dev.ukitomato.closta.core.models.ApprovalDecision
 import dev.ukitomato.closta.core.models.ConversationState
+import dev.ukitomato.closta.core.models.ElicitationDecision
 import dev.ukitomato.closta.core.models.fold
 import dev.ukitomato.closta.presenter.view.ApplyRecord
 import dev.ukitomato.closta.presenter.view.FileSearchRecord
@@ -40,6 +41,13 @@ data class SessionView(
         elapsedMs: Long,
         passedOn: PassedOn = PassedOn(),
     ): SessionView = folded(after, PresenterInput.Decided(decision, elapsedMs, passedOn))
+
+    /** The host answered an MCP server's request for input; [after] is core's state without the request. */
+    fun elicitationDecided(
+        after: ConversationState,
+        decision: ElicitationDecision,
+        content: String?,
+    ): SessionView = folded(after, PresenterInput.ElicitationDecided(decision.requestId, decision.action, content))
 
     /** The host could not pass its answer for [approvalId] on; core's state stays, and so does the open approval. */
     fun answerFailed(

@@ -23,6 +23,7 @@ import dev.ukitomato.closta.platforms.intellij.ui.plainTip
 import dev.ukitomato.closta.presenter.view.ApprovalOutcome
 import dev.ukitomato.closta.presenter.view.ApprovalRecord
 import dev.ukitomato.closta.presenter.view.ElicitationCard
+import dev.ukitomato.closta.presenter.view.ElicitationStage
 import dev.ukitomato.closta.presenter.view.PassedOn
 import dev.ukitomato.closta.presenter.view.PermissionCard
 import dev.ukitomato.closta.presenter.view.PermissionChoice
@@ -80,7 +81,11 @@ class CardViews(
     private val resized: (JComponent) -> Unit = {},
     /** The card that had the keyboard was answered, or its key to go back pressed: the keyboard goes back. */
     private val letGo: () -> Unit = {},
+    private val answerElicitation: (ElicitationAnswer) -> Unit = {},
 ) {
+    // What was typed in a form that waits, by request: a row made again (scrolled away and back) is given it back.
+    private val typed = HashMap<String, ElicitationDraft>()
+
     // The card that had the keyboard when it was made again (its answer failed, or it was answered), by request, and
     // the part of it that had it ([focusRole]): the card made next for that request takes it back, or lets it go.
     private var refocus: Pair<String, String>? = null
@@ -92,6 +97,7 @@ class CardViews(
         val made =
             when {
                 card is PlanCard -> plan(card)
+                card is ElicitationCard -> elicitation(card)
                 outcome != null -> answeredLine(outcome, outcomeText(card, outcome), about(card))
                 card is PermissionCard -> PermissionView(card)
                 card is QuestionCard -> QuestionCardView(card)
@@ -104,6 +110,17 @@ class CardViews(
             else -> SwingUtilities.invokeLater { partFor(again.second, made)?.requestFocusInWindow() }
         }
         return made
+    }
+
+    private fun elicitation(card: ElicitationCard): JComponent {
+        if (card.stage != ElicitationStage.WAITING) typed.remove(card.requestId)
+        return ElicitationCardView(
+            card,
+            { answerElicitation(it) },
+            resized,
+            letGo,
+            typed[card.requestId].orEmpty(),
+        ) { id, values -> typed[id] = values }
     }
 
     private fun about(card: ThreadCard): String? =
@@ -128,6 +145,11 @@ class CardViews(
         component: JComponent,
         card: ThreadCard,
     ): Boolean {
+        if (card is ElicitationCard && component is ElicitationCardView) {
+            if (card.stage != ElicitationStage.WAITING) typed.remove(card.requestId)
+            component.show(card)
+            return true
+        }
         focusRole(KeyboardFocusManager.getCurrentKeyboardFocusManager().focusOwner, component)?.let { role ->
             refocus = card.requestId to role
         }

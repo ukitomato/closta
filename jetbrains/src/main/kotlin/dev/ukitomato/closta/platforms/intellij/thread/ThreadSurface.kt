@@ -19,6 +19,7 @@ import dev.ukitomato.closta.presenter.view.AskAction
 import dev.ukitomato.closta.presenter.view.AskActions
 import dev.ukitomato.closta.presenter.view.CardRow
 import dev.ukitomato.closta.presenter.view.ThreadRow
+import dev.ukitomato.closta.presenter.view.waits
 import dev.ukitomato.closta.providers.claude.launch.CliPaths
 import java.awt.Point
 import java.awt.Rectangle
@@ -50,6 +51,9 @@ interface ThreadSurface : Disposable {
     )
 
     var onAnswer: (CardAnswer) -> Unit
+
+    /** The user answered an MCP server's request for input. */
+    var onElicitationAnswer: (ElicitationAnswer) -> Unit
 
     /**
      * The keyboard leaves the thread for the composer: the card that had it was answered and went, or its key to go
@@ -132,6 +136,7 @@ class SwingThreadSurface(
     roomy: Boolean = false,
 ) : ThreadSurface {
     override var onAnswer: (CardAnswer) -> Unit = {}
+    override var onElicitationAnswer: (ElicitationAnswer) -> Unit = {}
     override var onLetGo: () -> Unit = {}
     override var onWaitingOffScreen: (Int) -> Unit = {}
     private var offScreenTold = -1
@@ -194,6 +199,7 @@ class SwingThreadSurface(
                     { path -> openCliPath(project, path) },
                     { column.remeasureHolding(it) },
                     { onLetGo() },
+                    { onElicitationAnswer(it) },
                 ),
             ),
             roomy,
@@ -330,7 +336,7 @@ class SwingThreadSurface(
         approval: (String) -> ApprovalRecord?,
     ) {
         approvals = approval
-        waiting = rows.filter { it is CardRow && it.card.answered == null }.map { it.key }
+        waiting = rows.filter { it is CardRow && it.card.waits }.map { it.key }
         val following = atBottom()
         column.setRows(shown.of(rows))
         // Twice: the first move brings the last rows in sight and they are measured, which can change the height.

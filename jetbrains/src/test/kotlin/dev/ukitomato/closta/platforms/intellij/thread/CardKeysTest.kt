@@ -146,4 +146,14 @@ class CardKeysTest {
             assertEquals(CardKey.ToComposer, cardKey(kind, VK_W, ALT_DOWN_MASK or SHIFT_DOWN_MASK, 3, inText = true))
         }
     }
+
+    @Test
+    fun aFormIsSentWithCtrlEnterClosedWithEscAndItsDigitsAreForTyping() {
+        assertEquals(CardKey.Answer, cardKey(CardKind.ELICITATION, VK_ENTER, CTRL_DOWN_MASK, 0, inText = true))
+        assertEquals(CardKey.Answer, cardKey(CardKind.ELICITATION, VK_ENTER, META_DOWN_MASK, 0, inText = false))
+        assertNull(cardKey(CardKind.ELICITATION, VK_ENTER, 0, 0, inText = true))
+        assertEquals(CardKey.Deny, cardKey(CardKind.ELICITATION, VK_ESCAPE, 0, 0, inText = false))
+        assertEquals(CardKey.LeaveText, cardKey(CardKind.ELICITATION, VK_ESCAPE, 0, 0, inText = true))
+        assertNull(cardKey(CardKind.ELICITATION, VK_1, 0, 3, inText = false))
+    }
 }

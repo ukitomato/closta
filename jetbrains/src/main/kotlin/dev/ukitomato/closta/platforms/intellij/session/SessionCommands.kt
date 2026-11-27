@@ -5,6 +5,7 @@ import dev.ukitomato.closta.core.interfaces.Clock
 import dev.ukitomato.closta.core.models.ApprovalDecision
 import dev.ukitomato.closta.core.models.Attachment
 import dev.ukitomato.closta.core.models.ConversationState
+import dev.ukitomato.closta.core.models.ElicitationDecision
 import dev.ukitomato.closta.core.services.Interrupt
 import dev.ukitomato.closta.core.services.ReconnectMcpServer
 import dev.ukitomato.closta.core.services.RequestContextUsage
@@ -12,6 +13,7 @@ import dev.ukitomato.closta.core.services.RequestMcpStatus
 import dev.ukitomato.closta.core.services.RequestSettings
 import dev.ukitomato.closta.core.services.RequestUsage
 import dev.ukitomato.closta.core.services.RespondToApproval
+import dev.ukitomato.closta.core.services.RespondToElicitation
 import dev.ukitomato.closta.core.services.RewindFiles
 import dev.ukitomato.closta.core.services.SendMessage
 import dev.ukitomato.closta.core.services.SetMcpServerEnabled
@@ -63,6 +65,7 @@ class SessionCommands internal constructor(
 ) {
     private val send = SendMessage(session)
     private val respond = RespondToApproval(session, clock)
+    private val respondElicitation = RespondToElicitation(session)
     private val switch = SwitchModel(session)
     private val modeUseCase = SwitchPermissionMode(session)
     private val usageUseCase = RequestContextUsage(session)
@@ -139,6 +142,29 @@ class SessionCommands internal constructor(
             // The CLI has the answer, so core's state must no longer hold the approval, whatever the transcript did.
             throw CommitThenFail(view.copy(conversation = after), AnswerNotRecorded(failure))
         }
+    }
+
+    /**
+     * Answers an MCP server's request for input, in the same lock as the event fold. One that is not pending (already
+     * answered, taken away by a `result`) is not answered again. A write that fails leaves the request pending with the
+     * host's sentence written on it, and throws the failure again; the form's values stay out of both.
+     */
+    suspend fun respondToElicitation(
+        decision: ElicitationDecision,
+        content: String?,
+    ) = conversation.transition { view ->
+        if (view.conversation.pendingApprovals.none { it.requestId == decision.requestId }) return@transition view
+        val after =
+            try {
+                respondElicitation(view.conversation, decision, content)
+            } catch (cancel: CancellationException) {
+                throw cancel
+            } catch (
+                @Suppress("TooGenericExceptionCaught") failure: Exception,
+            ) {
+                throw CommitThenFail(view.answerFailed(decision.requestId, ANSWER_FAILED), failure)
+            }
+        view.elicitationDecided(after, decision, content)
     }
 
     /** An answer for [approvalId] could not be passed on: the approval says so, in the host's one fixed sentence. */
