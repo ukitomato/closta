@@ -8,7 +8,13 @@ import org.junit.jupiter.api.Test
 class ViewLeasesTest {
     private val changed = mutableListOf<String>()
     private val unheld = mutableListOf<String>()
-    private val leases = ViewLeases(onChange = { changed += it }, onUnheld = { unheld += it })
+    private val lefts = mutableListOf<LeftView?>()
+    private val leases =
+        ViewLeases(onChange = { changed += it }, onUnheld = { id, left ->
+            unheld += id
+            lefts += left
+        })
+    private val left = LeftView("p1", Placement.SIDEBAR, "a title", "/work")
 
     @Test
     fun returningTheLastLeaseTellsItOnce() {
@@ -22,13 +28,40 @@ class ViewLeasesTest {
     }
 
     @Test
+    fun leavingBeforeTheReleaseTellsWhatWasLeft() {
+        val a = leases.lease("s1")
+        a.leaving(left)
+        a.release()
+        assertEquals(listOf<LeftView?>(left), lefts)
+    }
+
+    @Test
+    fun aReleaseWithoutLeavingTellsNothingWasLeft() {
+        leases.lease("s1").release()
+        assertEquals(listOf<LeftView?>(null), lefts)
+    }
+
+    @Test
+    fun theLastLeavingIsTheOneTold() {
+        val a = leases.lease("s1")
+        val b = leases.lease("s1")
+        a.leaving(LeftView("p1", Placement.EDITOR_TAB, "first", null))
+        b.leaving(left)
+        a.release()
+        b.release()
+        assertEquals(listOf<LeftView?>(left), lefts)
+    }
+
+    @Test
     fun aMoveIsNeverTold() {
         val old = leases.lease("s1")
+        old.leaving(left)
         moveChat(leases, "s1", openNew = {
             leases.lease("s1")
             true
         }, closeOld = old::release, later = { it() })
         assertEquals(emptyList<String>(), unheld, "the bridge and the new place hold it")
+        assertEquals(emptyList<LeftView?>(), lefts)
     }
 
     @Test

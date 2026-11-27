@@ -1,20 +1,32 @@
 package dev.ukitomato.closta.platforms.intellij.chat
 
+/** What a screen showed when it was closed by the user: where, under what title and in which folder. */
+data class LeftView(
+    val projectHash: String,
+    val placement: Placement,
+    val title: String,
+    val workingDirectory: String?,
+) {
+    override fun toString(): String = "LeftView($placement)"
+}
+
 /**
  * Counts the screens that show each session, and which of them are in view. A screen leases its session while it is
  * open and returns the lease when it closes; returning the last lease stops nothing (a session outlives its screens:
- * it is stopped from the sessions list, or with its project), but [onUnheld] is told (a move holds a bridging lease,
- * so moving a conversation never tells it). A screen says whether it is in view ([Lease.visible]);
+ * it is stopped from the sessions list, or with its project), but [onUnheld] is told, with what the last screen said it
+ * left ([Lease.leaving]; null when none did, as the screen of an ended session). A move holds a bridging lease, so
+ * moving a conversation never tells it. A screen says whether it is in view ([Lease.visible]);
  * [onChange] is told each time a session comes into view or goes out of it.
  *
  * Free of `com.intellij`, so the fast tests run it. Called on the EDT.
  */
 class ViewLeases(
     private val onChange: (sessionId: String) -> Unit = {},
-    private val onUnheld: (sessionId: String) -> Unit = {},
+    private val onUnheld: (sessionId: String, left: LeftView?) -> Unit = { _, _ -> },
 ) {
     private val shown = HashMap<String, Int>()
     private val held = HashMap<String, Int>()
+    private val leftBy = HashMap<String, LeftView>()
 
     fun lease(sessionId: String): Lease {
         held[sessionId] = (held[sessionId] ?: 0) + 1
@@ -27,7 +39,7 @@ class ViewLeases(
             held[sessionId] = now
         } else {
             held.remove(sessionId)
-            onUnheld(sessionId)
+            onUnheld(sessionId, leftBy.remove(sessionId))
         }
     }
 
@@ -55,6 +67,11 @@ class ViewLeases(
             if (returned || shown == inView) return
             inView = shown
             count(sessionId, if (shown) 1 else -1)
+        }
+
+        /** Says what this screen showed; called before [release] by a screen the user closes. */
+        fun leaving(left: LeftView) {
+            if (!returned) leftBy[sessionId] = left
         }
 
         /** Returns the lease; a second call does nothing. */

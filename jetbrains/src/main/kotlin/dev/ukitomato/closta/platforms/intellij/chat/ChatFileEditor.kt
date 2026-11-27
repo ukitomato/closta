@@ -105,6 +105,9 @@ private class ChatFileEditor(
     private val panel: JComponent
     private val focus: JComponent?
 
+    // What the tab leaves when the user closes it; none for the screen of an ended session.
+    private var leftView: (() -> LeftView)? = null
+
     init {
         val source = sessions.source(chat.sessionId)
         if (source == null) {
@@ -138,6 +141,7 @@ private class ChatFileEditor(
             val chatPanel =
                 ChatPanel(project, source, EditorTabPlace(project, chat), lease, this)
             panel = chatPanel
+            leftView = { leftViewOf(project, source, Placement.EDITOR_TAB) }
             focus = chatPanel.preferredFocus()
         }
     }
@@ -160,7 +164,10 @@ private class ChatFileEditor(
 
     override fun removePropertyChangeListener(listener: PropertyChangeListener) = Unit
 
-    override fun dispose() = lease.release()
+    override fun dispose() {
+        leftView?.let { lease.leaving(it()) }
+        lease.release()
+    }
 }
 
 private class EditorTabPlace(
