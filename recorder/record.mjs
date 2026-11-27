@@ -277,8 +277,20 @@ async function recordOne(scenario, version) {
         uuid,
       });
     };
+    // Fail the recording through the normal cleanup: stop the child, wake the waiters, and let the step loop and the done check throw.
+    const failRecording = (e) => {
+      answerFailure = e;
+      try { child.kill('SIGKILL'); } catch { /* noop */ }
+      for (const w of waiters.splice(0)) w.reject(e);
+    };
     const handleCanUseTool = (env) => {
-      const payload = permissionAnswer(scenario.permission, env.request, permissionCounter.n, cwd);
+      let payload;
+      try {
+        payload = permissionAnswer(scenario.permission, env.request, permissionCounter.n, cwd);
+      } catch (e) {
+        failRecording(e);
+        return;
+      }
       permissionCounter.n += 1;
       const doIt = () => send({
         type: 'control_response',
@@ -293,10 +305,7 @@ async function recordOne(scenario, version) {
       try {
         answer = sceneAnswer(answerer, env.request, { index: counter.n, cwd });
       } catch (e) {
-        // Fail the recording through the normal cleanup: stop the child, wake the waiters, and let the step loop and the done check throw.
-        answerFailure = e;
-        try { child.kill('SIGKILL'); } catch { /* noop */ }
-        for (const w of waiters.splice(0)) w.reject(e);
+        failRecording(e);
         return;
       }
       const { holdMs: hold, payload } = answer;

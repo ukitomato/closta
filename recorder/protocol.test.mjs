@@ -29,6 +29,13 @@ check('permissionAnswer: allows with the input as is when the scene has no respo
   assert.deepEqual(seen, [2]);
 });
 
+check('permissionAnswer: a throwing respond becomes an Error naming can_use_tool and the tool', () => {
+  assert.throws(
+    () => permissionAnswer({ respond: () => { throw new Error('boom'); } }, { tool_name: 'ExitPlanMode' }, 0),
+    /answer to can_use_tool for ExitPlanMode failed: boom/,
+  );
+});
+
 check('initializeRequest: hooks default to {} and a given declaration is kept as is', () => {
   assert.deepEqual(initializeRequest().hooks, {});
   const hooks = { PreToolUse: [{ matcher: 'Edit', hookCallbackIds: ['x'], timeout: 10 }] };

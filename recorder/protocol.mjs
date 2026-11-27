@@ -34,5 +34,9 @@ export function sceneAnswer(answerer, req, ctx) {
 // index counts the can_use_tool requests of the scene from 0 (as for hook_callback).
 export function permissionAnswer(permission, req, index, cwd) {
   if (!permission?.respond) return { behavior: 'allow', updatedInput: req.input };
-  return permission.respond(req, { index, cwd });
+  try {
+    return permission.respond(req, { index, cwd });
+  } catch (e) {
+    throw new Error(`the scene's answer to can_use_tool for ${req?.tool_name} failed: ${e.message}`);
+  }
 }
