@@ -372,18 +372,20 @@ class ChatPanel(
 
     private fun showMore(under: JComponent) {
         val other = if (place.placement == Placement.EDITOR_TAB) Placement.SIDEBAR else Placement.EDITOR_TAB
-        val label =
+        val move =
             if (other == Placement.SIDEBAR) {
                 ClostaBundle.message("chat.move.toSidebar")
             } else {
                 ClostaBundle.message("chat.move.toEditorTab")
             }
+        val export = ClostaBundle.message("chat.export")
         JBPopupFactory
             .getInstance()
-            .createPopupChooserBuilder(listOf(label))
+            .createPopupChooserBuilder(listOf(move, export))
             .setRenderer(textListCellRenderer { it.orEmpty() })
-            .setItemChosenCallback { moveToOtherPlace() }
-            .createPopup()
+            .setItemChosenCallback { chosen ->
+                if (chosen == export) exportConversation(project, source) else moveToOtherPlace()
+            }.createPopup()
             .show(RelativePoint(under, Point(0, under.height)))
     }
 
