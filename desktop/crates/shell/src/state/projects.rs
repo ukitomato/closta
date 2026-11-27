@@ -38,6 +38,14 @@ impl fmt::Debug for ProjectSummary {
 }
 
 impl ShellState {
+    /// The folder of the project, as it was first written.
+    pub(super) fn folder_of(&self, key: &ProjectKey) -> Option<String> {
+        self.projects
+            .iter()
+            .find(|it| &it.key == key)
+            .map(|it| it.folder.clone())
+    }
+
     /// Puts the projects of the settings after those already there, in their order and state;
     /// an entry with no key or whose place is already there is dropped. Nothing is written and
     /// no session starts: what is saved next is compared with what is kept now.

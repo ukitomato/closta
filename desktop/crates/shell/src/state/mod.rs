@@ -470,6 +470,18 @@ struct RunEntry {
     finished: Receiver<()>,
 }
 
+/// A session [`ShellState::start`] handed to the spawn.
+struct Started {
+    runtime: SessionRuntime,
+    /// Closes once the run has returned.
+    finished: Receiver<()>,
+    session_id: String,
+    /// Whether it puts a saved session back.
+    resumed: bool,
+    /// The title of that conversation, if the launch gave one.
+    saved_title: Option<String>,
+}
+
 pub struct ShellState {
     header: AppHeader,
     spawn: Spawn,
@@ -549,7 +561,13 @@ impl ShellState {
             .project
             .as_deref()
             .and_then(|folder| self.join_project(folder));
-        let (runtime, finished, session_id, resumed, saved_title) = self.start(launch);
+        let Started {
+            runtime,
+            finished,
+            session_id,
+            resumed,
+            saved_title,
+        } = self.start(launch);
         self.slots.insert(
             id,
             Slot {
@@ -601,21 +619,21 @@ impl ShellState {
         let relaunch = launch.relaunch.clone();
         let settles_on_failure = launch.settles_on_failure;
         let working_directory = launch.working_directory.clone();
-        let (runtime, finished, session_id, resumed, saved_title) = self.start(launch);
+        let started = self.start(launch);
         let held = self.slots.get_mut(&slot)?;
         held.title = title;
         held.asked_title = None;
-        held.resumed = resumed;
-        held.session_id = session_id;
-        held.saved_title = saved_title;
+        held.resumed = started.resumed;
+        held.session_id = started.session_id;
+        held.saved_title = started.saved_title;
         held.relaunch = relaunch;
         held.settles_on_failure = settles_on_failure;
         held.working_directory = working_directory;
         held.line = None;
         held.compacting = false;
         held.composer.clear_reason();
-        held.runtime = runtime;
-        held.finished = finished;
+        held.runtime = started.runtime;
+        held.finished = started.finished;
         held.generation += 1;
         held.builder = ThreadRows::default();
         held.status = SessionStatus::Starting;
@@ -641,14 +659,8 @@ impl ShellState {
         })
     }
 
-    /// A new session, its run and its companion handed to the spawn; with the receiver that
-    /// closes once the run has returned.
-    /// Besides the runtime and the receiver: the session's id, whether it puts a saved session
-    /// back, and the title of that conversation if the launch gave one.
-    fn start(
-        &mut self,
-        launch: SlotLaunch,
-    ) -> (SessionRuntime, Receiver<()>, String, bool, Option<String>) {
+    /// A new session, its run and its companion handed to the spawn.
+    fn start(&mut self, launch: SlotLaunch) -> Started {
         let id = launch
             .session_id
             .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
@@ -686,7 +698,13 @@ impl ShellState {
         if let Some(companion) = launch.companion {
             (self.spawn)(companion(runtime.clone()));
         }
-        (runtime, finished, id, resumed, saved_title)
+        Started {
+            runtime,
+            finished,
+            session_id: id,
+            resumed,
+            saved_title,
+        }
     }
 
     /// How many runs have not returned, those of replaced sessions included.
@@ -1401,8 +1419,7 @@ impl ShellState {
             let folder = held
                 .project
                 .as_ref()
-                .and_then(|key| self.projects.iter().find(|it| &it.key == key))
-                .map(|it| it.folder.clone())
+                .and_then(|key| self.folder_of(key))
                 .or_else(|| held.working_directory.clone());
             match folder {
                 Some(folder) => {

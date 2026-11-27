@@ -91,8 +91,7 @@ impl ShellState {
         }
         let folder = self
             .project_at_hand()
-            .and_then(|key| self.projects.iter().find(|project| &project.key == key))
-            .map(|project| project.folder.clone())
+            .and_then(|key| self.folder_of(key))
             .unwrap_or_default();
         let problem = quick_problem(&folder, self.ports.checks.as_ref());
         self.dialog = Some(NewSessionDialog {

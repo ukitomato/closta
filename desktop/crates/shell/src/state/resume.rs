@@ -70,12 +70,7 @@ impl ShellState {
         if !self.can_open_resume() {
             return Acted::default();
         }
-        let Some(folder) = self
-            .projects
-            .iter()
-            .find(|it| &it.key == key)
-            .map(|it| it.folder.clone())
-        else {
+        let Some(folder) = self.folder_of(key) else {
             return Acted::default();
         };
         self.last_listing += 1;
@@ -168,12 +163,7 @@ impl ShellState {
         if self.resume_row_state(session_id) == ResumeRowState::Closing || self.slots_full() {
             return Acted::default();
         }
-        let Some(folder) = self
-            .projects
-            .iter()
-            .find(|it| it.key == project)
-            .map(|it| it.folder.clone())
-        else {
+        let Some(folder) = self.folder_of(&project) else {
             return Acted::default();
         };
         self.close_resume();
