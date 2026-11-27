@@ -2,12 +2,14 @@ package dev.ukitomato.closta.platforms.intellij.session
 
 import dev.ukitomato.closta.providers.claude.launch.ClaudeLaunchSpec
 import dev.ukitomato.closta.providers.claude.launch.ProcessSpawner
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.job
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
@@ -63,6 +65,9 @@ class SessionRuntimeSettingsTest {
     private fun FakeSpawner.sessionArgv() = calls.map { it.argv }.last { it.last() != "--version" }
 
     private fun List<String>.flagValue(flag: String) = zipWithNext().firstOrNull { it.first == flag }?.second
+
+    private suspend fun FakeProcess.nextLine() =
+        checkNotNull(withContext(Dispatchers.IO) { nextStdinLine(GUARD.inWholeMilliseconds) })
 
     private fun <T> withParent(block: suspend (CoroutineScope) -> T): T =
         runBlocking {
@@ -150,29 +155,31 @@ class SessionRuntimeSettingsTest {
     @Timeout(TIMEOUT_SECONDS)
     fun `the step before sending runs before the line reaches the CLI, and a throwing step does not stop the send`() =
         withParent { parent ->
-            val events = java.util.concurrent.CopyOnWriteArrayList<String>()
             val process = FakeProcess()
-            var thrown = false
+            val entered = CompletableDeferred<Unit>()
+            val release = CompletableDeferred<Unit>()
             val runtime =
                 parent.runtime(
                     spawner(process),
                     beforeSend = {
-                        events += "before; lines so far ${process.stdinLines().size}"
-                        if (!thrown) {
-                            thrown = true
-                            throw java.io.IOException("SECRET-CANARY")
-                        }
+                        entered.complete(Unit)
+                        release.await()
+                        throw java.io.IOException("SECRET-CANARY")
                     },
                 )
             runtime.start()
             val running = runtime.running() as SessionStatus.Running
-            running.commands.sendMessage("m1", "hello")
-            val initialize =
-                checkNotNull(withContext(Dispatchers.IO) { process.nextStdinLine(GUARD.inWholeMilliseconds) })
-            assertTrue(initialize.contains("\"subtype\":\"initialize\""), initialize)
-            val line = checkNotNull(withContext(Dispatchers.IO) { process.nextStdinLine(GUARD.inWholeMilliseconds) })
-            assertTrue(line.contains("\"type\":\"user\"") && line.contains("hello"))
-            assertEquals(listOf("before; lines so far 1"), events)
+            val sending = parent.launch { running.commands.sendMessage("m1", "hello") }
+            withTimeout(GUARD) { entered.await() }
+            // Written while the step is still running: one writer drains the session's lines in order, so this line
+            // stands before the user's only if the user's was not yet handed on.
+            running.commands.interrupt()
+            release.complete(Unit)
+            sending.join()
+            val lines = List(3) { process.nextLine() }
+            assertTrue(lines[0].contains("\"subtype\":\"initialize\""), lines[0])
+            assertTrue(lines[1].contains("\"subtype\":\"interrupt\""), lines[1])
+            assertTrue(lines[2].contains("\"type\":\"user\"") && lines[2].contains("hello"), lines[2])
             runtime.close()
         }
 
