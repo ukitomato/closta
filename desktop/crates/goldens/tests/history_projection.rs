@@ -19,7 +19,7 @@ use closta_presenter::records::history::{HISTORY_UNAVAILABLE_TEXT, RESUME_REFUSE
 use closta_presenter::session::SessionView;
 use serde_json::{Map, Value, json};
 
-const SESSION: &str = "336ed47b-2675-4317-b3f5-a3b48abb03a2";
+const SESSION: &str = "f728d9f6-8d2f-4834-b749-4d085a4ef2c0";
 const TIME: &str = "2026-10-17T05:40:20.000Z";
 const CAPTURE: &str = "22-resume.ndjson";
 

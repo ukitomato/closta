@@ -72,8 +72,8 @@ fn the_record_of_capture_22_reads_as_the_lines_the_cli_saved() {
         vec!["User", "Assistant", "Assistant", "User", "Assistant"]
     );
     assert_eq!(
-        read.skipped, 22,
-        "27 lines of the record, 5 of them the conversation"
+        read.skipped, 31,
+        "36 lines of the record, 5 of them the conversation"
     );
     assert_eq!(read.dropped, 0);
     let AgentEvent::User {
