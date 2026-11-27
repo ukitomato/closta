@@ -16,11 +16,13 @@ import dev.ukitomato.closta.platforms.intellij.auth.BedrockSignInService
 import dev.ukitomato.closta.platforms.intellij.ide.IdeBridgeService
 import dev.ukitomato.closta.platforms.intellij.launch.IdeWsl
 import dev.ukitomato.closta.platforms.intellij.settings.BehaviourRecords
+import dev.ukitomato.closta.platforms.intellij.settings.BehaviourSettings
 import dev.ukitomato.closta.platforms.intellij.settings.ProviderPick
 import dev.ukitomato.closta.platforms.intellij.settings.ProviderSettings
 import dev.ukitomato.closta.platforms.intellij.settings.launchFor
 import dev.ukitomato.closta.platforms.intellij.store.AppSettingsStore
 import dev.ukitomato.closta.providers.claude.history.ProjectTranscripts
+import dev.ukitomato.closta.providers.claude.host.AFTER_EDIT
 import dev.ukitomato.closta.providers.claude.host.BEFORE_FILE_TOOL
 import dev.ukitomato.closta.providers.claude.host.ClaudeFileHooks
 import dev.ukitomato.closta.providers.claude.host.HostHooks
@@ -99,7 +101,7 @@ class ClaudeSessionService(
                 directory,
                 IdeSessionLog,
                 sdkServers = ideContextServers(ide, ide.cliPaths),
-                hostHooks = { fileHooks(ide, runtimeScope, IdeSessionLog::warn) { behaviour().saveBeforeSend } },
+                hostHooks = { fileHooks(ide, runtimeScope, IdeSessionLog::warn) { behaviour() } },
                 effort = effort,
                 opening = opening,
                 saved = projectTranscripts(directory, wsl, ideWsl),
@@ -192,17 +194,33 @@ class ClaudeSessionService(
     }
 }
 
-// Read when a process starts: the hook is declared only while the setting is on, and the setting is read again at
-// every call, so turning it off in the middle of a process stops the saving at once.
+// Read when a process starts: a hook is declared only while a setting that needs it is on, and each setting is read
+// again at every call, so turning one off in the middle of a process stops its work at once.
 private fun fileHooks(
     ide: IdeBridgeService,
     sessionScope: CoroutineScope,
     log: (String) -> Unit,
-    saveEnabled: () -> Boolean,
+    settings: () -> BehaviourSettings,
 ): HostHooks {
-    val hooks = FileToolHooks(sessionScope, ide.unsavedDocuments, saveEnabled, log)
+    val hooks =
+        FileToolHooks(
+            sessionScope,
+            ide.unsavedDocuments,
+            { settings().saveBeforeSend },
+            log,
+            diagnostics = ide.diagnostics,
+            analysis = ide.analysisWait,
+            reportEnabled = { settings().reportNewErrors },
+        )
+    val now = settings()
     return HostHooks(
-        declarations = if (saveEnabled()) listOf(BEFORE_FILE_TOOL) else emptyList(),
+        declarations =
+            listOfNotNull(
+                BEFORE_FILE_TOOL.takeIf { now.saveBeforeSend || now.reportNewErrors },
+                AFTER_EDIT.takeIf { now.reportNewErrors },
+            ),
         answerer = ClaudeFileHooks(hooks, ide.cliPaths),
+        turnEnded = hooks::turnEnded,
+        reports = hooks.reports,
     )
 }

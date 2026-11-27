@@ -4,6 +4,7 @@ import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import dev.ukitomato.closta.core.models.FileToolCall
 import dev.ukitomato.closta.core.models.HookPhase
+import dev.ukitomato.closta.core.services.DiagnosticsReport
 import dev.ukitomato.closta.core.services.FileToolHooks
 import dev.ukitomato.closta.providers.claude.launch.CliPaths
 
@@ -43,18 +44,85 @@ private fun JsonObject.text(key: String): String? = get(key)?.takeIf { it.isStri
 
 private fun JsonElement.isStringPrimitive() = isJsonPrimitive && asJsonPrimitive.isString
 
-/** Answers the hook that runs before a file tool: saves what is unsaved there, and lets the call go on. */
+/**
+ * Answers the hooks around a file tool. Before it, what is unsaved in that file is saved and the call goes on. After
+ * an edit, the errors the edit added are given to Claude as context; with none, the answer is an empty object.
+ */
 class ClaudeFileHooks(
     private val hooks: FileToolHooks,
     private val paths: CliPaths,
 ) : HookAnswerer {
+    private fun context(report: DiagnosticsReport): JsonObject =
+        JsonObject().apply {
+            add(
+                "hookSpecificOutput",
+                JsonObject().apply {
+                    addProperty("hookEventName", "PostToolUse")
+                    addProperty("additionalContext", diagnosticsContext(report, paths))
+                },
+            )
+        }
+
     override suspend fun answer(
         callbackId: String,
         input: JsonObject,
         toolUseId: String?,
     ): JsonObject? {
-        if (callbackId != BEFORE_FILE_TOOL.callbackId) return null
-        fileToolCall(input, toolUseId, paths)?.let { hooks.before(it) }
-        return JsonObject()
+        val call = fileToolCall(input, toolUseId, paths)
+        return when (callbackId) {
+            BEFORE_FILE_TOOL.callbackId -> JsonObject().also { call?.let { hooks.before(it) } }
+            AFTER_EDIT.callbackId -> call?.let { hooks.after(it) }?.let(::context) ?: JsonObject()
+            else -> null
+        }
     }
+}
+
+private const val MAX_LINES = 20
+private const val MAX_CHARS = 2_000
+private const val MAX_MESSAGE_CHARS = 300
+private val HTML_TAG = Regex("<[^>]*>")
+private val ENTITIES =
+    listOf(
+        "&lt;" to "<",
+        "&gt;" to ">",
+        "&quot;" to "\"",
+        "&#39;" to "'",
+        "&nbsp;" to " ",
+        "&amp;" to "&",
+    )
+
+private fun plain(message: String): String =
+    ENTITIES
+        .fold(message.replace(HTML_TAG, "")) { text, (entity, char) -> text.replace(entity, char) }
+        .replace(Regex("\\s+"), " ")
+        .trim()
+        .take(MAX_MESSAGE_CHARS)
+
+/**
+ * The text Claude is given about the errors [report] found, with the path in the CLI's form: at most 20 findings and
+ * 2,000 characters, the last line saying how many were left out.
+ */
+fun diagnosticsContext(
+    report: DiagnosticsReport,
+    paths: CliPaths,
+): String {
+    val lines =
+        report.added.map { found ->
+            val source = found.source?.let { " ($it)" }.orEmpty()
+            "  ${found.line}:${found.column} ${plain(found.message)}$source"
+        }
+    val total = lines.size
+    val noun = if (total == 1) "1 new error" else "$total new errors"
+
+    fun render(shown: Int): String =
+        buildList {
+            add("<ide-diagnostics>")
+            add("The edit added $noun in ${paths.toCli(report.path)}:")
+            addAll(lines.take(shown))
+            if (shown < total) add("  …and ${total - shown} more")
+            add("</ide-diagnostics>")
+        }.joinToString("\n")
+    var shown = minOf(MAX_LINES, total)
+    while (shown > 0 && render(shown).length > MAX_CHARS) shown--
+    return render(shown)
 }

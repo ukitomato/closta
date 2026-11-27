@@ -2,7 +2,7 @@ package dev.ukitomato.closta.platforms.intellij.settings
 
 /**
  * The Behaviour page while it is open: what was saved, and what the user has changed on the screen. The screen
- * edits the three properties; [isModified] compares them with what was saved, [current] is what Apply saves, and
+ * edits the four properties; [isModified] compares them with what was saved, [current] is what Apply saves, and
  * [reset] puts the saved values back. Pure, so the fast suite measures it.
  */
 class BehaviourEditor(
@@ -11,9 +11,11 @@ class BehaviourEditor(
     var saveBeforeSend: Boolean = saved.saveBeforeSend
     var respectGitIgnore: Boolean = saved.respectGitIgnore
     var initialPermissionMode: InitialPermissionMode? = saved.initialPermissionMode
+    var reportNewErrors: Boolean = saved.reportNewErrors
 
     /** The values as edited. */
-    fun current(): BehaviourSettings = BehaviourSettings(saveBeforeSend, respectGitIgnore, initialPermissionMode)
+    fun current(): BehaviourSettings =
+        BehaviourSettings(saveBeforeSend, respectGitIgnore, initialPermissionMode, reportNewErrors)
 
     fun isModified(): Boolean = current() != saved
 
@@ -28,5 +30,6 @@ class BehaviourEditor(
         saveBeforeSend = from.saveBeforeSend
         respectGitIgnore = from.respectGitIgnore
         initialPermissionMode = from.initialPermissionMode
+        reportNewErrors = from.reportNewErrors
     }
 }

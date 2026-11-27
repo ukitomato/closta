@@ -5,6 +5,7 @@ import com.intellij.notification.NotificationType
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.SystemInfo
+import dev.ukitomato.closta.core.interfaces.AnalysisWait
 import dev.ukitomato.closta.core.interfaces.Diagnostics
 import dev.ukitomato.closta.core.interfaces.DiffViews
 import dev.ukitomato.closta.core.interfaces.EditorEdits
@@ -41,6 +42,7 @@ class IdeBridgeService(
     override val diagnostics: Diagnostics = IdeDiagnostics(project)
     override val diffViews: DiffViews = IdeDiffViews(project)
     override val unsavedDocuments: UnsavedDocuments = IdeUnsavedDocuments(project)
+    override val analysisWait: AnalysisWait = IdeAnalysisWait(project)
     override val worktrees: Worktrees? =
         project.basePath?.let { root -> NotifyingWorktrees(GitWorktrees(root), ::announce) }
 

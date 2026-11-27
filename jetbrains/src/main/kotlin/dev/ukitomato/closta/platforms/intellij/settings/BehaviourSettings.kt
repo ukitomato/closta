@@ -33,4 +33,6 @@ data class BehaviourSettings(
     val respectGitIgnore: Boolean = true,
     /** The permission mode new sessions start in; null is the CLI's own. */
     val initialPermissionMode: InitialPermissionMode? = null,
+    /** Tell Claude about the IDE errors its edits introduce. */
+    val reportNewErrors: Boolean = true,
 )

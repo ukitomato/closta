@@ -9,7 +9,7 @@ import javax.swing.JComponent
 import javax.swing.JPanel
 
 /**
- * The Swing side of Settings | Tools | Closta | Behaviour: two check boxes and a choice of permission
+ * The Swing side of Settings | Tools | Closta | Behaviour: three check boxes and a choice of permission
  * mode, each with a short note on when a change takes effect. Every edit goes straight into the bound
  * [BehaviourEditor]. EDT only.
  */
@@ -22,6 +22,8 @@ internal class BehaviourForm {
         JBCheckBox(
             ClostaBundle.message("settings.behaviour.respectGitIgnore"),
         ).withMnemonic('L')
+    private val reportNewErrors =
+        JBCheckBox(ClostaBundle.message("settings.behaviour.reportNewErrors")).withMnemonic('E')
     private val modeChoice =
         ComboBox(CHOICES.toTypedArray()).apply {
             renderer = textListCellRenderer { it?.label.orEmpty() }
@@ -35,6 +37,8 @@ internal class BehaviourForm {
             .addTooltip(ClostaBundle.message("settings.behaviour.saveBeforeSend.note"))
             .addComponent(respectGitIgnore)
             .addTooltip(ClostaBundle.message("settings.behaviour.respectGitIgnore.note"))
+            .addComponent(reportNewErrors)
+            .addTooltip(ClostaBundle.message("settings.behaviour.reportNewErrors.note"))
             .addLabeledComponent(
                 mnemonicLabel(ClostaBundle.message("settings.behaviour.mode"), 'P', modeChoice),
                 modeChoice,
@@ -45,6 +49,7 @@ internal class BehaviourForm {
     init {
         saveBeforeSend.addActionListener { if (!loading) editor.saveBeforeSend = saveBeforeSend.isSelected }
         respectGitIgnore.addActionListener { if (!loading) editor.respectGitIgnore = respectGitIgnore.isSelected }
+        reportNewErrors.addActionListener { if (!loading) editor.reportNewErrors = reportNewErrors.isSelected }
         modeChoice.addActionListener {
             if (!loading) editor.initialPermissionMode = (modeChoice.selectedItem as? ModeChoice)?.mode
         }
@@ -57,6 +62,7 @@ internal class BehaviourForm {
             editor = bound
             saveBeforeSend.isSelected = bound.saveBeforeSend
             respectGitIgnore.isSelected = bound.respectGitIgnore
+            reportNewErrors.isSelected = bound.reportNewErrors
             modeChoice.selectedItem = CHOICES.first { it.mode == bound.initialPermissionMode }
         } finally {
             loading = false

@@ -19,9 +19,9 @@ class BehaviourRecordsTest {
     }
 
     @Test
-    fun `three values written read back the same`() {
+    fun `four values written read back the same`() {
         for (mode in listOf(null) + InitialPermissionMode.entries) {
-            val chosen = BehaviourSettings(false, false, mode)
+            val chosen = BehaviourSettings(false, false, mode, false)
             val store = FakeSettingsStore()
             BehaviourRecords.save(store, chosen)
             assertEquals(chosen, BehaviourRecords.load(store), "mode $mode")
@@ -29,7 +29,19 @@ class BehaviourRecordsTest {
     }
 
     @Test
-    fun `saving writes all three keys, also when a value is the default`() {
+    fun `reporting new errors is on by default and survives a write`() {
+        assertTrue(BehaviourSettings().reportNewErrors)
+        val store = FakeSettingsStore()
+        store.entries["behaviour.reportNewErrors"] = "maybe"
+        assertTrue(BehaviourRecords.load(store).reportNewErrors)
+        BehaviourRecords.save(store, BehaviourSettings(reportNewErrors = false))
+        assertEquals(false, BehaviourRecords.load(store).reportNewErrors)
+        BehaviourRecords.save(store, BehaviourSettings(reportNewErrors = true))
+        assertTrue(BehaviourRecords.load(store).reportNewErrors)
+    }
+
+    @Test
+    fun `saving writes all four keys, also when a value is the default`() {
         val store = FakeSettingsStore()
         BehaviourRecords.save(store, defaults)
         assertEquals(
@@ -37,6 +49,7 @@ class BehaviourRecordsTest {
                 "behaviour.saveBeforeSend" to "true",
                 "behaviour.respectGitIgnore" to "true",
                 "behaviour.initialPermissionMode" to "",
+                "behaviour.reportNewErrors" to "true",
             ),
             store.entries,
         )
@@ -99,7 +112,7 @@ class BehaviourRecordsTest {
         BehaviourRecords.save(store, BehaviourSettings(saveBeforeSend = false))
         assertEquals("[]", store.entries["providers.v1"])
         assertEquals("x", store.entries["providers.active"])
-        assertEquals(5, store.entries.size)
+        assertEquals(6, store.entries.size)
     }
 
     @Test

@@ -46,6 +46,30 @@ class FileToolHooksBudgetTest {
         }
     }
 
+    @Tag("perf")
+    @Test
+    fun `two hundred after-hooks with no copy stay within budget`() {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            val hooks = FileToolHooks(scope, null, { true }, {}, reportEnabled = { true })
+            val call = FileToolCall(HookPhase.AFTER, "Edit", "/p/a.kt", "t", null)
+            runBlocking { repeat(WARM_UP) { hooks.after(call) } }
+            val sorted =
+                runBlocking {
+                    List(CALLS) {
+                        val start = System.nanoTime()
+                        hooks.after(call.copy(toolUseId = "t$it"))
+                        (System.nanoTime() - start) / NANOS_PER_MS
+                    }
+                }.sorted()
+            val p95 = sorted[CALLS * 95 / 100]
+            println("perf fileToolAfterWithoutCopy p95=${"%.3f".format(p95)}ms")
+            assertTrue(p95 <= P95_BUDGET_MS, "p95 ${p95}ms (budget ${P95_BUDGET_MS}ms)")
+        } finally {
+            scope.cancel()
+        }
+    }
+
     private companion object {
         const val CALLS = 200
         const val WARM_UP = 50

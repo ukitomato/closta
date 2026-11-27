@@ -37,4 +37,7 @@ interface IdeBridge {
 
     /** The editor buffers not yet on disk. Null when the host has none to save. */
     val unsavedDocuments: UnsavedDocuments? get() = null
+
+    /** Waiting for the IDE to analyse a file again. Null when the host cannot tell. */
+    val analysisWait: AnalysisWait? get() = null
 }
