@@ -174,6 +174,13 @@ class ClaudeSession(
         stdinChannel.send(StdinEncoder.backgroundTasks(requestId, toolUseId))
     }
 
+    override suspend fun requestTaskOutput(
+        taskId: String,
+        requestId: String,
+    ) {
+        stdinChannel.send(StdinEncoder.getTaskOutput(requestId, taskId))
+    }
+
     override suspend fun cancelQueuedMessage(
         messageUuid: String,
         requestId: String,

@@ -111,6 +111,9 @@ interface ChatSource : Disposable {
     /** Moves the running call [toolUseId] to the background, or with null every one; its line says how it went. */
     suspend fun moveToBackground(toolUseId: String?)
 
+    /** Asks the CLI for the end of the output of the shell task [taskId]; the answer is the view's output. */
+    suspend fun requestTaskOutput(taskId: String)
+
     suspend fun setMcpServerEnabled(
         name: String,
         enabled: Boolean,
@@ -312,6 +315,10 @@ interface ChatSource : Disposable {
 
         override suspend fun moveToBackground(toolUseId: String?) {
             commands()?.backgroundTasks(toolUseId)
+        }
+
+        override suspend fun requestTaskOutput(taskId: String) {
+            commands()?.requestTaskOutput(taskId)
         }
 
         override suspend fun dismissRateLimit(seq: Int) {

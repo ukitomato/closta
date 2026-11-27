@@ -325,6 +325,19 @@ object StdinEncoder {
         }
 
     /**
+     * `get_task_output`: reads the end (at most 8 KiB) of the output of the shell or Monitor task [taskId]
+     * (`SDKControlGetTaskOutputRequest` in sdk.d.ts 0.3.325). No capture holds the request.
+     */
+    fun getTaskOutput(
+        requestId: String,
+        taskId: String,
+    ): String =
+        controlRequest(requestId) {
+            addProperty("subtype", "get_task_output")
+            addProperty("task_id", taskId)
+        }
+
+    /**
      * `cancel_async_message`: withdraws the queued message [messageUuid]. The CLI answers whether it was still queued
      * (`SDKControlCancelAsyncMessageRequest` in sdk.d.ts 0.3.325); no capture holds the request.
      */

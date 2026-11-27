@@ -16,6 +16,7 @@ import dev.ukitomato.closta.core.services.RequestContextUsage
 import dev.ukitomato.closta.core.services.RequestMcpStatus
 import dev.ukitomato.closta.core.services.RequestPermissionRules
 import dev.ukitomato.closta.core.services.RequestSettings
+import dev.ukitomato.closta.core.services.RequestTaskOutput
 import dev.ukitomato.closta.core.services.RequestUsage
 import dev.ukitomato.closta.core.services.RespondToApproval
 import dev.ukitomato.closta.core.services.RespondToElicitation
@@ -75,6 +76,7 @@ class SessionCommands internal constructor(
     private val modeUseCase = SwitchPermissionMode(session)
     private val usageUseCase = RequestContextUsage(session)
     private val usageOfPlan = RequestUsage(session)
+    private val taskOutputUseCase = RequestTaskOutput(session)
     private val rulesUseCase = RequestPermissionRules(session)
     private val renameUseCase = RenameSession(session)
     private val reloadPluginsUseCase = ReloadPlugins(session)
@@ -252,6 +254,13 @@ class SessionCommands internal constructor(
      */
     suspend fun backgroundTasks(toolUseId: String?) =
         requested(ControlKind.BACKGROUND, toolUseId) { backgroundUseCase(toolUseId, it) }
+
+    /**
+     * Asks the CLI for the end of the output of the shell task [taskId], as [switchModel] does: the answer is the
+     * view's output, and only the newest request is waited for.
+     */
+    suspend fun requestTaskOutput(taskId: String) =
+        requested(ControlKind.TASK_OUTPUT, taskId) { taskOutputUseCase(taskId, it) }
 
     /**
      * Asks the CLI for the settings in effect, as [switchModel] does; the answer is the view's effort and model.

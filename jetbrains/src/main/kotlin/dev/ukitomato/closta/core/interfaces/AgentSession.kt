@@ -132,6 +132,15 @@ interface AgentSession {
     )
 
     /**
+     * Asks for the end of the output of the shell task [taskId]. Only issues the request; the answer carries
+     * [requestId], as for [requestContextUsage].
+     */
+    suspend fun requestTaskOutput(
+        taskId: String,
+        requestId: String,
+    )
+
+    /**
      * Asks for the permission rules the session runs with and the directories it works in. Only issues the request;
      * the answer carries [requestId], as for [requestContextUsage].
      */

@@ -134,6 +134,13 @@ class FakeAgentSession(
         recorded += Sent.BackgroundTasks(toolUseId, requestId)
     }
 
+    override suspend fun requestTaskOutput(
+        taskId: String,
+        requestId: String,
+    ) {
+        recorded += Sent.TaskOutput(taskId, requestId)
+    }
+
     override suspend fun cancelQueuedMessage(
         messageUuid: String,
         requestId: String,

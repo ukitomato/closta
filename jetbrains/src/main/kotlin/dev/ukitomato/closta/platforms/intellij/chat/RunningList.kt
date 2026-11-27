@@ -27,12 +27,13 @@ import javax.swing.Timer
  * The running list above the composer: a heading that folds the list to one line (a click, or Enter or Space on it),
  * then a row per running subagent or shell, a child one step in under its parent. The row under the mouse and the row
  * chosen show a stop icon, which stops the task when it is pressed; Delete and the row's context menu stop it too.
- * ↑↓ choose and Enter (or a double click) opens the subagent's tab. It disappears when nothing runs; folded, its
- * spinners stop. It only shows [show]'s list.
+ * ↑↓ choose and Enter (or a double click) opens the subagent's tab, or shows a shell's output. It disappears when
+ * nothing runs; folded, its spinners stop. It only shows [show]'s list.
  */
 class RunningList(
     private val onOpen: (RunningTask) -> Unit,
     private val onStop: (RunningTask) -> Unit,
+    private val onOutput: (RunningTask) -> Unit,
 ) {
     private val model = DefaultListModel<RunningTask>()
     private val list = JBList(model)
@@ -85,7 +86,7 @@ class RunningList(
             object : KeyAdapter() {
                 override fun keyPressed(e: KeyEvent) {
                     when (e.keyCode) {
-                        KeyEvent.VK_ENTER -> list.selectedValue?.let(onOpen)
+                        KeyEvent.VK_ENTER -> list.selectedValue?.let(::open)
                         KeyEvent.VK_DELETE -> list.selectedValue?.let(onStop)
                     }
                 }
@@ -116,7 +117,7 @@ class RunningList(
                     val task = model.get(index)
                     when {
                         onStopIcon(index, e) -> onStop(task)
-                        e.clickCount == 2 -> onOpen(task)
+                        e.clickCount == 2 -> open(task)
                     }
                 }
 
@@ -129,6 +130,9 @@ class RunningList(
         component.add(heading, BorderLayout.NORTH)
         component.add(list, BorderLayout.CENTER)
     }
+
+    /** A subagent opens its tab; a shell shows the end of its output. */
+    private fun open(task: RunningTask) = if (task.kind == SHELL) onOutput(task) else onOpen(task)
 
     private fun fold() {
         folded = !folded
@@ -168,12 +172,16 @@ class RunningList(
             object : com.intellij.openapi.project.DumbAwareAction(ClostaBundle.message("chat.running.stop")) {
                 override fun actionPerformed(event: com.intellij.openapi.actionSystem.AnActionEvent) = onStop(task)
             }
+        val output =
+            object : com.intellij.openapi.project.DumbAwareAction(ClostaBundle.message("chat.running.showOutput")) {
+                override fun actionPerformed(event: com.intellij.openapi.actionSystem.AnActionEvent) = onOutput(task)
+            }
         com.intellij.openapi.actionSystem.ActionManager
             .getInstance()
             .createActionPopupMenu(
                 PLACE,
                 com.intellij.openapi.actionSystem
-                    .DefaultActionGroup(stop),
+                    .DefaultActionGroup(listOfNotNull(output.takeIf { task.kind == SHELL }, stop)),
             ).component
             .show(list, e.x, e.y)
     }
@@ -244,6 +252,7 @@ class RunningList(
                 when {
                     index == hovered && overStop -> ClostaBundle.message("chat.running.stop")
                     task.kind == AGENT -> ClostaBundle.message("chat.running.agent.tooltip")
+                    task.kind == SHELL -> ClostaBundle.message("chat.running.shell.tooltip")
                     else -> null
                 }
             return row

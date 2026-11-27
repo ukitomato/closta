@@ -110,6 +110,11 @@ sealed interface Sent {
         val requestId: String,
     ) : Sent
 
+    data class TaskOutput(
+        val taskId: String,
+        val requestId: String,
+    ) : Sent
+
     data class CancelQueuedMessage(
         val messageUuid: String,
         val requestId: String,

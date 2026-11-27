@@ -114,6 +114,15 @@ class RecordingAgentSession(
         pluginReloads += refuseIfBusy to requestId
     }
 
+    val taskOutputRequests = mutableListOf<Pair<String, String>>()
+
+    override suspend fun requestTaskOutput(
+        taskId: String,
+        requestId: String,
+    ) {
+        taskOutputRequests += taskId to requestId
+    }
+
     val backgroundRequests = mutableListOf<Pair<String?, String>>()
 
     override suspend fun backgroundTasks(

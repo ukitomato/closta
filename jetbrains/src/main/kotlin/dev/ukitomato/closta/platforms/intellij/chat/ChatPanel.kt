@@ -154,10 +154,17 @@ class ChatPanel(
     private val changesBar = ChangesBar(changes)
 
     private val tabs = ChatTabs(project, surface.component, parent)
+    private val taskOutput =
+        TaskOutputPopup(
+            project,
+            view = { source.view.value },
+            ask = { taskId -> scope.launch(failures) { source.requestTaskOutput(taskId) } },
+        )
     private val running =
         RunningList(
             onOpen = { task -> task.toolUseId?.takeIf { task.kind == "agent" }?.let { tabs.open(it, task.title) } },
             onStop = { task -> scope.launch(failures) { source.stopTask(task.taskId) } },
+            onOutput = { task -> taskOutput.open(task) },
         )
     private val limitBanner = RateLimitBanner()
     private val rootsBanner = RootsBanner()
@@ -165,6 +172,7 @@ class ChatPanel(
     init {
         Disposer.register(parent, surface)
         Disposer.register(parent) { running.stop() }
+        Disposer.register(parent, taskOutput)
         background = UIUtil.getPanelBackground()
         notice.isVisible = false
         tabs.onMainShown = { main -> composer.component.isVisible = main }

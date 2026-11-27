@@ -432,4 +432,15 @@ class CodecEncodeTest {
             json(StdinEncoder.backgroundTasks("b2", null)),
         )
     }
+
+    @Test
+    fun `type only - get_task_output names the task`() {
+        assertEquals(
+            json(
+                """{"type":"control_request","request_id":"o1",""" +
+                    """"request":{"subtype":"get_task_output","task_id":"bxyz"}}""",
+            ),
+            json(StdinEncoder.getTaskOutput("o1", "bxyz")),
+        )
+    }
 }
