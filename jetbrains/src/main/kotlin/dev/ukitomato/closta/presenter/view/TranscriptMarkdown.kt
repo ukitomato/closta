@@ -64,7 +64,7 @@ private fun userMessage(
     out.block("## ${words.you}" + if (withdrawn) " (${words.withdrawn})" else "")
     for (part in message.parts.values()) {
         when (part) {
-            is TextRecord -> if (!part.reasoning) out.block(clean(part.text))
+            is TextRecord -> if (!part.reasoning) out.block(guarded(clean(part.text)))
             is AttachmentRecord -> out.item("- ${words.attachment}: ${oneLine(part.name)}")
             else -> Unit
         }
@@ -86,7 +86,7 @@ private fun assistantMessage(
             is TextRecord ->
                 if (!part.reasoning && part.text.isNotBlank()) {
                     heading()
-                    out.block(clean(part.text))
+                    out.block(guarded(clean(part.text)))
                 }
             is ToolCallRecord -> {
                 heading()
@@ -153,4 +153,37 @@ private class ExportBuilder {
     }
 
     fun text(): String = text.toString()
+}
+
+private val FENCE = Regex("^ {0,3}(`{3,}|~{3,})(.*)$")
+private val RULE_LINE = Regex("^ {0,3}(?:([-*_])( *\\1){2,}|=+) *$")
+
+/**
+ * [text] made safe to sit among the export's own structure: outside a code fence, a line that starts with `#` or is a
+ * rule (or a setext underline) gets a backslash in front, so it cannot become a heading or a divider; a fence left open
+ * at the end is closed. Code inside a fence is untouched.
+ */
+private fun guarded(text: String): String {
+    var open: String? = null
+    val out =
+        text.lines().map { line ->
+            val fence = FENCE.matchEntire(line)
+            val marker = open
+            when {
+                marker != null -> {
+                    val closing =
+                        fence != null && fence.groupValues[2].isBlank() && fence.groupValues[1].startsWith(marker)
+                    if (closing) open = null
+                    line
+                }
+                fence != null -> {
+                    open = fence.groupValues[1]
+                    line
+                }
+                line.trimStart().startsWith("#") || RULE_LINE.matches(line) -> "\\$line"
+                else -> line
+            }
+        }
+    val closer = open?.let { "\n" + it } ?: ""
+    return out.joinToString("\n") + closer
 }

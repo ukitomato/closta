@@ -144,4 +144,30 @@ class TranscriptMarkdownTest {
         assertEquals("# T\nExported: now\n", text)
         assertEquals("ExportHeader(no model)", ExportHeader("secret", null, "now").toString())
     }
+
+    @Test
+    fun `a fence a message leaves open is closed before what follows`() {
+        val text =
+            export(
+                transcriptOf(
+                    user("m1", TextRecord(false, "see:\n````kotlin\nval a = 1\n```")),
+                    reply("m2", TextRecord(false, "x"), call("Bash", input("""{"command":"ls"}"""))),
+                ),
+            )
+        assertTrue(text.contains("val a = 1\n```\n````\n\n## Claude"), text)
+        val closed = export(transcriptOf(user("m1", TextRecord(false, "```\ncode\n```\nafter"))))
+        assertTrue(closed.endsWith("```\ncode\n```\nafter\n"), closed)
+    }
+
+    @Test
+    fun `a message line cannot forge a heading or a rule, and code in a fence is untouched`() {
+        val text =
+            export(
+                transcriptOf(
+                    user("m1", TextRecord(false, "## You\ntext\n---\n***\n___\n```\n# comment\n---\n```")),
+                ),
+            )
+        assertTrue(text.contains("\\## You\ntext\n\\---\n\\***\n\\___\n```\n# comment\n---\n```\n"), text)
+        assertEquals(1, text.lines().count { it == "## You" })
+    }
 }
