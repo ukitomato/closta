@@ -417,4 +417,19 @@ class CodecEncodeTest {
             json(StdinEncoder.reloadPlugins("r9", refuseIfBusy = false)),
         )
     }
+
+    @Test
+    fun `type only - background_tasks names the tool use, or none for all`() {
+        assertEquals(
+            json(
+                """{"type":"control_request","request_id":"b1",""" +
+                    """"request":{"subtype":"background_tasks","tool_use_id":"toolu_1"}}""",
+            ),
+            json(StdinEncoder.backgroundTasks("b1", "toolu_1")),
+        )
+        assertEquals(
+            json("""{"type":"control_request","request_id":"b2","request":{"subtype":"background_tasks"}}"""),
+            json(StdinEncoder.backgroundTasks("b2", null)),
+        )
+    }
 }

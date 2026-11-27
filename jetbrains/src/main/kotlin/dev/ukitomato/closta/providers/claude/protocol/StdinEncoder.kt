@@ -311,6 +311,20 @@ object StdinEncoder {
         }
 
     /**
+     * `background_tasks`: moves running foreground work to the background. With [toolUseId] only the task that tool
+     * use started; null leaves the field out and moves all of them (`SDKControlBackgroundTasksRequest` in sdk.d.ts
+     * 0.3.325). No capture holds the request.
+     */
+    fun backgroundTasks(
+        requestId: String,
+        toolUseId: String?,
+    ): String =
+        controlRequest(requestId) {
+            addProperty("subtype", "background_tasks")
+            if (toolUseId != null) addProperty("tool_use_id", toolUseId)
+        }
+
+    /**
      * `cancel_async_message`: withdraws the queued message [messageUuid]. The CLI answers whether it was still queued
      * (`SDKControlCancelAsyncMessageRequest` in sdk.d.ts 0.3.325); no capture holds the request.
      */

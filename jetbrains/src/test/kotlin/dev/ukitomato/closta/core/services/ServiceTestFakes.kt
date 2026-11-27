@@ -114,6 +114,15 @@ class RecordingAgentSession(
         pluginReloads += refuseIfBusy to requestId
     }
 
+    val backgroundRequests = mutableListOf<Pair<String?, String>>()
+
+    override suspend fun backgroundTasks(
+        toolUseId: String?,
+        requestId: String,
+    ) {
+        backgroundRequests += toolUseId to requestId
+    }
+
     val queuedCancellations = mutableListOf<Pair<String, String>>()
 
     override suspend fun cancelQueuedMessage(

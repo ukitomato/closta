@@ -122,6 +122,16 @@ interface AgentSession {
     )
 
     /**
+     * Moves running foreground work to the background: only the task started by the tool use [toolUseId], or every
+     * foreground task when it is null. Only issues the request; the answer carries [requestId], as for
+     * [requestContextUsage].
+     */
+    suspend fun backgroundTasks(
+        toolUseId: String?,
+        requestId: String,
+    )
+
+    /**
      * Asks for the permission rules the session runs with and the directories it works in. Only issues the request;
      * the answer carries [requestId], as for [requestContextUsage].
      */
