@@ -88,4 +88,14 @@ class ClearedTabsTest {
         )
         assertFalse(transcript(null, MessageSource.Sent).sentAfterClear())
     }
+
+    @Test
+    fun aSessionThatStopsUnclearedDropsItsOldRow() {
+        val cleared = ClearedTab("c1", null)
+        var tabs = ClearedTabs.after(emptyMap(), listOf("H" to cleared, "other" to ClearedTab("o", "/w")))
+        assertEquals(cleared, tabs["H"])
+        assertEquals(ClearedTab("o", "/w"), tabs["other"])
+        tabs = ClearedTabs.after(tabs, listOf("H" to null, "never" to null))
+        assertEquals(listOf("other"), tabs.keys.toList())
+    }
 }

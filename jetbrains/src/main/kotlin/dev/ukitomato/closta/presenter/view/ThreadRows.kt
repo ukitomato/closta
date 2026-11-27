@@ -341,6 +341,7 @@ private class TaskTodos {
     ): List<ThreadRow> {
         if (rows.none { it.isTask() }) {
             lists = HashMap()
+            callsOf = IdentityHashMap()
             return rows
         }
         val calls = taskCalls(transcript)

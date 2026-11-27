@@ -187,10 +187,10 @@ private fun rememberClearedTabs(
     project: Project,
     sources: Collection<ChatSource>,
 ) {
-    val tabs =
-        sources.fold(project.clearedTabs()) { kept, source ->
+    val stopped =
+        sources.map { source ->
             val transcript = source.view.value.transcript
-            val tab =
+            source.sessionId to
                 clearedTabOf(
                     source.sessionId,
                     source.resumeId,
@@ -199,8 +199,8 @@ private fun rememberClearedTabs(
                     source.workingDirectory,
                     project.basePath,
                 )
-            if (tab == null) kept else ClearedTabs.withTab(kept, source.sessionId, tab)
         }
+    val tabs = ClearedTabs.after(project.clearedTabs(), stopped)
     project.saveClearedTabs(tabs)
 }
 

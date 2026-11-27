@@ -67,6 +67,16 @@ object ClearedTabs {
             it.toPair()
         }
 
+    /**
+     * [tabs] after sessions stopped, each as its host id with what it showed, null when it was not cleared: a cleared
+     * one writes its row, one not cleared drops the row an earlier run of the same id left.
+     */
+    fun after(
+        tabs: Map<String, ClearedTab>,
+        stopped: List<Pair<String, ClearedTab?>>,
+    ): Map<String, ClearedTab> =
+        stopped.fold(tabs) { kept, (host, tab) -> if (tab == null) kept - host else withTab(kept, host, tab) }
+
     private fun tabOf(item: JsonElement): Pair<String, ClearedTab>? {
         val fields = item as? JsonObject
         val host = fields?.text("host")?.takeIf { it.isNotBlank() }
