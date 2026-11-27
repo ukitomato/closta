@@ -101,6 +101,8 @@ impl ShellState {
         else {
             return Acted::default();
         };
+        // A reading answers `None` only once its stop is set, and the stop is set only as the
+        // popup closes, so a popup of this generation does not get one: kept as it is if it did.
         let Some(listing) = listing else {
             return Acted::default();
         };

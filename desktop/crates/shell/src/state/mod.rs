@@ -1428,6 +1428,10 @@ impl ShellState {
                         saved_title: held.saved_title.clone(),
                     });
                 }
+                // With no folder the saved session cannot be found: a new id starts instead,
+                // although the note said the Restart continues. Not reached today: of the slots
+                // with a Restart, only the checks' `fail_launch` ones have no folder, and they
+                // neither resume nor send a request.
                 None => launch.session_id = None,
             }
         }
