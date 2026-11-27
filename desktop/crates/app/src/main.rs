@@ -73,6 +73,7 @@ fn main() -> ExitCode {
             probe: None,
             ports: ports::real_ports(settings),
             projects,
+            open_resume: false,
         }
     };
     closta_platform::run(options);
@@ -144,6 +145,7 @@ fn replay_options(
         probe: None,
         ports: ports::real_ports(settings),
         projects,
+        open_resume: false,
     })
 }
 
@@ -192,5 +194,6 @@ fn probe_options(
         probe,
         ports,
         projects,
+        open_resume: false,
     })
 }

@@ -6,7 +6,9 @@ use std::sync::Arc;
 
 use std::sync::atomic::AtomicBool;
 
-use closta_core::ports::{SavedSessions, SavedSessionsError};
+use closta_core::ports::SavedSessionsError;
+// Named here beside `SavedFor`, whose `saved` gives one, for the crates above the shell.
+pub use closta_core::ports::SavedSessions;
 use closta_model::{SavedSessionSummary, SavedTranscript};
 use closta_providers::claude::launch::wsl::{WslLocation, distro_named};
 use closta_session::history::SavedListing;

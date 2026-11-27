@@ -678,7 +678,14 @@ mod tests {
                                 let host = this.upgrade()?;
                                 let host = host.read(cx);
                                 let now_ms = host.clock.now_ms();
-                                Some(host.focus.gate(keystroke, now_ms, None, window, cx))
+                                Some(host.focus.gate(
+                                    keystroke,
+                                    now_ms,
+                                    None,
+                                    &focus::ResumeAtKey::default(),
+                                    window,
+                                    cx,
+                                ))
                             },
                             Rc::clone(&dispatch),
                             Rc::new(|_, _, _| {}),

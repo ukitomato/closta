@@ -6,10 +6,12 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use closta_core::ports::MAX_LISTED;
-use closta_model::SavedSessionSummary;
+// Named here for the screen, which draws the rows of a listing and depends on no lower crate.
+pub use closta_model::SavedSessionSummary;
 use closta_session::history::SavedListing;
 use futures_lite::future;
 
+use crate::copy;
 use crate::projects::ProjectKey;
 use crate::slot::SlotId;
 
@@ -104,6 +106,20 @@ impl ResumePicker {
             })
             .take(MAX_LISTED)
             .collect()
+    }
+}
+
+impl ResumePicker {
+    /// What the popup says in place of rows: that it reads, that nothing is saved, that the
+    /// saved sessions could not be read or that none matches the search; `None` while rows show.
+    pub fn message(&self) -> Option<&'static str> {
+        match &self.stage {
+            ResumeStage::Loading => Some(copy::RESUME_LOADING),
+            ResumeStage::Unreadable => Some(copy::RESUME_UNREADABLE),
+            ResumeStage::Listed(sessions) if sessions.is_empty() => Some(copy::RESUME_NONE),
+            ResumeStage::Listed(_) if self.filtered().is_empty() => Some(copy::RESUME_NO_MATCHES),
+            ResumeStage::Listed(_) => None,
+        }
     }
 }
 
@@ -202,6 +218,25 @@ mod tests {
 
         let key = project_key(r"C:\work\closta").expect("a key");
         assert!(ResumePicker::new(key, 1).filtered().is_empty(), "loading");
+    }
+
+    #[test]
+    fn the_popup_says_why_it_shows_no_row() {
+        let key = project_key(r"C:\work\closta").expect("a key");
+        let mut picker = ResumePicker::new(key, 1);
+        assert_eq!(picker.message(), Some(copy::RESUME_LOADING));
+        picker.stage = ResumeStage::Unreadable;
+        assert_eq!(picker.message(), Some(copy::RESUME_UNREADABLE));
+        assert_eq!(listed(Vec::new(), "").message(), Some(copy::RESUME_NONE));
+        // A search on nothing saved still says nothing is saved.
+        assert_eq!(listed(Vec::new(), "fix").message(), Some(copy::RESUME_NONE));
+        let one = vec![summary("aaa-111", "Fix the CI cache key")];
+        assert_eq!(listed(one.clone(), "").message(), None);
+        assert_eq!(listed(one.clone(), "fix").message(), None);
+        assert_eq!(
+            listed(one, "nothing like it").message(),
+            Some(copy::RESUME_NO_MATCHES)
+        );
     }
 
     #[test]

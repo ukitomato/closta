@@ -24,7 +24,7 @@ use gpui_kit::*;
 use crate::Measure;
 use crate::clock::WallClock;
 use crate::composer::{self, Dispatch};
-use crate::focus::{self, CardField, FocusMap};
+use crate::focus::{self, CardField, FocusMap, ResumeAtKey};
 use crate::perf::{IdleStart, Measuring};
 use crate::probe::{Probe, Probing};
 use crate::thread::cards::CardCache;
@@ -56,6 +56,11 @@ pub(crate) struct ShellModel {
     pub(crate) folder: Option<Entity<InputState>>,
     /// The wait for the typing in the folder field to settle.
     pub(crate) folder_typing: Option<Task<()>>,
+    /// The resume popup's search field, made the first time the popup opens; its text is a copy
+    /// of the popup's search.
+    pub(crate) resume_field: Option<Entity<InputState>>,
+    /// Where the resume popup's rows are scrolled to.
+    pub(crate) resume_scroll: ScrollHandle,
     pub(crate) panes: Entity<ResizableState>,
     /// The one clock the shell is handed times from.
     pub(crate) clock: WallClock,
@@ -109,6 +114,8 @@ impl ShellModel {
             composers: HashMap::new(),
             folder: None,
             folder_typing: None,
+            resume_field: None,
+            resume_scroll: ScrollHandle::new(),
             panes: cx.new(|_| ResizableState::default()),
             clock: WallClock::start(),
             needs_you_scroll: ScrollHandle::new(),
@@ -181,12 +188,23 @@ impl ShellModel {
         focus::hold_keys(
             move |keystroke, window, cx| {
                 let model = this.upgrade()?;
+                let (field, picked) = {
+                    let model = model.read(cx);
+                    let up = model.shell.resume().is_some();
+                    let field = model.resume_field.clone().filter(|_| up);
+                    (field, model.shell.resume_picked())
+                };
+                // Read before the model is: the field reads it only with both to change.
+                let resume = ResumeAtKey {
+                    composing: field.is_some_and(|field| focus::composing(&field, window, cx)),
+                    picked,
+                };
                 let model = model.read(cx);
                 let cursor = model.shell.nav_cursor();
                 Some(
                     model
                         .focus
-                        .gate(keystroke, model.clock.now_ms(), cursor, window, cx),
+                        .gate(keystroke, model.clock.now_ms(), cursor, &resume, window, cx),
                 )
             },
             Self::dispatch(cx),
@@ -427,6 +445,11 @@ impl ShellModel {
             | ShellAction::CancelBypass { slot } => Some(slot),
             _ => None,
         };
+        let resume_before = self.shell.resume().is_some();
+        let moves_pick = matches!(
+            action,
+            ShellAction::MoveResume { .. } | ShellAction::EditResumeQuery { .. }
+        );
         // Taken before the dialog's field takes the keyboard, to give it back once it closes.
         let focused = window.focused(cx);
         let Acted {
@@ -440,8 +463,7 @@ impl ShellModel {
             removed,
             clipboard,
             focus,
-            // The resume popup is not drawn yet.
-            listing: _,
+            listing,
         } = self.shell.act(action);
         let selects = self.shell.selected() != selected_before;
         // Whatever opened or shut a pane — its button, or the key that goes to the list.
@@ -498,6 +520,16 @@ impl ShellModel {
         }
         if close {
             self.close_sessions(cx);
+        }
+        if let Some(listing) = listing {
+            self.list_saved(listing, window, cx);
+        }
+        if !resume_before && self.shell.resume().is_some() {
+            self.clear_resume_field(window, cx);
+        }
+        // Only when the pick moved: a wheel over the rows scrolls them freely.
+        if let Some(picker) = self.shell.resume().filter(|_| moves_pick) {
+            self.resume_scroll.scroll_to_item(picker.selected);
         }
         // After the close began too: the overlay it puts up holds the keys from then on.
         self.sync_focus(focused, window, cx);
@@ -718,8 +750,8 @@ impl ShellModel {
         }
     }
 
-    /// Puts the keyboard in the overlay that just came up: the dialog's folder field, the
-    /// Cancel of a close question, or the layer that says the sessions are closing. A part
+    /// Puts the keyboard in the overlay that just came up: the dialog's folder field, the resume
+    /// popup's search field, the Cancel of a close question, or the layer that says the sessions are closing. A part
     /// first drawn in the next frame is focused again then.
     fn focus_overlay(&mut self, overlay: Overlay, window: &mut Window, cx: &mut Context<Self>) {
         let handle = match overlay {
@@ -727,8 +759,12 @@ impl ShellModel {
                 Some(input) => input.read(cx).focus_handle(cx),
                 None => return,
             },
+            Overlay::Resume => match &self.resume_field {
+                Some(input) => input.read(cx).focus_handle(cx),
+                None => self.focus.overlay_layer.clone(),
+            },
             Overlay::CloseWindow | Overlay::CloseSlot => self.focus.overlay_cancel.clone(),
-            Overlay::Closing | Overlay::Resume => self.focus.overlay_layer.clone(),
+            Overlay::Closing => self.focus.overlay_layer.clone(),
         };
         window.focus(&handle, cx);
         window.on_next_frame(move |window, cx| window.focus(&handle, cx));

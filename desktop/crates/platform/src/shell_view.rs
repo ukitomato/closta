@@ -1,7 +1,8 @@
 //! The window's three panes under the header line: on the left the needs-you list, then the
 //! projects with their sessions and the button that opens the New Session dialog under them,
 //! the conversation in the middle, and the right pane,
-//! which is an empty frame for now. The dialog and the close are drawn over the panes. The panes' widths and
+//! which is an empty frame for now. The dialog, the resume popup and the close are drawn over
+//! the panes. The panes' widths and
 //! whether they are open are the shell's; a drag hands the new width to the shell and takes
 //! back the width it allowed.
 
@@ -20,6 +21,7 @@ use crate::closing::{close_layer, slot_close_layer};
 use crate::dialog;
 use crate::focus::left_list;
 use crate::model::ShellModel;
+use crate::resume;
 use crate::thread;
 use crate::tree;
 
@@ -43,6 +45,7 @@ impl Render for ShellModel {
         let center = thread::conversation(self, window, cx);
         let right = right_frame(cx);
         let dialog = dialog::new_session(self, cx);
+        let resume = resume::resume_popup(self, cx);
         let slot_close = slot_close_layer(self, cx);
         let close = close_layer(self, cx);
         self.focus
@@ -78,6 +81,7 @@ impl Render for ShellModel {
                 ),
             )
             .children(dialog)
+            .children(resume)
             .children(slot_close)
             .children(close)
     }

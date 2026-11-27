@@ -8,6 +8,7 @@ mod model;
 mod needs_you;
 pub mod perf;
 mod probe;
+mod resume;
 mod shell_view;
 #[cfg(test)]
 mod test_window;
@@ -54,6 +55,8 @@ pub struct PlatformOptions {
     pub ports: Ports,
     /// The projects the left pane starts with, as they were kept.
     pub projects: Settings,
+    /// Whether the resume popup opens on the first project once the window is up.
+    pub open_resume: bool,
 }
 
 /// A measured run. Once `finished` ends (every replay was written), `ready` is logged; once
@@ -94,6 +97,7 @@ pub fn run(options: PlatformOptions) {
             probe,
             ports,
             projects,
+            open_resume,
         } = options;
         let executor = cx.background_executor().clone();
         let spawn: Spawn = Arc::new(move |run| executor.spawn(run).detach());
@@ -128,7 +132,13 @@ pub fn run(options: PlatformOptions) {
             ..Default::default()
         };
         open_window(options, cx, move |window, cx| {
-            cx.new(|cx| ShellModel::new(shell, slots, measure, probe, window, cx))
+            cx.new(|cx| {
+                let mut model = ShellModel::new(shell, slots, measure, probe, window, cx);
+                if open_resume {
+                    model.open_first_resume(window, cx);
+                }
+                model
+            })
         })
         .expect("failed to open window");
     });

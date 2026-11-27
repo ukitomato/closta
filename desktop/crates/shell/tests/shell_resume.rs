@@ -722,3 +722,61 @@ fn picking_a_slot_of_a_collapsed_project_opens_it() {
         assert!(!shell.projects()[0].collapsed);
     });
 }
+
+#[test]
+fn the_picked_id_follows_the_moves_and_the_search() {
+    drive(|harness| async move {
+        let (mut shell, _) = shell_of(&harness, &[A]);
+        assert_eq!(shell.resume_picked(), None, "no popup");
+        let acted = open(&mut shell, A);
+        assert_eq!(shell.resume_picked(), None, "loading");
+        shell.act(ShellAction::SavedListed {
+            generation: generation(&acted),
+            listing: listed(three()),
+        });
+        assert_eq!(shell.resume_picked().as_deref(), Some(X));
+        shell.act(ShellAction::MoveResume { delta: 2 });
+        assert_eq!(shell.resume_picked().as_deref(), Some(Z));
+        shell.act(ShellAction::EditResumeQuery {
+            text: "auth".to_owned(),
+        });
+        assert_eq!(shell.resume_picked().as_deref(), Some(Y));
+        shell.act(ShellAction::EditResumeQuery {
+            text: "nothing like it".to_owned(),
+        });
+        assert_eq!(shell.resume_picked(), None, "no row matches");
+    });
+}
+
+#[test]
+fn the_resume_button_waits_behind_an_overlay_and_a_check() {
+    drive(|harness| async move {
+        let (mut shell, _) = shell_of(&harness, &[A, B]);
+        assert!(shell.can_open_resume());
+        open(&mut shell, A);
+        assert!(shell.resume().is_some());
+        assert!(!shell.can_open_resume(), "the popup is up");
+        shell.act(ShellAction::CloseResume);
+        assert!(shell.can_open_resume());
+
+        shell.act(ShellAction::OpenNewSession);
+        assert!(shell.new_session().is_some());
+        assert!(!shell.can_open_resume(), "the dialog is up");
+        shell.act(ShellAction::CancelNewSession);
+        assert!(shell.can_open_resume());
+
+        let plus = shell.act(ShellAction::NewInProject { project: key(A) });
+        assert!(plus.project_check.is_some());
+        assert!(!shell.can_open_resume(), "a plus checks its folder");
+        // The button of the other project waits too.
+        let acted = open(&mut shell, B);
+        assert!(acted.listing.is_none());
+        shell.act(ShellAction::ProjectChecked {
+            project: key(A),
+            exists: false,
+        });
+        assert!(!shell.can_open_resume(), "the dialog the check opened");
+        shell.act(ShellAction::CancelNewSession);
+        assert!(shell.can_open_resume());
+    });
+}

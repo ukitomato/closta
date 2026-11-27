@@ -12,6 +12,7 @@ use closta_shell::card_keys::{
 };
 use closta_shell::hub_keys::{HubKeyOutcome, hub_key};
 use closta_shell::nav::NavItem;
+use closta_shell::resume_keys::{ResumeKey, resume_key};
 use closta_shell::slot::SlotId;
 use closta_shell::state::{Overlay, ShellAction};
 use gpui_kit::component::input::{InputEvent, InputState};
@@ -156,6 +157,22 @@ pub(crate) struct Gate {
     pub(crate) tab: Option<(bool, FocusHandle)>,
 }
 
+/// What the gate reads of the resume popup when a key comes: whether its search field composes
+/// text with an input method, and the id of the row picked, which Enter opens.
+#[derive(Default)]
+pub(crate) struct ResumeAtKey {
+    pub(crate) composing: bool,
+    pub(crate) picked: Option<String>,
+}
+
+/// Whether `field` holds text an input method is still composing. The input reads it only with
+/// the window and the app to change, which the key's interceptor has.
+pub(crate) fn composing(field: &Entity<InputState>, window: &mut Window, cx: &mut App) -> bool {
+    field.update(cx, |state, cx| {
+        state.marked_text_range(window, cx).is_some()
+    })
+}
+
 /// The New Session dialog's Cancel and Start, as the window's model carries them out.
 pub(crate) type DialogKeys = Rc<dyn Fn(OverlayKey, &mut Window, &mut App)>;
 
@@ -211,7 +228,7 @@ fn tab_within(layer: &FocusHandle, forward: bool, window: &mut Window, cx: &mut 
 /// Puts the gate in front of every key of the window: `gate` reads where the keyboard is when
 /// the key comes, before the bindings of the focused part run.
 pub(crate) fn hold_keys(
-    gate: impl Fn(&Keystroke, &Window, &App) -> Option<Gate> + 'static,
+    gate: impl Fn(&Keystroke, &mut Window, &mut App) -> Option<Gate> + 'static,
     dispatch: Dispatch,
     dialog: DialogKeys,
     cx: &mut App,
@@ -397,12 +414,14 @@ impl FocusMap {
     }
 
     /// What `keystroke`, pressed at `now_ms`, does where the keyboard is now, with the left
-    /// list's cursor on `cursor`. A key that came again with no release between is held.
+    /// list's cursor on `cursor` and the resume popup as `resume` says. A key that came again
+    /// with no release between is held.
     pub(crate) fn gate(
         &self,
         keystroke: &Keystroke,
         now_ms: i64,
         cursor: Option<&NavItem>,
+        resume: &ResumeAtKey,
         window: &Window,
         cx: &App,
     ) -> Gate {
@@ -412,7 +431,7 @@ impl FocusMap {
         // Each key down must pass here once: a second look would take it for a held key.
         key.held = self.repeats.borrow_mut().pressed(&keystroke.key);
         if let Some(overlay) = self.overlay {
-            return self.overlay_gate(overlay, keystroke, &key, window, cx);
+            return self.overlay_gate(overlay, keystroke, &key, resume, window, cx);
         }
         let located = self.locate(cursor, window, cx);
         let scene = located.scene();
@@ -499,12 +518,13 @@ impl FocusMap {
     /// What a key does while `overlay` is up: Escape cancels it and Enter confirms its default;
     /// any other key goes on to the part of the overlay that has the keyboard. A key whose focus
     /// is behind the overlay does nothing and reaches nothing there; it puts the keyboard back
-    /// on the overlay.
+    /// on the overlay. The resume popup's keys are its own (`resume_gate`).
     fn overlay_gate(
         &self,
         overlay: Overlay,
         keystroke: &Keystroke,
         key: &CardKey,
+        resume: &ResumeAtKey,
         window: &Window,
         cx: &App,
     ) -> Gate {
@@ -515,6 +535,14 @@ impl FocusMap {
         if !self.overlay_layer.contains_focused(window, cx) {
             gate.focus = Some(self.overlay_layer.clone());
             return gate;
+        }
+        if overlay == Overlay::Resume {
+            // While the field composes, every key is the input method's, a held one and Tab
+            // too: nothing below may stop it.
+            if resume.composing {
+                return Gate::default();
+            }
+            return resume_gate(key, resume);
         }
         if card_key(&FocusScene::Overlay, key) == CardKeyOutcome::Swallow {
             return gate;
@@ -540,7 +568,7 @@ impl FocusMap {
             (OverlayKey::Confirm, Overlay::CloseSlot) => {
                 gate.action = Some(ShellAction::ConfirmCloseSlot);
             }
-            // The resume popup takes its keys once it is drawn.
+            // The resume popup's keys were taken above.
             (OverlayKey::Cancel | OverlayKey::Confirm, Overlay::Closing | Overlay::Resume) => {}
             (OverlayKey::Pass, _) => gate.stop = false,
         }
@@ -754,12 +782,34 @@ fn hub_gate(scene: &FocusScene, key: &CardKey) -> Gate {
         HubKeyOutcome::Move(delta) => ShellAction::NavMove { delta },
         HubKeyOutcome::Left => ShellAction::NavLeft,
         HubKeyOutcome::Right => ShellAction::NavRight,
-        // The resume popup is not drawn yet.
-        HubKeyOutcome::OpenResume | HubKeyOutcome::Pass => return Gate::default(),
+        HubKeyOutcome::OpenResume => ShellAction::OpenResumeHere,
+        HubKeyOutcome::Pass => return Gate::default(),
     };
     Gate {
         stop: true,
         action: Some(action),
+        ..Gate::default()
+    }
+}
+
+/// What a key does in the resume popup, its field not composing: Enter opens the picked row,
+/// Escape closes the popup and the arrows move the pick; Tab stays, having nowhere to go inside
+/// the popup; any other key goes on to the search field.
+fn resume_gate(key: &CardKey, resume: &ResumeAtKey) -> Gate {
+    let action = match resume_key(resume.composing, key) {
+        ResumeKey::Pass => return Gate::default(),
+        ResumeKey::Stay => None,
+        // With no row shown there is nothing to open.
+        ResumeKey::Pick => resume
+            .picked
+            .clone()
+            .map(|session_id| ShellAction::PickResume { session_id }),
+        ResumeKey::Close => Some(ShellAction::CloseResume),
+        ResumeKey::Move(delta) => Some(ShellAction::MoveResume { delta }),
+    };
+    Gate {
+        stop: true,
+        action,
         ..Gate::default()
     }
 }
@@ -852,13 +902,14 @@ mod tests {
     use gpui_kit::test::TestWindowExt as _;
     // Named one by one: the glob would bring in a `test` that hides the built-in attribute.
     use gpui_kit::{
-        AnyWindowHandle, AppContext as _, Bounds, ClickEvent, Context, Entity, FocusHandle,
-        Focusable as _, InteractiveElement as _, IntoElement, KeyDownEvent, KeyUpEvent, Keystroke,
-        ParentElement as _, PlatformInput, Point, Render, Styled as _, Subscription,
-        TestAppContext, Window, WindowBounds, WindowOptions, div, open_window, px, size,
+        AnyWindowHandle, AppContext as _, Bounds, ClickEvent, Context, Entity,
+        EntityInputHandler as _, FocusHandle, Focusable as _, InteractiveElement as _, IntoElement,
+        KeyDownEvent, KeyUpEvent, Keystroke, ParentElement as _, PlatformInput, Point, Render,
+        Styled as _, Subscription, TestAppContext, Window, WindowBounds, WindowOptions, div,
+        open_window, px, size,
     };
 
-    use super::{FocusMap, hold_keys, left_list, on_screen, to_card_key};
+    use super::{FocusMap, ResumeAtKey, composing, hold_keys, left_list, on_screen, to_card_key};
     use crate::composer::{Dispatch, new_input};
     use crate::test_window;
 
@@ -871,6 +922,8 @@ mod tests {
         focus: FocusMap,
         composer: Entity<TextareaState>,
         field: Entity<InputState>,
+        /// The row the resume popup has picked, as the shell would say.
+        picked: Option<String>,
         stops: [FocusHandle; 2],
         _changes: Subscription,
         _keys: Subscription,
@@ -928,7 +981,19 @@ mod tests {
                         let keys = hold_keys(
                             move |keystroke, window, cx| {
                                 let host = this.upgrade()?;
-                                Some(host.read(cx).focus.gate(keystroke, 0, None, window, cx))
+                                let (field, picked) = {
+                                    let host = host.read(cx);
+                                    (host.field.clone(), host.picked.clone())
+                                };
+                                let resume = ResumeAtKey {
+                                    composing: composing(&field, window, cx),
+                                    picked,
+                                };
+                                Some(
+                                    host.read(cx)
+                                        .focus
+                                        .gate(keystroke, 0, None, &resume, window, cx),
+                                )
                             },
                             dispatch,
                             Rc::new(move |key, _, _| starts.borrow_mut().push(key)),
@@ -944,6 +1009,7 @@ mod tests {
                             focus,
                             composer,
                             field,
+                            picked: None,
                             stops: [
                                 cx.focus_handle().tab_stop(true),
                                 cx.focus_handle().tab_stop(true),
@@ -1099,6 +1165,83 @@ mod tests {
         );
     }
 
+    /// Puts the resume popup up with its field holding the keyboard and `picked` picked.
+    fn open_resume(
+        cx: &mut TestAppContext,
+        picked: Option<&str>,
+    ) -> (AnyWindowHandle, Entity<Behind>, Acted, FocusHandle) {
+        let (handle, host, acted, _) = open_behind(cx);
+        host.update(cx, |host, _| {
+            host.focus.overlay = Some(Overlay::Resume);
+            host.picked = picked.map(str::to_owned);
+        });
+        let field = host.read_with(cx, |host, cx| host.field.read(cx).focus_handle(cx));
+        focus_on(cx, handle, &field);
+        (handle, host, acted, field)
+    }
+
+    #[gpui_kit::test]
+    fn keys_in_the_popup_pick_close_and_move(cx: &mut TestAppContext) {
+        let (handle, host, acted, field) = open_resume(cx, Some("0b1f4c52"));
+        for key in ["enter", "escape", "up", "down", "tab", "shift-tab"] {
+            cx.update_window(handle, |_, window, cx| window.press(key, cx))
+                .expect("press a key");
+            cx.run_until_parked();
+            assert!(focus_is(cx, handle, &field), "{key} moved the keyboard");
+        }
+        assert_eq!(
+            *acted.borrow(),
+            [
+                ShellAction::PickResume {
+                    session_id: "0b1f4c52".to_owned()
+                },
+                ShellAction::CloseResume,
+                ShellAction::MoveResume { delta: -1 },
+                ShellAction::MoveResume { delta: 1 },
+            ]
+        );
+        cx.update_window(handle, |_, window, cx| window.input("fix", cx))
+            .expect("type in the field");
+        cx.run_until_parked();
+        let text = host.read_with(cx, |host, cx| host.field.read(cx).value().to_string());
+        assert_eq!(text, "fix", "a letter goes to the search field");
+
+        // With no row shown Enter opens nothing, and it still reaches no part behind.
+        host.update(cx, |host, _| host.picked = None);
+        acted.borrow_mut().clear();
+        cx.update_window(handle, |_, window, cx| window.press("enter", cx))
+            .expect("press enter");
+        cx.run_until_parked();
+        assert!(acted.borrow().is_empty(), "{:?}", acted.borrow());
+    }
+
+    #[gpui_kit::test]
+    fn while_composing_the_keys_go_to_the_field(cx: &mut TestAppContext) {
+        let (handle, host, acted, _) = open_resume(cx, Some("0b1f4c52"));
+        let input = host.read_with(cx, |host, _| host.field.clone());
+        for key in ["enter", "escape", "up", "down", "tab"] {
+            let marked = cx
+                .update_window(handle, |_, window, cx| {
+                    input.update(cx, |state, cx| {
+                        state.replace_and_mark_text_in_range(None, "か", None, window, cx);
+                    });
+                    composing(&input, window, cx)
+                })
+                .expect("compose");
+            assert!(marked, "the field composes before {key}");
+            cx.update_window(handle, |_, window, cx| window.press(key, cx))
+                .expect("press a key");
+            cx.run_until_parked();
+            // The field has the key: the gate handed nothing to the shell.
+            assert!(acted.borrow().is_empty(), "{key}: {:?}", acted.borrow());
+        }
+    }
+
+    fn focus_is(cx: &mut TestAppContext, handle: AnyWindowHandle, focus: &FocusHandle) -> bool {
+        cx.update_window(handle, |_, window, _| focus.is_focused(window))
+            .expect("read the focus")
+    }
+
     /// A window with the left list, a slot's input, a waiting permission card in the
     /// conversation and the slot's "Session ended" band with a Restart that keeps its presses;
     /// and the window's gate, which reads the list's cursor from `cursor`.
@@ -1176,7 +1319,14 @@ mod tests {
                                 let host = this.upgrade()?;
                                 let host = host.read(cx);
                                 let cursor = host.cursor.as_ref();
-                                Some(host.focus.gate(keystroke, 0, cursor, window, cx))
+                                Some(host.focus.gate(
+                                    keystroke,
+                                    0,
+                                    cursor,
+                                    &ResumeAtKey::default(),
+                                    window,
+                                    cx,
+                                ))
                             },
                             dispatch,
                             Rc::new(|_, _, _| {}),
@@ -1457,6 +1607,52 @@ mod tests {
         assert!(
             !test_window::focused(cx, handle, &input),
             "Escape closed the menu, not the list"
+        );
+    }
+
+    #[gpui_kit::test]
+    fn ctrl_shift_o_opens_the_popup_of_the_selected_slot_s_project(cx: &mut TestAppContext) {
+        use closta_shell::projects::project_key;
+
+        use crate::test_window::TreeSetup;
+
+        const A: &str = r"C:\dev\alpha";
+        const B: &str = r"C:\dev\beta";
+        let (handle, model) = test_window::open_tree(
+            cx,
+            TreeSetup {
+                projects: &[(A, false), (B, false)],
+                slots: &[Some(A), Some(B)],
+                run: false,
+            },
+        );
+        let second = SlotId::numbered(2);
+        test_window::act(cx, handle, &model, ShellAction::Select(second));
+        let typing = model.read_with(cx, |model, _| model.focus.composers[&second].clone());
+        test_window::focus_on(cx, handle, &typing);
+        test_window::press(cx, handle, "ctrl-shift-o");
+        test_window::draw(cx, handle);
+        let (project, field) = model.read_with(cx, |model, cx| {
+            (
+                model.shell.resume().map(|it| it.project.clone()),
+                model
+                    .resume_field
+                    .as_ref()
+                    .map(|it| it.read(cx).focus_handle(cx)),
+            )
+        });
+        assert_eq!(project, Some(project_key(B).expect("a key")));
+        let field = field.expect("the search field");
+        assert!(
+            test_window::focused(cx, handle, &field),
+            "the search field has the keyboard"
+        );
+
+        test_window::press(cx, handle, "escape");
+        assert!(model.read_with(cx, |model, _| model.shell.resume().is_none()));
+        assert!(
+            test_window::focused(cx, handle, &typing),
+            "the input has the keyboard again"
         );
     }
 

@@ -386,8 +386,8 @@ pub(crate) fn bypass_band(
     }
 }
 
-/// "Session ended", and the button that restarts it when it can be, or why it cannot while
-/// eight slots hold a session. Once the left list sent the keyboard here, the band and its
+/// "Session ended", and the button that restarts it with what a Restart does when it can be,
+/// or why it cannot while eight slots hold a session. Once the left list sent the keyboard here, the band and its
 /// Restart take it.
 fn ended(model: &ShellModel, slot: SlotId, cx: &mut Context<ShellModel>) -> AnyElement {
     let focus = model.focus.ended.get(&slot);
@@ -404,11 +404,13 @@ fn ended(model: &ShellModel, slot: SlotId, cx: &mut Context<ShellModel>) -> AnyE
             model.act(ShellAction::Restart { slot }, window, cx);
         }))
     });
-    let limit = model.shell.restart_blocked(slot).then(|| {
-        div()
-            .text_color(cx.theme().muted_foreground)
-            .child(copy::SLOT_LIMIT)
-    });
+    let muted = cx.theme().muted_foreground;
+    let notes = ended_notes(
+        model.shell.restart_note(slot),
+        model.shell.restart_blocked(slot),
+    )
+    .into_iter()
+    .map(|text| div().text_color(muted).child(text));
     let band = h_flex()
         .id("session-ended")
         .accessibility_id("session-ended")
@@ -424,11 +426,19 @@ fn ended(model: &ShellModel, slot: SlotId, cx: &mut Context<ShellModel>) -> AnyE
                 .child(copy::SESSION_ENDED),
         )
         .children(restart)
-        .children(limit);
+        .children(notes);
     match focus {
         Some(focus) => band.track_focus(&focus.band).into_any_element(),
         None => band.into_any_element(),
     }
+}
+
+/// What the "Session ended" band says after its Restart: what a Restart does while one is on
+/// offer (`note`), or the slot limit while it is `blocked` by it.
+fn ended_notes(note: Option<&'static str>, blocked: bool) -> Vec<&'static str> {
+    note.into_iter()
+        .chain(blocked.then_some(copy::SLOT_LIMIT))
+        .collect()
 }
 
 #[cfg(test)]
@@ -459,8 +469,8 @@ mod tests {
     use closta_shell::state::{BYPASS_MODE, ComposerLine};
 
     use super::{
-        Browsing, Dispatch, bypass_band, input_box, jump_hint, mode_choices, mode_look,
-        mode_picker, new_input,
+        Browsing, Dispatch, bypass_band, ended_notes, input_box, jump_hint, mode_choices,
+        mode_look, mode_picker, new_input,
     };
     use crate::focus::{self, FocusMap};
 
@@ -831,7 +841,14 @@ mod tests {
                         let keys = focus::hold_keys(
                             move |keystroke, window, cx| {
                                 let band = this.upgrade()?;
-                                Some(band.read(cx).focus.gate(keystroke, 0, None, window, cx))
+                                Some(band.read(cx).focus.gate(
+                                    keystroke,
+                                    0,
+                                    None,
+                                    &focus::ResumeAtKey::default(),
+                                    window,
+                                    cx,
+                                ))
                             },
                             Rc::clone(&dispatch),
                             Rc::new(|_, _, _| {}),
@@ -1014,5 +1031,21 @@ mod tests {
         });
         draw(cx, handle);
         assert!(hint_drawn(cx, handle));
+    }
+
+    #[test]
+    fn the_ended_band_says_what_restart_does() {
+        use closta_shell::copy;
+
+        assert_eq!(
+            ended_notes(Some(copy::RESTART_CONTINUES), false),
+            [copy::RESTART_CONTINUES]
+        );
+        assert_eq!(
+            ended_notes(Some(copy::RESTART_AGAIN), false),
+            [copy::RESTART_AGAIN]
+        );
+        assert_eq!(ended_notes(None, true), [copy::SLOT_LIMIT]);
+        assert!(ended_notes(None, false).is_empty());
     }
 }

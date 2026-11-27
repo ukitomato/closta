@@ -36,6 +36,21 @@ impl ShellState {
         Some(copy::resume_title(&display_name(project, &self.projects)))
     }
 
+    /// The id of the row picked in the popup, which Enter opens; `None` while no row is shown.
+    pub fn resume_picked(&self) -> Option<String> {
+        let picker = self.resume.as_ref()?;
+        picker
+            .filtered()
+            .get(picker.selected)
+            .map(|summary| summary.id.clone())
+    }
+
+    /// Whether the resume popup may be opened now: no overlay is up and no plus waits for its
+    /// folder, so its button may be pressed.
+    pub fn can_open_resume(&self) -> bool {
+        self.overlay().is_none() && self.pending_new.is_none()
+    }
+
     fn resume_row_state(&self, session_id: &str) -> ResumeRowState {
         let mut holding = self
             .slots
@@ -52,7 +67,7 @@ impl ShellState {
 
     pub(super) fn open_resume(&mut self, key: &ProjectKey) -> Acted {
         // A plus that waits for its folder may yet open the dialog: the two never stand together.
-        if self.pending_new.is_some() {
+        if !self.can_open_resume() {
             return Acted::default();
         }
         let Some(folder) = self

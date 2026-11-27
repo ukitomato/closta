@@ -24,6 +24,7 @@ use crate::model::ShellModel;
 const ELAPSED_TICK: Duration = Duration::from_secs(30);
 const ROW_HEIGHT: f32 = 28.;
 const PLUS: &str = "+";
+const RESUME: &str = "⏲";
 const CHECKING: &str = "⟳";
 const OPEN: &str = "▾";
 const SHUT: &str = "▸";
@@ -126,6 +127,7 @@ impl ShellModel {
         let slots = self.shell.slots();
         let selected = self.shell.selected();
         let full = self.shell.slots_full();
+        let can_resume = self.shell.can_open_resume();
         let dispatch = Self::dispatch(cx);
         let mut timed = false;
         let mut rows = Vec::new();
@@ -141,6 +143,7 @@ impl ShellModel {
                         &projects[at],
                         on_cursor,
                         full,
+                        can_resume,
                         &dispatch,
                         cx,
                     ));
@@ -206,13 +209,15 @@ fn cursor_ring(cursor: bool, cx: &App) -> Hsla {
     if cursor { ring } else { ring.opacity(0.) }
 }
 
-/// A project's row: the fold, the name, the runtime, the check in progress and the plus; a click
+/// A project's row: the fold, the name, the runtime, the check in progress, the plus and the
+/// button that opens the resume popup, which waits while an overlay is up; a click
 /// opens or closes it and puts the list's cursor on it, a right click offers Remove from list.
 fn project_row(
     at: usize,
     project: &ProjectSummary,
     cursor: bool,
     slots_full: bool,
+    can_resume: bool,
     dispatch: &Dispatch,
     cx: &App,
 ) -> AnyElement {
@@ -265,6 +270,29 @@ fn project_row(
                 );
             })
     };
+    let resume_id = SharedString::from(format!("project-resume-{at}"));
+    let resume = {
+        let dispatch = dispatch.clone();
+        let key = key.clone();
+        Button::new(resume_id.clone())
+            .accessibility_id(resume_id)
+            .accessibility_label(copy::resume_title(&project.name))
+            .tab_stop(false)
+            .ghost()
+            .xsmall()
+            .label(RESUME)
+            .disabled(!can_resume)
+            .on_click(move |_: &ClickEvent, window, cx| {
+                cx.stop_propagation();
+                dispatch(
+                    ShellAction::OpenResume {
+                        project: key.clone(),
+                    },
+                    window,
+                    cx,
+                );
+            })
+    };
     let checking = project
         .checking
         .then(|| div().flex_none().text_color(muted).child(CHECKING));
@@ -305,6 +333,7 @@ fn project_row(
         )
         .children(checking)
         .child(plus)
+        .child(resume)
         .on_click(toggle)
         .context_menu(move |menu, _, _| fill_menu(menu, &choices, &menu_dispatch))
         .into_any_element()
@@ -530,6 +559,44 @@ mod tests {
             }
         })
         .expect("look at the plus");
+    }
+
+    #[gpui_kit::test]
+    fn a_project_row_has_a_resume_button_and_other_has_none(cx: &mut TestAppContext) {
+        let (handle, model) = test_window::open_tree(
+            cx,
+            TreeSetup {
+                projects: &[(A, false), (B, false)],
+                slots: &[Some(A), None],
+                run: false,
+            },
+        );
+        let buttons = |cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, _| {
+                assert!(
+                    window.try_find("other".to_owned()).is_some(),
+                    "OTHER is drawn"
+                );
+                assert!(window.try_find("project-resume-3".to_owned()).is_none());
+                ["project-resume-1", "project-resume-2"].map(|id| {
+                    let button = window.find(id.to_owned());
+                    button.disabled().unwrap_or(false)
+                })
+            })
+            .expect("look at the tree")
+        };
+        assert_eq!(buttons(cx), [false, false]);
+
+        cx.update_window(handle, |_, window, cx| {
+            window.click("project-resume-2".to_owned(), cx)
+        })
+        .expect("click the resume button");
+        test_window::draw(cx, handle);
+        let project = model.read_with(cx, |model, _| {
+            model.shell.resume().map(|it| it.project.clone())
+        });
+        assert_eq!(project, Some(project_key(B).expect("a key")));
+        assert_eq!(buttons(cx), [true, true], "waits behind the popup");
     }
 
     #[gpui_kit::test]
