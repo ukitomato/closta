@@ -1236,3 +1236,27 @@ fn every_capture_ends_satisfying_the_conversation_invariants() {
 
     assert!(failures.is_empty(), "{failures:#?}");
 }
+
+#[test]
+fn capture_41_drops_the_session_at_the_reset_and_takes_the_next_inits_id() {
+    let events = read_capture("41-clear-reset.ndjson");
+    let mut state = ConversationState::default();
+    let mut ids: Vec<Option<String>> = Vec::new();
+    for event in &events {
+        state = fold(state, event);
+        ids.push(state.session.as_ref().map(|s| s.session_id.clone()));
+    }
+    assert_eq!(
+        Some("a6635625-53e9-40b5-adfb-977a4e9163b2".to_string()),
+        ids[16],
+        "after line 17 the first conversation's id"
+    );
+    assert_eq!(Some(AgentEventKind::ConversationReset), events[17].kind());
+    assert_eq!(None, ids[17], "after the reset on line 18");
+    assert_eq!(None, ids[18], "after line 19");
+    assert_eq!(
+        Some("b3c1b6ae-517a-4b6a-8b61-f3693facb4f1".to_string()),
+        ids[19],
+        "after the init on line 20"
+    );
+}

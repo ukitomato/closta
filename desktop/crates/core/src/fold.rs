@@ -33,6 +33,13 @@ pub fn fold(state: ConversationState, event: &AgentEvent) -> ConversationState {
         AgentEvent::SystemTaskNotification { .. } => fold_task_notification(state, event),
         AgentEvent::ControlResponse { .. } => fold_control_response(state, event),
         AgentEvent::SystemStatus { .. } => fold_status(state, event),
+        // The CLI goes on under a new session id that only the next init names: until then there is no
+        // session, so nothing reads the old id as the current one. The cost is left for the next
+        // result, which counts from zero.
+        AgentEvent::ConversationReset { .. } => ConversationState {
+            session: None,
+            ..state
+        },
 
         AgentEvent::ControlRequest { .. } => fold_control_request(state, event),
 
@@ -47,7 +54,6 @@ pub fn fold(state: ConversationState, event: &AgentEvent) -> ConversationState {
         | AgentEvent::SystemCommandsChanged { .. }
         | AgentEvent::SystemCompactBoundary { .. }
         | AgentEvent::SystemUiInvalidate { .. }
-        | AgentEvent::ConversationReset { .. }
         | AgentEvent::SystemPermissionDenied { .. }
         | AgentEvent::SystemInformational { .. }
         | AgentEvent::SystemApiRetry { .. }
@@ -340,7 +346,7 @@ fn update_where<T: Clone>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use closta_model::{RawJson, Usage};
+    use closta_model::{AgentEventKind, RawJson, Usage};
 
     fn result_for(user_message_uuid: Option<&str>, cost: f64) -> AgentEvent {
         AgentEvent::Result {
@@ -382,6 +388,108 @@ mod tests {
             phase: TurnPhase::Open,
             incomplete_reason: None,
             lifecycle_done: false,
+        }
+    }
+
+    fn established() -> ConversationState {
+        ConversationState {
+            session: Some(SessionInfo {
+                session_id: "old".into(),
+                model: "model".into(),
+                permission_mode: "default".into(),
+                cwd: "/repo".into(),
+                version: "2.1.282".into(),
+            }),
+            turns: imbl::vector![open_turn("cmd-1")],
+            tasks: imbl::vector![Task {
+                task_id: "t1".into(),
+                status: TaskStatus::Running,
+                parent_tool_use_id: None,
+                subagent_type: None,
+                is_backgrounded: false,
+                spawn_depth: None,
+                incomplete_reason: None,
+            }],
+            usage: Usage {
+                session_cost_usd: 0.25,
+            },
+            ..ConversationState::default()
+        }
+    }
+
+    #[test]
+    fn a_reset_drops_the_session_and_keeps_the_rest() {
+        let before = established();
+        let reset = AgentEvent::ConversationReset {
+            uuid: "u".into(),
+            session_id: "old".into(),
+            new_conversation_id: "new".into(),
+            trigger: Some("clear".into()),
+            user_message_uuid: None,
+            timestamp: None,
+        };
+        assert_eq!(Some(AgentEventKind::ConversationReset), reset.kind());
+        let after = fold(before.clone(), &reset);
+        assert!(before.session.is_some());
+        assert_eq!(None, after.session);
+        assert_eq!(before.turns, after.turns);
+        assert_eq!(before.tasks, after.tasks);
+        assert_eq!(before.usage, after.usage);
+    }
+
+    #[test]
+    fn the_other_new_kinds_leave_the_state_as_it_was() {
+        let events = [
+            (
+                AgentEventKind::SystemPermissionDenied,
+                AgentEvent::SystemPermissionDenied {
+                    uuid: "u".into(),
+                    session_id: "old".into(),
+                    tool_name: "Bash".into(),
+                    tool_use_id: "toolu_1".into(),
+                    agent_id: None,
+                    decision_reason_type: Some("mode".into()),
+                    decision_reason: Some("r".into()),
+                    message: "m".into(),
+                },
+            ),
+            (
+                AgentEventKind::SystemInformational,
+                AgentEvent::SystemInformational {
+                    uuid: "u".into(),
+                    session_id: "old".into(),
+                    content: "c".into(),
+                    level: "info".into(),
+                    tool_use_id: None,
+                    prevent_continuation: None,
+                    tag: None,
+                },
+            ),
+            (
+                AgentEventKind::SystemApiRetry,
+                AgentEvent::SystemApiRetry {
+                    uuid: "u".into(),
+                    session_id: "old".into(),
+                    attempt: 1,
+                    max_retries: 10,
+                    retry_delay_ms: 500,
+                    error_status: None,
+                    error: None,
+                },
+            ),
+            (
+                AgentEventKind::SystemUiInvalidate,
+                AgentEvent::SystemUiInvalidate {
+                    uuid: "u".into(),
+                    session_id: "old".into(),
+                    event: Some("ui.render".into()),
+                },
+            ),
+        ];
+        let before = established();
+        for (kind, event) in &events {
+            assert_eq!(Some(*kind), event.kind());
+            assert_eq!(before, fold(before.clone(), event), "{kind:?}");
         }
     }
 
