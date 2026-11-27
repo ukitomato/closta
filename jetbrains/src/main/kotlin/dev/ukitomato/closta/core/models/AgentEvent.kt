@@ -211,6 +211,8 @@ sealed interface AgentEvent {
         val productFeedbackDisabled: Boolean,
         val perTurnEffortActive: Boolean,
         val fastModeDisabledReason: String? = null,
+        /** Load-time errors of plugins (sdk.d.ts `plugin_errors`); the CLI omits the key when there are none. */
+        val pluginErrors: RawJson? = null,
     ) : Known {
         override val kind: AgentEventKind get() = AgentEventKind.SYSTEM_INIT
     }

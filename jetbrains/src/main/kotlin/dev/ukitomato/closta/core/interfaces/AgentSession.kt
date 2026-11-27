@@ -103,6 +103,16 @@ interface AgentSession {
     suspend fun requestUsage(requestId: String)
 
     /**
+     * Reloads the plugins from disk. With [refuseIfBusy] the CLI reloads nothing while a turn or other work is live
+     * and answers with an error instead. Only issues the request; the answer carries [requestId], as for
+     * [requestContextUsage].
+     */
+    suspend fun reloadPlugins(
+        refuseIfBusy: Boolean,
+        requestId: String,
+    )
+
+    /**
      * Withdraws the message [messageUuid] the CLI has queued and not yet started. Only issues the request; the answer
      * carries [requestId], as for [requestContextUsage], and says whether the message was still queued.
      */

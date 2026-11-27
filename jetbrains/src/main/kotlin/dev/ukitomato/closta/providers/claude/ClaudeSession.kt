@@ -160,6 +160,13 @@ class ClaudeSession(
         stdinChannel.send(StdinEncoder.getUsage(requestId))
     }
 
+    override suspend fun reloadPlugins(
+        refuseIfBusy: Boolean,
+        requestId: String,
+    ) {
+        stdinChannel.send(StdinEncoder.reloadPlugins(requestId, refuseIfBusy))
+    }
+
     override suspend fun cancelQueuedMessage(
         messageUuid: String,
         requestId: String,

@@ -297,6 +297,20 @@ object StdinEncoder {
         }
 
     /**
+     * `reload_plugins`: reloads plugins from disk. [refuseIfBusy] is sent only when true (the CLI honors it when its
+     * init lists `reload_plugins_refuse_if_busy_v1`, and may ignore it otherwise); `hold_on_cache_impact` is never
+     * sent (`SDKControlReloadPluginsRequest` in sdk.d.ts 0.3.325). No capture holds the request.
+     */
+    fun reloadPlugins(
+        requestId: String,
+        refuseIfBusy: Boolean,
+    ): String =
+        controlRequest(requestId) {
+            addProperty("subtype", "reload_plugins")
+            if (refuseIfBusy) addProperty("refuse_if_busy", true)
+        }
+
+    /**
      * `cancel_async_message`: withdraws the queued message [messageUuid]. The CLI answers whether it was still queued
      * (`SDKControlCancelAsyncMessageRequest` in sdk.d.ts 0.3.325); no capture holds the request.
      */

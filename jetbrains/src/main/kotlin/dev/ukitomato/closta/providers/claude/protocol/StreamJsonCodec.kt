@@ -320,6 +320,7 @@ object StreamJsonCodec {
                     productFeedbackDisabled = f.flag("product_feedback_disabled"),
                     perTurnEffortActive = f.flag("per_turn_effort_active"),
                     fastModeDisabledReason = f.textOrNull("fast_mode_disabled_reason"),
+                    pluginErrors = f.rawOrNull("plugin_errors"),
                 )
             },
             AgentEventKind.RESULT to { f ->

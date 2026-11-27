@@ -120,6 +120,13 @@ class FakeAgentSession(
         recorded += Sent.RequestUsage(requestId)
     }
 
+    override suspend fun reloadPlugins(
+        refuseIfBusy: Boolean,
+        requestId: String,
+    ) {
+        recorded += Sent.ReloadPlugins(refuseIfBusy, requestId)
+    }
+
     override suspend fun cancelQueuedMessage(
         messageUuid: String,
         requestId: String,

@@ -528,4 +528,27 @@ class CodecDecodeTest {
             { assertNull(accepted.error) },
         )
     }
+
+    @Test
+    fun `type only - plugin_errors on init is kept raw, and an init without it has none`() {
+        val recorded = assertInstanceOf(AgentEvent.SystemInit::class.java, captureLine("43-usage-and-rules", 4))
+        val line = CaptureFixtures.nonBlankLines(CaptureFixtures.textOf("43-usage-and-rules.ndjson"))[3]
+        val withErrors =
+            line.replaceFirst(
+                "\"type\":\"system\"",
+                "\"type\":\"system\",\"plugin_errors\":" +
+                    "[{\"plugin\":\"a@m\",\"type\":\"path-not-found\",\"message\":\"gone\"}]",
+            )
+        val decoded = assertInstanceOf(AgentEvent.SystemInit::class.java, StreamJsonCodec.decode(withErrors))
+
+        assertAll(
+            { assertNull(recorded.pluginErrors) },
+            {
+                assertEquals(
+                    """[{"plugin":"a@m","type":"path-not-found","message":"gone"}]""",
+                    decoded.pluginErrors?.text,
+                )
+            },
+        )
+    }
 }

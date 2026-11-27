@@ -29,6 +29,7 @@ class RecordingAgentSession(
     val setModes = mutableListOf<Pair<String, String>>()
     val contextRequests = mutableListOf<String>()
     val usageRequests = mutableListOf<String>()
+    val pluginReloads = mutableListOf<Pair<Boolean, String>>()
     val sentUuids = mutableListOf<String?>()
     val rewinds = mutableListOf<Triple<String, Boolean, String>>()
     var interruptCount = 0
@@ -104,6 +105,13 @@ class RecordingAgentSession(
 
     override suspend fun requestUsage(requestId: String) {
         usageRequests += requestId
+    }
+
+    override suspend fun reloadPlugins(
+        refuseIfBusy: Boolean,
+        requestId: String,
+    ) {
+        pluginReloads += refuseIfBusy to requestId
     }
 
     val queuedCancellations = mutableListOf<Pair<String, String>>()

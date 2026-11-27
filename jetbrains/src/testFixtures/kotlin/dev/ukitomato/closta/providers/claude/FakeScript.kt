@@ -100,6 +100,11 @@ sealed interface Sent {
         val requestId: String,
     ) : Sent
 
+    data class ReloadPlugins(
+        val refuseIfBusy: Boolean,
+        val requestId: String,
+    ) : Sent
+
     data class CancelQueuedMessage(
         val messageUuid: String,
         val requestId: String,

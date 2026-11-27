@@ -402,4 +402,19 @@ class CodecEncodeTest {
             },
         )
     }
+
+    @Test
+    fun `type only - reload_plugins asks to be refused when busy, and has no field when false`() {
+        assertEquals(
+            json(
+                """{"type":"control_request","request_id":"r9",""" +
+                    """"request":{"subtype":"reload_plugins","refuse_if_busy":true}}""",
+            ),
+            json(StdinEncoder.reloadPlugins("r9", refuseIfBusy = true)),
+        )
+        assertEquals(
+            json("""{"type":"control_request","request_id":"r9","request":{"subtype":"reload_plugins"}}"""),
+            json(StdinEncoder.reloadPlugins("r9", refuseIfBusy = false)),
+        )
+    }
 }
