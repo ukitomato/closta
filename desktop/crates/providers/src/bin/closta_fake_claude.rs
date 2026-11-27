@@ -16,7 +16,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
-const DEFAULT_VERSION: &str = "2.1.282 (Claude Code)";
+const DEFAULT_VERSION: &str = "2.1.325 (Claude Code)";
 const DEFAULT_LIFETIME_SECS: u64 = 60;
 const NAP: Duration = Duration::from_millis(50);
 const FLOOD_STDOUT_CHARS: usize = 200_000;

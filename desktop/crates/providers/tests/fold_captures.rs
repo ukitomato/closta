@@ -346,7 +346,7 @@ fn second_init() -> AgentEvent {
         model: "second-model".into(),
         permission_mode: "default".into(),
         api_key_source: "none".into(),
-        claude_code_version: "2.1.282".into(),
+        claude_code_version: "2.1.325".into(),
         output_style: "text".into(),
         view_mode: "normal".into(),
         scratchpad_path: Some("/tmp".into()),
@@ -550,7 +550,7 @@ fn a_task_started_that_arrives_after_completion_does_not_demote_the_task_back_to
 
 // --- UnknownEventTest -----------------------------------------------------------------------
 
-const COMMAND_LIFECYCLE_LINES: usize = 135;
+const COMMAND_LIFECYCLE_LINES: usize = 156;
 
 fn all_events() -> Vec<AgentEvent> {
     manifest()
@@ -754,7 +754,7 @@ fn session(mode: &str) -> SessionInfo {
         model: "m".into(),
         permission_mode: mode.into(),
         cwd: "/c".into(),
-        version: "2.1.282".into(),
+        version: "2.1.325".into(),
     }
 }
 

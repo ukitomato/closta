@@ -515,7 +515,7 @@ fn a_thread_has_no_session_or_usage_until_the_cli_starts_one_then_its_model_mode
     assert_eq!(Some("claude-sonnet-5-5"), str(shown, "model"));
     assert_eq!(Some("default"), str(shown, "permissionMode"));
     assert_eq!(Some("/work"), str(shown, "cwd"));
-    assert_eq!(Some("2.1.282"), str(shown, "version"));
+    assert_eq!(Some("2.1.325"), str(shown, "version"));
     assert_eq!(
         Some(&json!(0.0)),
         obj(session.thread(), "usage").get("costUsd"),

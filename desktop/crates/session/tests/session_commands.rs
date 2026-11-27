@@ -221,7 +221,7 @@ fn approvals_sent(record: &FakeRecord) -> Vec<Sent> {
 #[test]
 fn the_store_folds_every_capture_as_session_view_does() {
     let captures = common::capture_file_names();
-    assert!(captures.len() >= 40, "the 40 captures are on disk");
+    assert!(captures.len() >= 44, "the 44 captures are on disk");
     for capture in captures {
         let store = ConversationStore::default();
         let mut host = SessionView::default();

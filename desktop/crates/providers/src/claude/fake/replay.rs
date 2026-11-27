@@ -24,7 +24,7 @@ use crate::claude::protocol::json::parse_line;
 pub const REPLAY_KEY: &str = "closta_replay";
 
 /// What the replay answers to `claude --version`.
-pub const VERSION_LINE: &str = "2.1.282 (Claude Code)";
+pub const VERSION_LINE: &str = "2.1.325 (Claude Code)";
 
 const USER: &str = "user";
 const ANSWER: &str = "answer";

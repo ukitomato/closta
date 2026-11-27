@@ -46,11 +46,11 @@ fn through_runtime(scenario: &str) -> (Vec<SessionStatus>, ConversationState) {
 #[test]
 fn each_capture_through_the_runtime_goes_starting_running_ended_and_matches_the_golden() {
     let scenarios = common::scenario_names();
-    assert!(scenarios.len() >= 40, "{} scenarios", scenarios.len());
+    assert!(scenarios.len() >= 44, "{} scenarios", scenarios.len());
     let expected = [
         SessionStatus::Starting,
         SessionStatus::Running {
-            version: "2.1.282".to_owned(),
+            version: VERSION.to_owned(),
         },
         SessionStatus::Ended,
     ];

@@ -153,7 +153,7 @@ pub fn fixed_clock(ms: u64) -> Arc<dyn Clock> {
 }
 
 /// The version every fake `claude --version` prints.
-pub const VERSION: &str = "2.1.282";
+pub const VERSION: &str = "2.1.325";
 /// How long a test waits for one thing to happen before it fails.
 pub const GUARD: Duration = Duration::from_secs(10);
 /// How long a whole test may take.

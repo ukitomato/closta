@@ -356,7 +356,7 @@ fn events_are_folded_into_the_conversation_and_commands_reach_the_process() {
                 .conversation
                 .session
                 .map(|session| session.version),
-            Some("2.1.282".to_owned())
+            Some("2.1.325".to_owned())
         );
 
         let commands = runtime.commands().expect("running");

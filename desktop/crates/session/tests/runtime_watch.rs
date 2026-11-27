@@ -8,7 +8,7 @@ use closta_providers::claude::fake::live::LiveOptions;
 use closta_session::status::SessionStatus;
 use futures_lite::future;
 use smol::Timer;
-use support::{GUARD, Processes, drive, reach, runtime, until};
+use support::{GUARD, Processes, VERSION, drive, reach, runtime, until};
 
 fn running(status: &SessionStatus) -> bool {
     matches!(status, SessionStatus::Running { .. })
@@ -34,7 +34,7 @@ fn the_status_channel_closes_once_the_session_ends() {
         assert_eq!(
             rx.recv().await,
             Ok(SessionStatus::Running {
-                version: "2.1.282".into()
+                version: VERSION.into()
             })
         );
         assert_eq!(rx.recv().await, Ok(SessionStatus::Ended));

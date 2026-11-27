@@ -576,7 +576,7 @@ fn ready_lines_wait_for_every_slot_to_run_or_fail() {
             shell.refresh(broken, watch.generation(), 0).unwrap();
         }
         let lines = shell.ready_lines().unwrap();
-        assert_eq!(lines, ["Running 2.1.282", "Failed WslCommandNotFound"]);
+        assert_eq!(lines, ["Running 2.1.325", "Failed WslCommandNotFound"]);
         assert!(
             lines
                 .iter()

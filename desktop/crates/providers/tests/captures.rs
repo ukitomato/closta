@@ -12,9 +12,9 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 
-const EXPECTED_CAPTURES: usize = 40;
-const EXPECTED_LINES: usize = 2832;
-const CLI_VERSION: &str = "2.1.282";
+const EXPECTED_CAPTURES: usize = 44;
+const EXPECTED_LINES: usize = 2852;
+const CLI_VERSION: &str = "2.1.325";
 const FIRST_TOKEN_MS: i64 = 812;
 
 const STDOUT_MESSAGE_KINDS: usize = 45;

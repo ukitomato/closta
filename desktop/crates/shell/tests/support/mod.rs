@@ -69,7 +69,7 @@ impl Harness {
         let held = Arc::clone(&answers);
         let spawner = FakeSpawner::answering(move |launch: &Launch| {
             if launch.args == ["--version"] {
-                let script = ProcessScript::replaying(vec!["2.1.282 (Claude Code)".to_owned()]);
+                let script = ProcessScript::replaying(vec!["2.1.325 (Claude Code)".to_owned()]);
                 let (process, _probe) = FakeProcess::new(script);
                 return Ok(Box::new(process) as Box<dyn AgentProcess>);
             }
