@@ -35,7 +35,9 @@ private fun foldReset(
 ): Transcript {
     val (placed, messageKey) =
         transcript.withPart(event.uuid, CLEARED_PART) { key -> ClearedRecord(key, event.timestamp) }
-    return placed.copy(clearedAt = placed.messages.order.indexOf(messageKey), compactFailure = null)
+    return placed
+        .copy(clearedAt = placed.messages.order.indexOf(messageKey), compactFailure = null)
+        .withOperations(placed.operations.contextReset())
 }
 
 /**

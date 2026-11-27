@@ -3,7 +3,6 @@ package dev.ukitomato.closta.presenter.view
 import dev.ukitomato.closta.core.models.AgentEvent
 import org.junit.jupiter.api.Assertions.assertAll
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
 
@@ -108,13 +107,13 @@ class CacheClockTest {
     }
 
     @Test
-    fun `a result that names no model ends the clock but keeps the tokens`() {
+    fun `a result that names no model ends the clock and the tokens`() {
         val warm = HostState().with(turn(10, 20, 0)).seenAt(1_000)
         val bare = warm.with(Lines.result(null))
 
         assertAll(
             { assertEquals(CacheRecord(1_000, 3_600_000), warm.ops().cache) },
-            { assertNotNull(bare.ops().tokens) },
+            { assertNull(bare.ops().tokens) },
             { assertNull(bare.seenAt(2_000).ops().cache) },
         )
     }

@@ -43,6 +43,57 @@ class ContextReadingsTest {
         assertEquals(emptyList<ContextCategory>(), state.ops().context!!.categories)
     }
 
+    private fun HostState.asked(
+        id: String,
+        body: String,
+    ) = next(
+        PresenterInput.ControlRequested(id, ControlKind.CONTEXT),
+    ).next(PresenterInput.Event(Lines.controlOk(id, body)))
+
+    private val whole =
+        """{"totalTokens":9,"maxTokens":10,"percentage":90,"categories":[""" +
+            """{"name":"A","tokens":4,"kind":"used"},{"name":"B","tokens":5,"kind":"used"}]}"""
+    private val summary = """{"totalTokens":7,"maxTokens":10,"percentage":70}"""
+    private val twoCategories =
+        listOf(ContextCategory(null, "A", 4, ContextKind.USED), ContextCategory(null, "B", 5, ContextKind.USED))
+
+    @Test
+    fun `type only - a summary answer keeps the rows of the whole one and takes its totals`() {
+        val context =
+            HostState()
+                .asked("c1", whole)
+                .asked("c2", summary)
+                .ops()
+                .context!!
+        assertAll(
+            { assertEquals(twoCategories, context.categories) },
+            { assertEquals(7, context.totalTokens) },
+        )
+    }
+
+    @Test
+    fun `type only - a conversation reset drops the rows of the breakdown`() {
+        val reset = AgentEvent.ConversationReset("rs", "s-1", "s-2", timestamp = "2026-11-14T12:26:36.305Z")
+        val state = HostState().asked("c1", whole).next(PresenterInput.Event(reset)).asked("c2", summary)
+        assertEquals(emptyList<ContextCategory>(), state.ops().context!!.categories)
+    }
+
+    @Test
+    fun `type only - a compaction drops the rows of the breakdown`() {
+        val boundary = Lines.compactBoundary("""{"trigger":"manual","pre_tokens":9,"post_tokens":3}""")
+        val state = HostState().asked("c1", whole).next(PresenterInput.Event(boundary)).asked("c2", summary)
+        assertEquals(emptyList<ContextCategory>(), state.ops().context!!.categories)
+    }
+
+    @Test
+    fun `type only - a second whole answer replaces the first`() {
+        val other =
+            """{"totalTokens":9,"maxTokens":10,"percentage":90,"categories":[""" +
+                """{"name":"Z","tokens":9,"kind":"free"}]}"""
+        val state = HostState().asked("c1", whole).asked("c2", other)
+        assertEquals(listOf(ContextCategory(null, "Z", 9, ContextKind.FREE)), state.ops().context!!.categories)
+    }
+
     @Test
     fun `type only - a category with no name or no tokens is left out, and a kind not known is used`() {
         val body =

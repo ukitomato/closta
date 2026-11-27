@@ -267,12 +267,12 @@ class OperationsFoldTest {
     }
 
     @Test
-    fun `a result that names no model says nothing of the tokens`() {
+    fun `a result that names no model clears the tokens`() {
         val usage = """{"m":{"inputTokens":3,"outputTokens":4,"cacheReadInputTokens":5,"cacheCreationInputTokens":6}}"""
         val counted = HostState().with(Lines.result(null, modelUsage = usage))
         assertEquals(TokenTotals(3, 4, 5, 6), counted.ops().tokens)
         val bare = counted.with(Lines.result(null))
-        assertSame(counted.transcript.operations.tokens, bare.ops().tokens)
+        assertNull(bare.ops().tokens)
         val odd = counted.with(Lines.result(null, modelUsage = """{"m":{"inputTokens":"x"},"n":7}"""))
         assertEquals(TokenTotals(0, 0, 0, 0), odd.ops().tokens, "a figure that is not a number counts as none")
         assertNull(HostState().with(Lines.result(null)).ops().tokens)

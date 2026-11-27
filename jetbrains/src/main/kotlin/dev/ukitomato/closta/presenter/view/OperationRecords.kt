@@ -423,7 +423,9 @@ internal fun OperationRecords.answered(event: AgentEvent.ControlResponse): Opera
         id in waiting -> {
             val body = (JsonRead.parse(event.response.text) as? JsonObject)?.obj("response")
             val read = if (succeeded) body?.let(::contextOf) else null
-            copy(waiting = waiting - id, context = read ?: context)
+            // The summary form carries no rows: the last whole answer's stay, under the new totals.
+            val kept = read?.takeIf { it.categories.isEmpty() }?.copy(categories = context?.categories.orEmpty())
+            copy(waiting = waiting - id, context = kept ?: read ?: context)
         }
         id in mcpWaiting -> mcpAnswered(id, event)
         id in usageWaiting -> {
@@ -438,6 +440,16 @@ internal fun OperationRecords.answered(event: AgentEvent.ControlResponse): Opera
             }
     }
 }
+
+/** The conversation the breakdown was counted for is over (a clear or a compaction): its rows are no longer true. */
+internal fun OperationRecords.contextReset(): OperationRecords =
+    if (context == null ||
+        context.categories.isEmpty()
+    ) {
+        this
+    } else {
+        copy(context = context.copy(categories = emptyList()))
+    }
 
 /** The CLI took the switch [id]. A switch already over, or one nobody asked for, changes nothing. */
 private fun OperationRecords.switchApplied(id: String): OperationRecords {
