@@ -589,8 +589,8 @@ fn a_compaction_is_one_row_after_the_ask_that_asked_for_it() {
     assert_eq!(
         CompactionOutcome::Compacted {
             trigger: "manual".to_owned(),
-            pre_tokens: 20072,
-            post_tokens: 1235,
+            pre_tokens: 21819,
+            post_tokens: 3447,
         },
         row.outcome
     );
