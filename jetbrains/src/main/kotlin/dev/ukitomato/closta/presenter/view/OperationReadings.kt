@@ -51,17 +51,17 @@ internal fun OperationRecords.retryEnded(): OperationRecords = if (retry == null
 /**
  * The tokens of a `result`: `modelUsage` is the session's total so far for each model, so the figures are summed over
  * the models and replace the last ones, never added to them. A `result` that names no model leaves no total and no
- * cache to count (the `result` of `/clear` names none). The rest is the cache, read from [cacheTurn].
+ * cache to count (the `result` of `/clear` names none). The rest is the cache, read from [cacheTurn] with the time
+ * [seenAtMs] the host saw the `result`.
  */
-internal fun OperationRecords.resulted(event: AgentEvent.Result): OperationRecords {
+internal fun OperationRecords.resulted(
+    event: AgentEvent.Result,
+    seenAtMs: Long?,
+): OperationRecords {
     val usage = (JsonRead.parse(event.modelUsage.text) as? JsonObject)?.entries?.map { it.value }.orEmpty()
     val models = usage.filterIsInstance<JsonObject>()
     if (models.isEmpty()) {
-        return if (tokens == null && cacheTtlMs == null && !cacheTouched) {
-            this
-        } else {
-            copy(tokens = null, cacheTtlMs = null, cacheTouched = false)
-        }
+        return if (tokens == null && cache == null) this else copy(tokens = null, cache = null)
     }
     val totals =
         TokenTotals(
@@ -71,27 +71,31 @@ internal fun OperationRecords.resulted(event: AgentEvent.Result): OperationRecor
             cacheCreation = models.sumOf { it.count("cacheCreationInputTokens") ?: 0L },
         )
     val next = if (totals == tokens) this else copy(tokens = totals)
-    return next.cacheTurn(JsonRead.parse(event.usage.text) as? JsonObject)
+    return next.cacheTurn(JsonRead.parse(event.usage.text) as? JsonObject, seenAtMs)
 }
 
 /**
  * The cache in the turn's own `usage` (`modelUsage` is the session's running total, so it cannot say what this turn
  * did). A turn that neither read nor wrote it (a local command, a compaction, a refusal before any request) leaves
- * the clock as it was. One that wrote to the one-hour cache makes it an hour, one that wrote only the five-minute cache
- * five minutes, and one that only read it keeps the time it had (five minutes when none is known).
+ * the clock as it was, and so does one the host gave no time for. One that wrote to the one-hour cache makes it an
+ * hour, one that wrote only the five-minute cache five minutes, and one that only read it keeps the time it had (five
+ * minutes when none is known); the clock starts again from [seenAtMs].
  */
-private fun OperationRecords.cacheTurn(usage: JsonObject?): OperationRecords {
+private fun OperationRecords.cacheTurn(
+    usage: JsonObject?,
+    seenAtMs: Long?,
+): OperationRecords {
     val read = usage?.count("cache_read_input_tokens") ?: 0L
     val created = usage?.count("cache_creation_input_tokens") ?: 0L
-    if (read + created == 0L) return if (cacheTouched) copy(cacheTouched = false) else this
+    if (read + created == 0L || seenAtMs == null) return this
     val split = usage?.get("cache_creation") as? JsonObject
     val ttl =
         when {
             (split?.count("ephemeral_1h_input_tokens") ?: 0L) > 0L -> HOUR_CACHE_MS
             created > 0L -> FIVE_MINUTE_CACHE_MS
-            else -> cacheTtlMs ?: FIVE_MINUTE_CACHE_MS
+            else -> cache?.ttlMs ?: FIVE_MINUTE_CACHE_MS
         }
-    return if (cacheTouched && ttl == cacheTtlMs) this else copy(cacheTtlMs = ttl, cacheTouched = true)
+    return copy(cache = CacheRecord(seenAtMs, ttl))
 }
 
 private const val HOUR_CACHE_MS = 3_600_000L

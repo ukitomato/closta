@@ -41,7 +41,6 @@ data class HostState(
                 is PresenterInput.RewindNotSent,
                 is PresenterInput.TurnChangesFound,
                 is PresenterInput.RateLimitDismissed,
-                is PresenterInput.ResultSeenAt,
                 -> conversation
             }
         return HostState(after, foldTranscript(transcript, input, conversation, after))

@@ -17,9 +17,13 @@ sealed interface PresenterInput {
      */
     data object StopRequested : PresenterInput
 
-    /** One stdout line. */
+    /**
+     * One stdout line. [seenAtMs] is when the host saw the line (the host's clock); for now only a `Result` carries it.
+     * Core does not use it.
+     */
     data class Event(
         val event: AgentEvent,
+        val seenAtMs: Long? = null,
     ) : PresenterInput
 
     /**
@@ -223,14 +227,6 @@ sealed interface PresenterInput {
     /** The user closed the banner of the limit [seq] ([RateLimitRecord.seq]). Core does not change. */
     data class RateLimitDismissed(
         val seq: Int,
-    ) : PresenterInput
-
-    /**
-     * The host saw a `result` at [epochMs] (its own clock): the prompt cache that `result` wrote is counted from then.
-     * Core does not change.
-     */
-    data class ResultSeenAt(
-        val epochMs: Long,
     ) : PresenterInput
 }
 

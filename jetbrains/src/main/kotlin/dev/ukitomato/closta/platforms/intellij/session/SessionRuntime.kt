@@ -456,10 +456,8 @@ class SessionRuntime(
         val firstInit = !checks.contextAsked && event is AgentEvent.SystemInit
         if (firstInit) checks.contextAsked = true
         val asksContext = asksForContext(event) || firstInit
-        store.transition { it.event(PresenterInput.Event(event)) }
-        if (event is AgentEvent.Result) {
-            store.transition { it.requested(PresenterInput.ResultSeenAt(clock.now().toEpochMilli())) }
-        }
+        val seenAtMs = if (event is AgentEvent.Result) clock.now().toEpochMilli() else null
+        store.transition { it.event(PresenterInput.Event(event, seenAtMs)) }
         if (asks) {
             checks.settingsAsked = true
             askSettings(commands)

@@ -25,7 +25,7 @@ fun foldTranscript(
     after: ConversationState,
 ): Transcript =
     when (input) {
-        is PresenterInput.Event -> foldEvent(transcript, input.event, before, after)
+        is PresenterInput.Event -> foldEvent(transcript, input.event, before, after, input.seenAtMs)
         is PresenterInput.UserSent -> foldSent(transcript, input)
         PresenterInput.StopRequested -> foldStop(transcript, after)
         is PresenterInput.Decided -> foldDecided(transcript, input, before)
@@ -46,13 +46,12 @@ fun foldTranscript(
         is PresenterInput.ResumeRefused,
         is PresenterInput.AttachmentRefused,
         is PresenterInput.RateLimitDismissed,
-        is PresenterInput.ResultSeenAt,
         -> transcript.withOperations(foldOperation(transcript.operations, input))
         is PresenterInput.SessionsListed,
         is PresenterInput.Restored,
         is PresenterInput.HistoryRestored,
         PresenterInput.HistoryUnavailable,
-        -> transcript.foldHistory(input, before, after, ::foldEvent)
+        -> transcript.foldHistory(input, before, after, { t, e, b, a -> foldEvent(t, e, b, a) })
     }
 
 private const val STARTED = "started"
@@ -62,12 +61,13 @@ private fun foldEvent(
     event: AgentEvent,
     before: ConversationState,
     after: ConversationState,
+    seenAtMs: Long? = null,
 ): Transcript =
     when (event) {
         is AgentEvent.CommandLifecycle -> foldLifecycle(transcript, event)
         is AgentEvent.Result ->
             foldResult(transcript.compactFailureShown(), event, before, after)
-                .let { it.withOperations(it.operations.resulted(event).retryEnded()) }
+                .let { it.withOperations(it.operations.resulted(event, seenAtMs).retryEnded()) }
                 .let(::stopTaken)
         is AgentEvent.StreamEvent,
         is AgentEvent.SystemApiRetry,

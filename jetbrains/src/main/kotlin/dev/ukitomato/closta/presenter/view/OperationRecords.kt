@@ -213,13 +213,6 @@ data class OperationRecords(
     val usageWaiting: List<String> = emptyList(),
     /** The last `get_usage` answer that could be read; null before the first. */
     val usage: UsageRecord? = null,
-    /**
-     * How long the prompt cache lives, as the last `result` that read or wrote it says; null before one, and after a
-     * `result` that names no model (`/clear`'s).
-     */
-    val cacheTtlMs: Long? = null,
-    /** The last `result` read or wrote the cache, so the time it is seen at starts the clock again. */
-    val cacheTouched: Boolean = false,
     /** When the host saw the last `result` that had a cache, and how long that cache lives; null when it had none. */
     val cache: CacheRecord? = null,
 )
