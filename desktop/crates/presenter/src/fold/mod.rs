@@ -200,12 +200,17 @@ fn fold_event(
         AgentEvent::SystemBackgroundTasksChanged { .. }
         | AgentEvent::SystemTaskProgress { .. }
         | AgentEvent::SystemTaskStarted { .. } => fold_background(transcript, event),
-        // The rest carry no content: what they mean for the domain is core's to fold.
+        // The rest carry nothing the transcript shows; core folds what they mean for the domain.
         AgentEvent::RateLimitEvent { .. }
         | AgentEvent::SystemThinkingTokens { .. }
         | AgentEvent::SystemTaskUpdated { .. }
         | AgentEvent::SystemTaskNotification { .. }
         | AgentEvent::SystemCommandsChanged { .. }
+        | AgentEvent::SystemUiInvalidate { .. }
+        | AgentEvent::ConversationReset { .. }
+        | AgentEvent::SystemPermissionDenied { .. }
+        | AgentEvent::SystemInformational { .. }
+        | AgentEvent::SystemApiRetry { .. }
         | AgentEvent::UnknownKind { .. }
         | AgentEvent::BrokenLine { .. } => Arc::clone(transcript),
     }

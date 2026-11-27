@@ -46,6 +46,11 @@ pub fn fold(state: ConversationState, event: &AgentEvent) -> ConversationState {
         | AgentEvent::SystemBackgroundTasksChanged { .. }
         | AgentEvent::SystemCommandsChanged { .. }
         | AgentEvent::SystemCompactBoundary { .. }
+        | AgentEvent::SystemUiInvalidate { .. }
+        | AgentEvent::ConversationReset { .. }
+        | AgentEvent::SystemPermissionDenied { .. }
+        | AgentEvent::SystemInformational { .. }
+        | AgentEvent::SystemApiRetry { .. }
         | AgentEvent::UnknownKind { .. }
         | AgentEvent::BrokenLine { .. } => state,
     }
