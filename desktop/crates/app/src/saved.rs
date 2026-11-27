@@ -59,14 +59,31 @@ pub fn saved_sessions_in(
 /// The saved sessions of each project, made once per project and kept: a project's reader
 /// remembers where its records are.
 pub struct RealSavedFor {
-    homes: Arc<RecordHomes>,
+    make: Box<dyn Fn(&str) -> ProjectTranscripts + Send + Sync>,
     kept: Mutex<HashMap<ProjectKey, Arc<ProjectTranscripts>>>,
 }
 
 impl RealSavedFor {
     pub fn new(homes: Arc<RecordHomes>) -> RealSavedFor {
         RealSavedFor {
-            homes,
+            make: Box::new(move |folder| saved_sessions_for(folder, &homes)),
+            kept: Mutex::new(HashMap::new()),
+        }
+    }
+
+    /// Every project's records are read from `<dir>/projects/<folder name>`, and no WSL
+    /// distribution is asked: a replay or a check of the resume popup reads a fixed place.
+    #[cfg(feature = "replay")]
+    pub fn in_config_dir(dir: PathBuf) -> RealSavedFor {
+        RealSavedFor {
+            make: Box::new(move |folder| {
+                let home = dir.clone();
+                saved_sessions_in(
+                    folder,
+                    Some(dir.clone()),
+                    Arc::new(move |_: &WslLocation| Some(home.clone())),
+                )
+            }),
             kept: Mutex::new(HashMap::new()),
         }
     }
@@ -74,12 +91,12 @@ impl RealSavedFor {
     fn transcripts(&self, folder: &str) -> Arc<ProjectTranscripts> {
         // A blank folder names no project: its reader is made each time and not kept.
         let Some(key) = project_key(folder) else {
-            return Arc::new(saved_sessions_for(folder, &self.homes));
+            return Arc::new((self.make)(folder));
         };
         let mut kept = self.kept.lock().unwrap_or_else(PoisonError::into_inner);
         Arc::clone(
             kept.entry(key)
-                .or_insert_with(|| Arc::new(saved_sessions_for(folder, &self.homes))),
+                .or_insert_with(|| Arc::new((self.make)(folder))),
         )
     }
 }
@@ -157,5 +174,21 @@ mod tests {
         let sessions = saved_sessions_for(r"\\wsl.localhost\Ubuntu\home\me\p", &homes);
 
         assert_eq!(format!("{sessions:?}"), "ProjectTranscripts");
+    }
+
+    #[cfg(feature = "replay")]
+    #[test]
+    fn a_config_dir_serves_every_project_and_asks_no_distribution() {
+        let saved_for = RealSavedFor::in_config_dir(std::env::temp_dir().join("closta-no-config"));
+
+        let wsl = saved_for.saved(r"\\wsl.localhost\Ubuntu\home\me\p");
+        let again = saved_for.saved(r"\\wsl.localhost\Ubuntu\home\me\p/");
+
+        assert!(Arc::ptr_eq(&wsl, &again));
+        let listed = smol::block_on(saved_for.list(
+            r"\\wsl.localhost\Ubuntu\home\me\p",
+            Arc::new(AtomicBool::new(false)),
+        ));
+        assert!(listed.is_some());
     }
 }

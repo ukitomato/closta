@@ -5,7 +5,9 @@ use anyhow::{Context, bail};
 
 use crate::check::LOCK;
 use crate::perf_log::{Outcome, PerfLog, PerfScene, references, verdicts};
-use crate::scenes::{BASH_PROMPT, HUB_REPLAYS, SIZES, Scene, stopped_replay};
+use crate::scenes::{
+    BASH_PROMPT, HUB_REPLAYS, RESUME_FOLDER, SIZES, Scene, record_name, stopped_replay,
+};
 
 /// The Windows-side copy of `desktop/`, as seen from WSL. The Windows build
 /// needs the Windows SDK shader compiler and Windows paths, so it runs on Windows.
@@ -17,6 +19,16 @@ pub const WIN_COPY: &str = r"C:\dev\tools\closta\desktop";
 pub const REPLAY_WSL: &str = "/mnt/c/dev/tools/closta/replay";
 /// The same folder as Windows sees it.
 pub const REPLAY: &str = r"C:\dev\tools\closta\replay";
+/// The config directory the resume scene reads its saved sessions from, as seen from WSL.
+const CONFIG_WSL: &str = "/mnt/c/dev/tools/closta/replay/config";
+/// The same folder as Windows sees it.
+pub const CONFIG_DIR: &str = r"C:\dev\tools\closta\replay\config";
+/// The captures whose transcripts the resume scene lists.
+const TRANSCRIPTS: [&str; 3] = [
+    "22-resume.transcript.jsonl",
+    "27-resume-session-at.transcript.jsonl",
+    "39-sandbox-resume.transcript.jsonl",
+];
 /// The recorded captures, from `desktop/`.
 const CAPTURES: &str =
     "../jetbrains/src/main/kotlin/dev/ukitomato/closta/providers/claude/fixtures";
@@ -142,6 +154,21 @@ pub fn replay_copies(files: &[PathBuf]) -> Vec<(PathBuf, PathBuf)> {
         .collect()
 }
 
+/// Where a transcript goes in the config directory: under the project's record name, as the
+/// session id its first line that has one carries.
+pub fn transcript_copy(content: &str) -> Option<PathBuf> {
+    let id = content.lines().find_map(|line| {
+        let value: serde_json::Value = serde_json::from_str(line).ok()?;
+        value.get("sessionId")?.as_str().map(str::to_owned)
+    })?;
+    Some(
+        Path::new(CONFIG_WSL)
+            .join("projects")
+            .join(record_name(RESUME_FOLDER))
+            .join(format!("{id}.jsonl")),
+    )
+}
+
 /// Copies the captures and the written replay files to [`REPLAY_WSL`].
 pub fn copy_replays(root: &Path) -> anyhow::Result<()> {
     let mut files = Vec::new();
@@ -165,6 +192,28 @@ pub fn copy_replays(root: &Path) -> anyhow::Result<()> {
             .with_context(|| format!("could not copy {} to {}", from.display(), to.display()))?;
     }
     println!("==> copied {} replay files to {REPLAY}", copies.len());
+    copy_transcripts(&replay_dirs(root)[0])
+}
+
+/// Copies the transcripts of the resume scene into the config directory it reads.
+fn copy_transcripts(captures: &Path) -> anyhow::Result<()> {
+    for name in TRANSCRIPTS {
+        let from = captures.join(name);
+        let content = std::fs::read_to_string(&from)
+            .with_context(|| format!("could not read {}", from.display()))?;
+        let to = transcript_copy(&content)
+            .with_context(|| format!("{name} has no line with a session id"))?;
+        if let Some(dir) = to.parent() {
+            std::fs::create_dir_all(dir)
+                .with_context(|| format!("could not create {}", dir.display()))?;
+        }
+        std::fs::copy(&from, &to)
+            .with_context(|| format!("could not copy {} to {}", from.display(), to.display()))?;
+    }
+    println!(
+        "==> copied {} transcripts to {CONFIG_DIR}",
+        TRANSCRIPTS.len()
+    );
     Ok(())
 }
 
@@ -748,6 +797,25 @@ mod tests {
             ]
         );
         assert_eq!(REPLAY, r"C:\dev\tools\closta\replay");
+    }
+
+    #[test]
+    fn the_transcripts_go_where_the_scene_reads_them() {
+        // The id comes from the first line that has one, not from the file name.
+        let content = concat!(
+            "{\"type\":\"summary\"}\n",
+            "{\"type\":\"user\",\"sessionId\":\"aaaa-1\"}\n",
+            "{\"type\":\"user\",\"sessionId\":\"bbbb-2\"}\n",
+        );
+        assert_eq!(
+            transcript_copy(content),
+            Some(PathBuf::from(
+                "/mnt/c/dev/tools/closta/replay/config/projects/-home-me-closta/aaaa-1.jsonl"
+            ))
+        );
+        assert_eq!(transcript_copy("{\"type\":\"summary\"}\n"), None);
+        assert_eq!(CONFIG_DIR, r"C:\dev\tools\closta\replay\config");
+        assert_eq!(TRANSCRIPTS.len(), 3);
     }
 
     #[test]

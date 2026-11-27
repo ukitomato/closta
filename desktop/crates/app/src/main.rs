@@ -100,6 +100,20 @@ fn kept_settings(keeps: bool) -> (Settings, Arc<dyn SettingsSink>) {
     (projects, sink)
 }
 
+/// The ports of a replay or a check: the real ones, except that `--config-dir` fixes the place
+/// every project's saved sessions are read from.
+#[cfg(feature = "replay")]
+fn replay_ports(
+    settings: Arc<dyn SettingsSink>,
+    args: &args::AppArgs,
+) -> closta_shell::state::Ports {
+    let mut ports = ports::real_ports(settings);
+    if let Some(dir) = &args.config_dir {
+        ports.saved_for = Arc::new(saved::RealSavedFor::in_config_dir(dir.clone()));
+    }
+    ports
+}
+
 /// The window and the slots the replay build was started with: the replays and what is
 /// measured of them, or else the real folders and the failing launch of a check and its probe.
 #[cfg(feature = "replay")]
@@ -143,9 +157,9 @@ fn replay_options(
         panes: args.panes,
         measure,
         probe: None,
-        ports: ports::real_ports(settings),
+        ports: replay_ports(settings, &args),
         projects,
-        open_resume: false,
+        open_resume: args.open_resume,
     })
 }
 
@@ -161,7 +175,7 @@ fn probe_options(
     // A check reads and writes no settings; its projects are the ones it was given.
     let projects = args.settings();
     let (_, settings) = kept_settings(false);
-    let mut ports = ports::real_ports(settings);
+    let mut ports = replay_ports(settings, &args);
     // Wrapped before any folder is planned: every real session gets the mark and the
     // configuration, a Restart's too.
     if args.mark_children.is_some() || args.mcp_config.is_some() {
@@ -194,6 +208,6 @@ fn probe_options(
         probe,
         ports,
         projects,
-        open_resume: false,
+        open_resume: args.open_resume,
     })
 }

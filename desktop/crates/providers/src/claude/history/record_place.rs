@@ -167,6 +167,18 @@ mod tests {
         assert_eq!(name_of("C:\\dev\\é"), "C--dev--");
     }
 
+    // The xtask's `record_name` is tested with the same pairs; the two must not drift.
+    #[test]
+    fn names_follow_the_cli() {
+        for (path, name) in [
+            ("/home/me/closta", "-home-me-closta"),
+            ("/home/me/my.project/_x/1", "-home-me-my-project--x-1"),
+            ("C:\\dev\\x", "C--dev-x"),
+        ] {
+            assert_eq!(name_of(path), name, "{path}");
+        }
+    }
+
     #[test]
     fn no_folder_or_a_name_past_200_has_no_place_and_says_why() {
         let fs = MemoryRecordFs::default();

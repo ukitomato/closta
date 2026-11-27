@@ -1,7 +1,7 @@
 //! The scenes `win-shot` takes pictures of: each one starts the replay build with its own
 //! arguments, and is shot once at each of [`SIZES`].
 
-use crate::win::REPLAY;
+use crate::win::{CONFIG_DIR, REPLAY};
 
 /// The window sizes every scene is shot at: a small laptop, a common desktop and a large screen.
 pub const SIZES: [(u32, u32); 3] = [(1024, 700), (1600, 1000), (2560, 1440)];
@@ -40,6 +40,20 @@ pub const EXCLUDED_6D2A: [&str; 3] = [
     "the resume button and popup (stage 6d-2b)",
     "the content of the right pane",
 ];
+
+/// What a reviewer of the stage 6d-2b scene leaves out: what later stages build.
+pub const EXCLUDED_6D2B: [&str; 2] = ["the content of the right pane", "the conversation"];
+
+/// The folder of the resume scene's project as the CLI sees it inside the distribution.
+pub const RESUME_FOLDER: &str = "/home/me/closta";
+
+/// The name the CLI gives a folder's records: every character that is not an ASCII letter or
+/// digit becomes `-`. Short paths only; the CLI also cuts a long name, which no scene needs.
+pub fn record_name(path: &str) -> String {
+    path.chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect()
+}
 
 /// One scene: its name, the arguments the app starts with (the window size is added when it is
 /// shot), and what the reviewer leaves out.
@@ -158,6 +172,22 @@ pub fn scenes() -> Vec<Scene> {
                 )
                 .collect(),
             excluded: EXCLUDED_6D2A.to_vec(),
+        },
+        // The popup of a project's saved sessions, read from the records the copy puts in the
+        // config directory.
+        Scene {
+            name: "resume-popup",
+            args: [
+                "--project",
+                PROJECT_WSL,
+                "--config-dir",
+                CONFIG_DIR,
+                "--open",
+                "resume",
+            ]
+            .map(str::to_owned)
+            .to_vec(),
+            excluded: EXCLUDED_6D2B.to_vec(),
         },
     ]
 }
@@ -340,7 +370,7 @@ mod tests {
     #[test]
     fn every_scene_is_shot_at_the_three_sizes() {
         assert_eq!(SIZES, [(1024, 700), (1600, 1000), (2560, 1440)]);
-        assert_eq!(scenes().len() * SIZES.len(), 42);
+        assert_eq!(scenes().len() * SIZES.len(), 45);
     }
 
     #[test]
@@ -514,5 +544,40 @@ mod tests {
                 "the content of the right pane",
             ]
         );
+    }
+
+    #[test]
+    fn the_resume_scene_opens_the_popup_on_saved_sessions() {
+        let scene = find("resume-popup").unwrap();
+        assert_eq!(
+            scene.args,
+            [
+                "--project",
+                r"\\wsl.localhost\Ubuntu-26.04\home\me\closta",
+                "--config-dir",
+                r"C:\dev\tools\closta\replay\config",
+                "--open",
+                "resume",
+            ]
+        );
+        assert_eq!(scene.excluded, EXCLUDED_6D2B);
+        assert_eq!(
+            EXCLUDED_6D2B,
+            ["the content of the right pane", "the conversation"]
+        );
+    }
+
+    // The same pairs are tested for the app's own name in the providers crate
+    // (`names_follow_the_cli`); the two must not drift.
+    #[test]
+    fn record_names_follow_the_cli() {
+        for (path, name) in [
+            ("/home/me/closta", "-home-me-closta"),
+            ("/home/me/my.project/_x/1", "-home-me-my-project--x-1"),
+            ("C:\\dev\\x", "C--dev-x"),
+        ] {
+            assert_eq!(record_name(path), name, "{path}");
+        }
+        assert_eq!(RESUME_FOLDER, "/home/me/closta");
     }
 }
