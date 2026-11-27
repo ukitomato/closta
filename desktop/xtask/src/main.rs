@@ -2,6 +2,7 @@
 
 mod capture;
 mod check;
+mod gate;
 mod layers;
 mod perf_log;
 mod real;
@@ -54,13 +55,25 @@ fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
-        "perf" => match check::run_steps(&desktop_root(), &check::perf_steps()) {
-            Ok(()) => ExitCode::SUCCESS,
-            Err(err) => {
+        "perf" => {
+            let exe = match std::env::current_exe() {
+                Ok(exe) => exe,
+                Err(err) => {
+                    eprintln!("perf: could not find this program: {err}");
+                    return ExitCode::FAILURE;
+                }
+            };
+            println!("perf: waiting for the build lock");
+            let (program, args) = check::perf_locked(&exe);
+            ExitCode::from(check::run_child(&program, &args))
+        }
+        "perf-held" => {
+            let result = check::run_steps(&desktop_root(), &check::perf_steps());
+            if let Err(err) = &result {
                 eprintln!("{err:#}");
-                ExitCode::FAILURE
             }
-        },
+            ExitCode::from(check::held_exit_code(&result))
+        }
         "real-cli" => match check::run_steps(&desktop_root(), &check::real_cli_steps()) {
             Ok(()) => ExitCode::SUCCESS,
             Err(err) => {

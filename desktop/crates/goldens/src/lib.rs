@@ -5,6 +5,7 @@
 #[path = "../../providers/tests/common/mod.rs"]
 pub mod common;
 
+pub mod budget;
 pub mod gallery;
 pub mod lines;
 pub mod projector;

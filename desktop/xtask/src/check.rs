@@ -3,6 +3,7 @@ use std::process::Command;
 
 use anyhow::{Context, bail};
 
+use crate::gate::{Busy, Waited, read_load, wait_for_quiet};
 use crate::layers;
 
 pub(crate) const LOCK: &str = "/tmp/closta-gradle.lock";
@@ -15,6 +16,8 @@ pub enum Step {
         args: Vec<String>,
     },
     Layers,
+    /// Waits for a quiet machine; `perf` measures only when the load is below the core count.
+    Gate,
 }
 
 impl Step {
@@ -22,6 +25,7 @@ impl Step {
         match self {
             Step::Command { name, .. } => name,
             Step::Layers => "layers",
+            Step::Gate => "gate",
         }
     }
 }
@@ -109,26 +113,98 @@ pub fn steps() -> Vec<Step> {
 /// Only tests named `within_budget` run: a perf test without `within_budget` in its name never
 /// runs, and `every_perf_test_is_named_within_budget` stops one. nextest serialises tests under
 /// `--no-capture`, which is what runs them one at a time.
+///
+/// The build comes first so the gate reads the load without the compiler in it, and the run then
+/// builds nothing. None of the three takes the lock: `perf` holds it around all of them.
 pub fn perf_steps() -> Vec<Step> {
-    vec![locked_cargo(
-        "perf",
-        &[
-            "nextest",
-            "run",
-            "--cargo-profile",
-            "release",
-            "--workspace",
-            "--exclude",
-            "closta-platform",
-            "--exclude",
-            "closta",
-            "--run-ignored",
-            "ignored-only",
-            "-E",
-            "test(/within_budget/)",
-            "--no-capture",
-        ],
-    )]
+    let run = strings(&PERF_RUN);
+    let mut build: Vec<String> = run
+        .iter()
+        .filter(|it| *it != "--no-capture")
+        .cloned()
+        .collect();
+    build.push("--no-run".to_owned());
+    vec![
+        Step::Command {
+            name: "perf build",
+            program: "cargo".to_owned(),
+            args: build,
+        },
+        Step::Gate,
+        Step::Command {
+            name: "perf",
+            program: "cargo".to_owned(),
+            args: run,
+        },
+    ]
+}
+
+/// The arguments of the measuring run.
+const PERF_RUN: [&str; 14] = [
+    "nextest",
+    "run",
+    "--cargo-profile",
+    "release",
+    "--workspace",
+    "--exclude",
+    "closta-platform",
+    "--exclude",
+    "closta",
+    "--run-ignored",
+    "ignored-only",
+    "-E",
+    "test(/within_budget/)",
+    "--no-capture",
+];
+
+/// The lock `perf` waits for, around the whole of `perf-held` run by `exe`.
+pub fn perf_locked(exe: &Path) -> (String, Vec<String>) {
+    let mut args = strings(&["-w", "1800", LOCK]);
+    args.push(exe.display().to_string());
+    args.push("perf-held".to_owned());
+    ("flock".to_owned(), args)
+}
+
+/// The exit code a child's status passes on; a child killed by a signal has none.
+pub fn exit_code_of(status: Option<i32>) -> u8 {
+    status.and_then(|code| u8::try_from(code).ok()).unwrap_or(1)
+}
+
+/// The exit code `perf-held` ends with: 2 when the machine stayed busy, 1 for any other failure.
+pub fn held_exit_code(result: &anyhow::Result<()>) -> u8 {
+    match result {
+        Ok(()) => 0,
+        Err(err) if err.downcast_ref::<Busy>().is_some() => 2,
+        Err(_) => 1,
+    }
+}
+
+/// Runs `program` and returns the exit code it ended with, as `perf` passes it on.
+pub fn run_child(program: &str, args: &[String]) -> u8 {
+    match Command::new(program).args(args).status() {
+        Ok(status) => exit_code_of(status.code()),
+        Err(err) => {
+            eprintln!("could not start `{program}`: {err}");
+            1
+        }
+    }
+}
+
+/// The `gate` step: waits while the 1-minute load is at or above the core count, then says the
+/// load it runs at, or ends with `Busy`.
+fn wait_for_a_quiet_machine() -> anyhow::Result<()> {
+    let cores = std::thread::available_parallelism().map_or(1, usize::from);
+    let waited = wait_for_quiet(
+        &mut || read_load(std::fs::read_to_string("/proc/loadavg").ok().as_deref()),
+        &mut std::thread::sleep,
+        cores,
+    );
+    match waited {
+        Waited::Quiet(Some(load)) => println!("perf: load {load:.1} of {cores} cores"),
+        Waited::Quiet(None) => println!("perf: the load could not be read; perf runs"),
+        Waited::Busy(load) => return Err(Busy { load, cores }.into()),
+    }
+    Ok(())
 }
 
 /// `cargo xtask real-cli`: the round trip with the real `claude` on PATH (`#[ignore = "real-cli"]`).
@@ -157,6 +233,7 @@ pub fn run_steps(root: &Path, steps: &[Step]) -> anyhow::Result<()> {
         println!("==> {name}");
         match step {
             Step::Layers => layers::run(root).with_context(|| format!("step `{name}` failed"))?,
+            Step::Gate => wait_for_a_quiet_machine()?,
             Step::Command { program, args, .. } => {
                 let status = Command::new(program)
                     .args(args)
@@ -239,17 +316,92 @@ mod tests {
     #[test]
     fn perf_runs_only_the_ignored_budgets_in_release_under_the_lock() {
         let steps = perf_steps();
-        let [Step::Command { program, args, .. }] = steps.as_slice() else {
-            panic!("one command");
+        let Some(Step::Command { program, args, .. }) = steps.last() else {
+            panic!("a last command");
         };
-        assert_eq!(program, "flock");
-        assert_eq!(args[..3], strings(&[LOCK, "cargo", "nextest"]));
+        assert_eq!(program, "cargo");
+        assert_eq!(args[..2], strings(&["nextest", "run"]));
         for pair in [
             ["--cargo-profile", "release"],
             ["--run-ignored", "ignored-only"],
+            ["-E", "test(/within_budget/)"],
         ] {
             assert!(args.windows(2).any(|it| it == pair), "{pair:?}");
         }
+    }
+
+    #[test]
+    fn perf_builds_waits_for_a_quiet_machine_then_runs() {
+        let steps = perf_steps();
+        let [
+            Step::Command {
+                program: build_program,
+                args: build,
+                ..
+            },
+            Step::Gate,
+            Step::Command {
+                program: run_program,
+                args: run,
+                ..
+            },
+        ] = steps.as_slice()
+        else {
+            panic!("build, gate, run");
+        };
+        assert_eq!(build_program, "cargo");
+        assert_eq!(run_program, "cargo");
+        assert!(build.iter().any(|it| it == "--no-run"), "{build:?}");
+        assert!(!build.iter().any(|it| it == "--no-capture"), "{build:?}");
+        let release = ["--cargo-profile", "release"];
+        assert!(build.windows(2).any(|it| it == release), "{build:?}");
+        assert!(run.iter().any(|it| it == "--no-capture"), "{run:?}");
+        assert!(!run.iter().any(|it| it == "--no-run"), "{run:?}");
+        let without: Vec<_> = run.iter().filter(|it| *it != "--no-capture").collect();
+        let built: Vec<_> = build.iter().filter(|it| *it != "--no-run").collect();
+        assert_eq!(without, built, "the run builds nothing the build did not");
+    }
+
+    #[test]
+    fn perf_takes_the_lock_once_around_the_three() {
+        let exe = Path::new("/x/target/debug/xtask");
+        let (program, args) = perf_locked(exe);
+        assert_eq!(program, "flock");
+        assert_eq!(
+            args,
+            strings(&["-w", "1800", LOCK, "/x/target/debug/xtask", "perf-held"])
+        );
+    }
+
+    #[test]
+    fn a_busy_machine_ends_perf_held_with_two() {
+        let busy = crate::gate::Busy {
+            load: 30.0,
+            cores: 28,
+        };
+        assert_eq!(held_exit_code(&Ok(())), 0);
+        assert_eq!(held_exit_code(&Err(busy.into())), 2);
+        assert_eq!(
+            held_exit_code(&Err(anyhow::Error::new(busy).context("step `gate`"))),
+            2
+        );
+        assert_eq!(
+            held_exit_code(&Err(anyhow::anyhow!("step `perf` failed"))),
+            1
+        );
+    }
+
+    #[test]
+    fn perf_passes_the_child_exit_code_through() {
+        assert_eq!(exit_code_of(Some(2)), 2);
+        assert_eq!(exit_code_of(Some(1)), 1);
+        assert_eq!(exit_code_of(Some(0)), 0);
+        assert_eq!(exit_code_of(None), 1);
+        for code in [0, 1, 2] {
+            let script = strings(&["-c", &format!("exit {code}")]);
+            assert_eq!(run_child("sh", &script), code, "a child exiting {code}");
+        }
+        assert_eq!(run_child("/nonexistent/closta-xtask-child", &[]), 1);
     }
 
     #[test]
