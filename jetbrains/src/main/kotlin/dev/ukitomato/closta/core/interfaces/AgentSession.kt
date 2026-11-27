@@ -103,6 +103,15 @@ interface AgentSession {
     suspend fun requestUsage(requestId: String)
 
     /**
+     * Withdraws the message [messageUuid] the CLI has queued and not yet started. Only issues the request; the answer
+     * carries [requestId], as for [requestContextUsage], and says whether the message was still queued.
+     */
+    suspend fun cancelQueuedMessage(
+        messageUuid: String,
+        requestId: String,
+    )
+
+    /**
      * Asks for the permission rules the session runs with and the directories it works in. Only issues the request;
      * the answer carries [requestId], as for [requestContextUsage].
      */

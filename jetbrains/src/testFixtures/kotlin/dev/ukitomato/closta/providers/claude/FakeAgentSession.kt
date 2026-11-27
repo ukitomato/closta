@@ -120,6 +120,13 @@ class FakeAgentSession(
         recorded += Sent.RequestUsage(requestId)
     }
 
+    override suspend fun cancelQueuedMessage(
+        messageUuid: String,
+        requestId: String,
+    ) {
+        recorded += Sent.CancelQueuedMessage(messageUuid, requestId)
+    }
+
     override suspend fun requestPermissionRules(requestId: String) {
         recorded += Sent.RequestPermissionRules(requestId)
     }

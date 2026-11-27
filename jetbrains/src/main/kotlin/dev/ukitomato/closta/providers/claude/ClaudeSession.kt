@@ -160,6 +160,13 @@ class ClaudeSession(
         stdinChannel.send(StdinEncoder.getUsage(requestId))
     }
 
+    override suspend fun cancelQueuedMessage(
+        messageUuid: String,
+        requestId: String,
+    ) {
+        stdinChannel.send(StdinEncoder.cancelAsyncMessage(requestId, messageUuid))
+    }
+
     override suspend fun requestPermissionRules(requestId: String) {
         stdinChannel.send(StdinEncoder.listPermissionRules(requestId))
     }

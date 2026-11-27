@@ -297,6 +297,19 @@ object StdinEncoder {
         }
 
     /**
+     * `cancel_async_message`: withdraws the queued message [messageUuid]. The CLI answers whether it was still queued
+     * (`SDKControlCancelAsyncMessageRequest` in sdk.d.ts 0.3.325); no capture holds the request.
+     */
+    fun cancelAsyncMessage(
+        requestId: String,
+        messageUuid: String,
+    ): String =
+        controlRequest(requestId) {
+            addProperty("subtype", "cancel_async_message")
+            addProperty("message_uuid", messageUuid)
+        }
+
+    /**
      * `list_permission_rules`: the rules the session applies, each with the file it came from, and the directories it
      * works in. The request has no fields (`SDKControlListPermissionRulesRequest` in sdk.d.ts 0.3.325); no capture
      * holds it.

@@ -227,6 +227,17 @@ class CodecEncodeTest {
     }
 
     @Test
+    fun `type only - cancel_async_message carries the message uuid`() {
+        assertEquals(
+            json(
+                """{"type":"control_request","request_id":"r1",""" +
+                    """"request":{"subtype":"cancel_async_message","message_uuid":"m-1"}}""",
+            ),
+            json(StdinEncoder.cancelAsyncMessage("r1", "m-1")),
+        )
+    }
+
+    @Test
     fun `type only - list_permission_rules is a bare control request`() {
         assertEquals(
             json(

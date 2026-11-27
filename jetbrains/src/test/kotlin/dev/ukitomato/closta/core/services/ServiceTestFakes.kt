@@ -106,6 +106,15 @@ class RecordingAgentSession(
         usageRequests += requestId
     }
 
+    val queuedCancellations = mutableListOf<Pair<String, String>>()
+
+    override suspend fun cancelQueuedMessage(
+        messageUuid: String,
+        requestId: String,
+    ) {
+        queuedCancellations += messageUuid to requestId
+    }
+
     val permissionRuleRequests = mutableListOf<String>()
 
     override suspend fun requestPermissionRules(requestId: String) {

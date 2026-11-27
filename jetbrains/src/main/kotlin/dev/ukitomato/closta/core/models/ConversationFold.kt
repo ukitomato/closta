@@ -126,7 +126,9 @@ private fun foldStatus(
 /**
  * `command_lifecycle{queued|started}` opens a turn keyed by `command_uuid`, once — a `queued` then a
  * `started` for the same uuid is still one turn. `completed` is not a terminator and opens nothing:
- * it only marks an open turn [Turn.lifecycleDone]. A turn closes on a `result` that names it, and a
+ * it only marks an open turn [Turn.lifecycleDone]. `cancelled` closes the open turn it names with `incompleteReason`
+ * `"cancelled"`: a message withdrawn before it ran, or the CLI's last word on one a `result` has already closed, which
+ * it leaves as the `result` set it. A turn closes on a `result` that names it, and a
  * marked turn also closes with the turn whose `result` comes after its mark: a message sent mid-turn that the CLI
  * took into the running turn gets no `result` of its own (see [foldResult]).
  */
@@ -147,6 +149,17 @@ private fun foldLifecycle(
                     state.turns.map {
                         if (it.phase == TurnPhase.OPEN && it.commandUuid == event.commandUuid) {
                             it.copy(lifecycleDone = true)
+                        } else {
+                            it
+                        }
+                    },
+            )
+        LIFECYCLE_CANCELLED ->
+            state.copy(
+                turns =
+                    state.turns.map {
+                        if (it.phase == TurnPhase.OPEN && it.commandUuid == event.commandUuid) {
+                            it.copy(phase = TurnPhase.CLOSED, incompleteReason = LIFECYCLE_CANCELLED)
                         } else {
                             it
                         }
@@ -308,6 +321,7 @@ private fun List<Task>.upsertById(
 private const val LIFECYCLE_QUEUED = "queued"
 private const val LIFECYCLE_STARTED = "started"
 private const val LIFECYCLE_COMPLETED = "completed"
+private const val LIFECYCLE_CANCELLED = "cancelled"
 private const val TASK_COMPLETED = "completed"
 private const val CONTROL_ERROR_SUBTYPE = "error"
 private const val ASK_USER_QUESTION = "AskUserQuestion"

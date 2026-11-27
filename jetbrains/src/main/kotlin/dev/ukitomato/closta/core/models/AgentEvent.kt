@@ -127,9 +127,8 @@ sealed interface AgentEvent {
      * of `system/init`; paired with a user message uuid it is what distinguishes a turn the user
      * started from one the CLI resumed on its own.
      *
-     * [state] stays a string: the captures only ever show `queued`, `started` and `completed`, and
-     * the `cancelled` the SDK's prose mentions has never been recorded. Modelling an unrecorded value
-     * would be guessing at its spelling.
+     * [state] stays a string: the values recorded are `queued`, `started`, `completed` and `cancelled` (captures 30
+     * and 32 hold the last, after the turn's `result`); a closed set would reject one a newer CLI adds.
      */
     data class CommandLifecycle(
         val uuid: String,
