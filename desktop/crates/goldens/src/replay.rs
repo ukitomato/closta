@@ -310,9 +310,6 @@ fn requests(scenario: &str) -> HashMap<String, ControlRequested> {
             table.put(ControlKind::Sandbox, 5, Some("false"));
         }
         "36-sandbox-unavailable" => table.put(ControlKind::Settings, 4, None),
-        // The usage after the turn (req-2; its record is for a later stage), and the whole context
-        // usage last (req-6).
-        "43-usage-and-rules" => table.put(ControlKind::Context, 6, None),
         "39-sandbox-resume" => table.put(ControlKind::Settings, 3, None),
         "40-sandbox-same-id" => {
             for number in [2, 4] {
@@ -325,6 +322,9 @@ fn requests(scenario: &str) -> HashMap<String, ControlRequested> {
             table.put(ControlKind::Mode, 2, Some("bypassPermissions"));
             table.put(ControlKind::Mode, 3, Some("plan"));
         }
+        // The usage after the turn (req-2; its record is for a later stage), and the whole context
+        // usage last (req-6).
+        "43-usage-and-rules" => table.put(ControlKind::Context, 6, None),
         _ => {}
     }
     table.by_id

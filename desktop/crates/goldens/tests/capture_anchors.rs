@@ -922,17 +922,18 @@ fn every_capture_with_an_initialize_response_has_its_mode_on_the_thread() {
         .collect();
     // Counted: were the filter to match none, no case would run and none would fail.
     assert_eq!(
-        34,
+        38,
         with_initialize.len(),
-        "34 captures carry an initialize response"
+        "38 captures carry an initialize response"
     );
     for (scenario, tree) in &with_initialize {
         // Every response carries the mode: 19 was started in acceptEdits, 29 in plan, 37 in auto,
-        // the rest in default.
+        // 44 in dontAsk, the rest in default.
         let expected = match scenario.as_str() {
             "19-interrupt-background" => "acceptEdits",
             "29-exit-plan-mode" => "plan",
             "37-plan-auto" => "auto",
+            "44-permission-denied" => "dontAsk",
             _ => "default",
         };
         assert_eq!(
