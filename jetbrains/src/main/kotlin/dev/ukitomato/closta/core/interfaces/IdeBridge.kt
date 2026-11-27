@@ -34,4 +34,7 @@ interface IdeBridge {
 
     /** The IDE's diff view. Null when the host has none to open. */
     val diffViews: DiffViews? get() = null
+
+    /** The editor buffers not yet on disk. Null when the host has none to save. */
+    val unsavedDocuments: UnsavedDocuments? get() = null
 }

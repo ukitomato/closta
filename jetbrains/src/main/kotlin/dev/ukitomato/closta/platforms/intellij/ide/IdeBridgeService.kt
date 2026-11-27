@@ -11,6 +11,7 @@ import dev.ukitomato.closta.core.interfaces.EditorEdits
 import dev.ukitomato.closta.core.interfaces.EditorSelections
 import dev.ukitomato.closta.core.interfaces.IdeBridge
 import dev.ukitomato.closta.core.interfaces.ProjectFiles
+import dev.ukitomato.closta.core.interfaces.UnsavedDocuments
 import dev.ukitomato.closta.core.interfaces.WorktreeCreated
 import dev.ukitomato.closta.core.interfaces.Worktrees
 import dev.ukitomato.closta.platforms.intellij.chat.NoticeGroups
@@ -18,7 +19,7 @@ import dev.ukitomato.closta.providers.claude.launch.CliPaths
 import dev.ukitomato.closta.providers.claude.launch.cliPathsFor
 
 /**
- * The IntelliJ implementation of [IdeBridge] for one project: the six seams, backed by the platform. A light
+ * The IntelliJ implementation of [IdeBridge] for one project: the seams, backed by the platform. A light
  * project service, registered by the annotation; callers take it by this class (`project.service`), so plugin.xml
  * needs no `serviceInterface`.
  *
@@ -39,6 +40,7 @@ class IdeBridgeService(
     override val editorEdits: EditorEdits = IdeEditorEdits(project)
     override val diagnostics: Diagnostics = IdeDiagnostics(project)
     override val diffViews: DiffViews = IdeDiffViews(project)
+    override val unsavedDocuments: UnsavedDocuments = IdeUnsavedDocuments(project)
     override val worktrees: Worktrees? =
         project.basePath?.let { root -> NotifyingWorktrees(GitWorktrees(root), ::announce) }
 

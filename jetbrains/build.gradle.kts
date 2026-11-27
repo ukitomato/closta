@@ -295,6 +295,7 @@ abstract class CheckLayers : DefaultTask() {
         val basePath = base.replace('.', '/')
         val intellijImport = Regex("""^\s*import\s+com\.intellij[.\s]""")
         val platformsImport = Regex("""^\s*import\s+${Regex.escape(base)}\.platforms[.\s]""")
+        val providersImport = Regex("""^\s*import\s+${Regex.escape(base)}\.providers[.\s]""")
         val interfacesImport = Regex("""^\s*import\s+${Regex.escape(base)}\.core\.interfaces[.\s]""")
         val suspendKeyword = Regex("""(^|[^\w.])suspend($|[^\w])""")
 
@@ -312,6 +313,9 @@ abstract class CheckLayers : DefaultTask() {
             }
             if (inward && platformsImport.containsMatchIn(code)) {
                 violations += "$where  [rule 2] $layer/ imports $base.platforms — dependencies point inward"
+            }
+            if ((layer == "core" || layer == "presenter") && providersImport.containsMatchIn(code)) {
+                violations += "$where  [rule 5] $layer/ imports $base.providers — core and presenter know no provider"
             }
             if (inModels && interfacesImport.containsMatchIn(code)) {
                 violations += "$where  [rule 3] core/models/ imports core.interfaces — fold stays pure"

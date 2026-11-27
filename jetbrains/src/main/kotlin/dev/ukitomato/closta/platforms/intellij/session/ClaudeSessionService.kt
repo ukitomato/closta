@@ -11,6 +11,7 @@ import com.intellij.openapi.util.SystemInfo
 import com.intellij.platform.util.coroutines.childScope
 import dev.ukitomato.closta.core.interfaces.SavedSessions
 import dev.ukitomato.closta.core.models.SavedSessionSummary
+import dev.ukitomato.closta.core.services.FileToolHooks
 import dev.ukitomato.closta.platforms.intellij.auth.BedrockSignInService
 import dev.ukitomato.closta.platforms.intellij.ide.IdeBridgeService
 import dev.ukitomato.closta.platforms.intellij.launch.IdeWsl
@@ -20,6 +21,8 @@ import dev.ukitomato.closta.platforms.intellij.settings.ProviderSettings
 import dev.ukitomato.closta.platforms.intellij.settings.launchFor
 import dev.ukitomato.closta.platforms.intellij.store.AppSettingsStore
 import dev.ukitomato.closta.providers.claude.history.ProjectTranscripts
+import dev.ukitomato.closta.providers.claude.host.BEFORE_FILE_TOOL
+import dev.ukitomato.closta.providers.claude.host.ClaudeFileHooks
 import dev.ukitomato.closta.providers.claude.host.HostHooks
 import dev.ukitomato.closta.providers.claude.launch.WslLocation
 import dev.ukitomato.closta.providers.claude.launch.WslSpawner
@@ -87,15 +90,16 @@ class ClaudeSessionService(
                 IdeSessionLog,
             )
         val gated = TrustGatedPlanner({ TrustedProjects.isProjectTrusted(project) }, wslAware)
+        val runtimeScope = scope.childScope("Claude session $id")
         val runtime =
             SessionRuntime(
                 id,
-                scope.childScope("Claude session $id"),
+                runtimeScope,
                 gated,
                 directory,
                 IdeSessionLog,
                 sdkServers = ideContextServers(ide, ide.cliPaths),
-                hostHooks = { HostHooks() },
+                hostHooks = { fileHooks(ide, runtimeScope, IdeSessionLog::warn) { behaviour().saveBeforeSend } },
                 effort = effort,
                 opening = opening,
                 saved = projectTranscripts(directory, wsl, ideWsl),
@@ -186,4 +190,19 @@ class ClaudeSessionService(
 
         override fun warn(message: String) = LOG.warn(message)
     }
+}
+
+// Read when a process starts: the hook is declared only while the setting is on, and the setting is read again at
+// every call, so turning it off in the middle of a process stops the saving at once.
+private fun fileHooks(
+    ide: IdeBridgeService,
+    sessionScope: CoroutineScope,
+    log: (String) -> Unit,
+    saveEnabled: () -> Boolean,
+): HostHooks {
+    val hooks = FileToolHooks(sessionScope, ide.unsavedDocuments, saveEnabled, log)
+    return HostHooks(
+        declarations = if (saveEnabled()) listOf(BEFORE_FILE_TOOL) else emptyList(),
+        answerer = ClaudeFileHooks(hooks, ide.cliPaths),
+    )
 }
