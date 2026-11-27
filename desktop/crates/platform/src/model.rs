@@ -10,6 +10,7 @@ use std::time::{Duration, Instant};
 use closta_presenter::cards::ThreadCard;
 use closta_presenter::rows::ThreadRow;
 use closta_shell::card_keys::{OverlayKey, card_choices, card_kind};
+use closta_shell::resume::ResumeStage;
 use closta_shell::rows::{RowChange, ScrollDirection, kept, list_top};
 use closta_shell::slot::{SlotId, SlotLaunch};
 use closta_shell::state::{
@@ -335,6 +336,7 @@ impl ShellModel {
             Some(measuring) if !reread => {
                 measuring.record_ms("update_ms", done.saturating_duration_since(began));
                 measuring.note_natural_refresh(slot, done);
+                measuring.resume_restored(slot);
                 done
             }
             Some(measuring) if unchanged => measuring.last_refresh(slot).unwrap_or(done),
@@ -446,6 +448,9 @@ impl ShellModel {
             _ => None,
         };
         let resume_before = self.shell.resume().is_some();
+        let is_pick = matches!(action, ShellAction::PickResume { .. });
+        let opens_resume = matches!(action, ShellAction::OpenResume { .. });
+        let lists_resume = matches!(action, ShellAction::SavedListed { .. });
         let moves_pick = matches!(
             action,
             ShellAction::MoveResume { .. } | ShellAction::EditResumeQuery { .. }
@@ -466,6 +471,23 @@ impl ShellModel {
             listing,
         } = self.shell.act(action);
         let selects = self.shell.selected() != selected_before;
+        if let Some(measuring) = &mut self.measuring {
+            if opens_resume {
+                measuring.resume_opened();
+            }
+            // A stale answer leaves the stage as it was, which is not yet listed.
+            if lists_resume
+                && self
+                    .shell
+                    .resume()
+                    .is_some_and(|it| it.stage != ResumeStage::Loading)
+            {
+                measuring.resume_listed();
+            }
+            if let Some(slot) = started.filter(|_| is_pick) {
+                measuring.resume_picked(slot);
+            }
+        }
         // Whatever opened or shut a pane — its button, or the key that goes to the list.
         let toggles = {
             let panes = self.shell.panes();

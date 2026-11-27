@@ -94,13 +94,16 @@ impl PerfLog {
     }
 
     /// The span the scene's frames are judged in: the scroll for the synthetic conversation,
-    /// the first update to the replay's end for the stream.
+    /// the first update to the replay's end for the stream, the popup's asking to its rows for
+    /// the resume scene.
     fn frame_window(&self, scene: PerfScene) -> Option<(f64, f64)> {
         match scene {
             PerfScene::Synth => Some((self.first("scroll_start")?, self.first("scroll_end")?)),
             PerfScene::Stream | PerfScene::NeedsYou => {
                 Some((self.first("update_ms")?, self.first("ready")?))
             }
+            // From the popup being asked for to its rows being drawn.
+            PerfScene::Resume => Some((self.first(RESUME_OPENED)?, self.first("resume_list_ms")?)),
             PerfScene::Idle => None,
         }
     }
@@ -108,6 +111,9 @@ impl PerfLog {
 
 const HEADER: &str = "elapsed_ms,metric,value";
 const FRAME: &str = "frame_ms";
+/// The row the measuring exe writes (value 0) when the resume popup is asked for: the start of
+/// the resume scene's frame window.
+const RESUME_OPENED: &str = "resume_opened";
 
 fn within(at: f64, (start, end): (f64, f64)) -> bool {
     start <= at && at <= end
@@ -131,14 +137,17 @@ pub enum PerfScene {
     Idle,
     /// Eight replays, four of them streaming, with the needs-you list aggregating them.
     NeedsYou,
+    /// The resume popup opened over a replay, its saved sessions read from a config directory.
+    Resume,
 }
 
 impl PerfScene {
-    pub const ALL: [PerfScene; 4] = [
+    pub const ALL: [PerfScene; 5] = [
         PerfScene::Synth,
         PerfScene::Stream,
         PerfScene::Idle,
         PerfScene::NeedsYou,
+        PerfScene::Resume,
     ];
 
     pub fn name(self) -> &'static str {
@@ -147,6 +156,7 @@ impl PerfScene {
             PerfScene::Stream => "stream",
             PerfScene::Idle => "idle",
             PerfScene::NeedsYou => "needs-you",
+            PerfScene::Resume => "resume",
         }
     }
 
@@ -184,6 +194,8 @@ const FRAME_MS: f64 = 16.0;
 /// The share of one core used while idle: under 3%. GPUI on Windows wakes the window at every
 /// vsync even when nothing is drawn, which alone takes about 1–3% of a core.
 const IDLE_CPU: f64 = 0.03;
+/// Asking for the resume popup to its rows drawn, on the local disk: at most 300 ms.
+const RESUME_LIST_MS: f64 = 300.0;
 /// The working set after the scroll: under 400 MB.
 const WORKING_SET_MB: f64 = 400.0;
 
@@ -230,6 +242,15 @@ pub fn verdicts(scene: PerfScene, log: &PerfLog) -> Vec<Verdict> {
             ),
         ],
         PerfScene::Stream | PerfScene::NeedsYou => vec![update(), frame()],
+        PerfScene::Resume => vec![
+            judge(
+                "resume_list_ms",
+                log.last("resume_list_ms"),
+                RESUME_LIST_MS,
+                false,
+            ),
+            frame(),
+        ],
         PerfScene::Idle => {
             let share = match (log.last("idle_cpu_ms"), log.last("idle_wall_ms")) {
                 (Some(cpu), Some(wall)) if wall > 0.0 => Some(cpu / wall),
@@ -252,13 +273,18 @@ pub fn verdicts(scene: PerfScene, log: &PerfLog) -> Vec<Verdict> {
 /// times and of the prefetches in the scene's window.
 pub fn references(scene: PerfScene, log: &PerfLog) -> Vec<(&'static str, Option<f64>)> {
     let window = log.frame_window(scene);
-    ["dirty_ms", "prefetch_ms"]
+    let mut shown: Vec<_> = ["dirty_ms", "prefetch_ms"]
         .into_iter()
         .map(|metric| {
             let values = window.map(|window| log.values_within(metric, window));
             (metric, values.as_deref().and_then(p99))
         })
-        .collect()
+        .collect();
+    if scene == PerfScene::Resume {
+        // Opening a pick starts a real `claude`, so the time is only shown.
+        shown.push(("resume_open_ms", log.last("resume_open_ms")));
+    }
+    shown
 }
 
 #[cfg(test)]
@@ -563,6 +589,84 @@ mod tests {
         assert_eq!(verdict(&judged, "update_ms").outcome, Outcome::Pass);
         let judged = run("5", "17");
         assert_eq!(verdict(&judged, "frame_ms").outcome, Outcome::Fail);
+    }
+
+    /// A resume run: the popup asked for at 400, its rows drawn at 460 (`resume_list_ms` 60),
+    /// frames around it, and a pick opened at 900 that took 140.
+    fn resume(list_ms: &str) -> PerfLog {
+        log(&[
+            "100,frame_ms,50",
+            "400,resume_opened,0",
+            "430,frame_ms,8",
+            "460,frame_ms,9",
+            &format!("460,resume_list_ms,{list_ms}"),
+            "600,frame_ms,40",
+            "1040,resume_open_ms,140",
+        ])
+    }
+
+    #[test]
+    fn the_resume_scene_judges_the_listing_and_its_frames() {
+        let judged = verdicts(PerfScene::Resume, &resume("300"));
+        assert_eq!(judged.len(), 2);
+        let list = verdict(&judged, "resume_list_ms");
+        assert_eq!(list.budget, 300.0);
+        assert_eq!(list.outcome, Outcome::Pass);
+        // Only the frames between the popup being asked for and its rows are counted.
+        let frames = verdict(&judged, "frame_ms");
+        assert_eq!(frames.value, Some(9.0));
+        assert_eq!(frames.outcome, Outcome::Pass);
+
+        let judged = verdicts(PerfScene::Resume, &resume("301"));
+        assert_eq!(verdict(&judged, "resume_list_ms").outcome, Outcome::Fail);
+
+        // No row for the listing, or no row that started the window, fails.
+        let no_list = PerfLog {
+            rows: resume("100")
+                .rows
+                .into_iter()
+                .filter(|row| row.metric != "resume_list_ms")
+                .collect(),
+        };
+        let judged = verdicts(PerfScene::Resume, &no_list);
+        assert_eq!(verdict(&judged, "resume_list_ms").outcome, Outcome::Fail);
+        assert_eq!(verdict(&judged, "frame_ms").outcome, Outcome::Fail);
+        let no_opened = PerfLog {
+            rows: resume("100")
+                .rows
+                .into_iter()
+                .filter(|row| row.metric != "resume_opened")
+                .collect(),
+        };
+        let judged = verdicts(PerfScene::Resume, &no_opened);
+        assert_eq!(verdict(&judged, "frame_ms").outcome, Outcome::Fail);
+
+        let slow_frame = log(&[
+            "400,resume_opened,0",
+            "430,frame_ms,17",
+            "460,resume_list_ms,60",
+        ]);
+        let judged = verdicts(PerfScene::Resume, &slow_frame);
+        assert_eq!(verdict(&judged, "frame_ms").outcome, Outcome::Fail);
+    }
+
+    #[test]
+    fn resume_open_is_shown_and_not_judged() {
+        let slow = resume("100");
+        let judged = verdicts(PerfScene::Resume, &slow);
+        assert!(judged.iter().all(|it| it.name != "resume_open_ms"));
+        assert_eq!(
+            references(PerfScene::Resume, &slow)
+                .into_iter()
+                .find(|(name, _)| *name == "resume_open_ms"),
+            Some(("resume_open_ms", Some(140.0)))
+        );
+        assert_eq!(
+            references(PerfScene::Resume, &log(&["400,resume_opened,0"]))
+                .into_iter()
+                .find(|(name, _)| *name == "resume_open_ms"),
+            Some(("resume_open_ms", None))
+        );
     }
 
     #[test]

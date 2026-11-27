@@ -193,7 +193,7 @@ pub fn scenes() -> Vec<Scene> {
 }
 
 const PROJECT_WIN: &str = r"C:\dev\closta";
-const PROJECT_WSL: &str = r"\\wsl.localhost\Ubuntu-26.04\home\me\closta";
+pub const PROJECT_WSL: &str = r"\\wsl.localhost\Ubuntu-26.04\home\me\closta";
 const PROJECT_NOTES: &str = r"\\wsl.localhost\Ubuntu-26.04\home\me\notes";
 
 /// The replays of the projects scene: the record, its prompt, the line it stops at (the last

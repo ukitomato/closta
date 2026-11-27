@@ -99,7 +99,7 @@ fn main() -> ExitCode {
                     Some(scene) => scenes.push(scene),
                     None => {
                         eprintln!(
-                            "win-perf: unknown scene {name:?} (synth, stream, idle or needs-you)"
+                            "win-perf: unknown scene {name:?} (synth, stream, idle, needs-you or resume)"
                         );
                         return ExitCode::FAILURE;
                     }

@@ -6,7 +6,7 @@ use anyhow::{Context, bail};
 use crate::check::LOCK;
 use crate::perf_log::{Outcome, PerfLog, PerfScene, references, verdicts};
 use crate::scenes::{
-    BASH_PROMPT, HUB_REPLAYS, RESUME_FOLDER, SIZES, Scene, record_name, stopped_replay,
+    BASH_PROMPT, HUB_REPLAYS, PROJECT_WSL, RESUME_FOLDER, SIZES, Scene, record_name, stopped_replay,
 };
 
 /// The Windows-side copy of `desktop/`, as seen from WSL. The Windows build
@@ -359,6 +359,20 @@ pub fn scene_args(scene: PerfScene) -> Vec<String> {
             args.extend(["--pace", "30", "--exit-after-replay", "3000"].map(str::to_owned));
             args
         }
+        // The popup opens at the start over a one-slot replay whose folder is the project; its
+        // saved sessions are read from the config directory the copy fills.
+        PerfScene::Resume => vec![
+            "--replay".into(),
+            replay("01-baseline-text.ndjson"),
+            "--folder".into(),
+            PROJECT_WSL.into(),
+            "--config-dir".into(),
+            CONFIG_DIR.into(),
+            "--open".into(),
+            "resume".into(),
+            "--exit-after-replay".into(),
+            "3000".into(),
+        ],
         PerfScene::Idle => vec![
             "--replay".into(),
             replay("gallery.ndjson"),
@@ -937,6 +951,26 @@ mod tests {
                 "12000".to_owned(),
             ]
         );
+    }
+
+    #[test]
+    fn the_resume_run_opens_the_popup_over_a_replay_of_the_project() {
+        let args = scene_args(PerfScene::Resume);
+        assert_eq!(
+            args[..2],
+            [
+                "--replay",
+                r"C:\dev\tools\closta\replay\01-baseline-text.ndjson"
+            ]
+        );
+        for pair in [
+            ["--folder", PROJECT_WSL],
+            ["--config-dir", CONFIG_DIR],
+            ["--open", "resume"],
+            ["--exit-after-replay", "3000"],
+        ] {
+            assert!(args.windows(2).any(|it| it == pair), "{pair:?} in {args:?}");
+        }
     }
 
     #[test]
