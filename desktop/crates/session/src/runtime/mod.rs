@@ -714,8 +714,8 @@ fn fold_event(
     let own_answer = answers(&event, init.id);
     let first = !asked && ((own_answer && init.sandboxed) || is_system_init(&event));
     let asks = shared.store.transition_with(|view| {
-        let calls_for = !(own_answer && asked)
-            && asks_for_settings(&view.transcript.operations, &event);
+        let calls_for =
+            !(own_answer && asked) && asks_for_settings(&view.transcript.operations, &event);
         (view.fold(&PresenterInput::Event(event)), first || calls_for)
     });
     if asks {
