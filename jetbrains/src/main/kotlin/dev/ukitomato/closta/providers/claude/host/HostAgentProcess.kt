@@ -21,6 +21,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
+import java.io.IOException
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration
@@ -90,7 +91,7 @@ class HostAgentProcess(
         } catch (cancel: CancellationException) {
             throw cancel
         } catch (
-            @Suppress("TooGenericExceptionCaught", "SwallowedException") failure: Exception,
+            @Suppress("SwallowedException") failure: IOException,
         ) {
             // The reader goes on; the session's own writes fail the same way and say so.
         }
@@ -192,7 +193,8 @@ class HostAgentProcess(
         requestId: String,
         request: JsonObject,
     ): (suspend () -> String)? {
-        val callbackId = request.string("callback_id") ?: return null
+        // A callback with no id is one nobody can know: it is answered, so the CLI does not wait out its deadline.
+        val callbackId = request.string("callback_id") ?: return suspend { unknownHook(requestId) }
         val input = request.obj("input") ?: JsonObject()
         return suspend { hookAnswer(requestId, callbackId, input, request.string("tool_use_id")) }
     }
@@ -228,6 +230,8 @@ class HostAgentProcess(
         }
     }
 
+    private fun unknownHook(requestId: String) = StdinEncoder.controlError(requestId, UNKNOWN_HOOK)
+
     private suspend fun hookAnswer(
         requestId: String,
         callbackId: String,
@@ -237,7 +241,7 @@ class HostAgentProcess(
         try {
             val answer = withTimeout(hookTimeout) { hooks.answerer?.answer(callbackId, input, toolUseId) }
             if (answer == null) {
-                StdinEncoder.controlError(requestId, "unknown hook callback")
+                unknownHook(requestId)
             } else {
                 StdinEncoder.hookResponse(requestId, answer.toString())
             }
@@ -319,6 +323,7 @@ class HostAgentProcess(
     private companion object {
         const val MCP_MESSAGE = "mcp_message"
         const val HOOK_CALLBACK = "hook_callback"
+        const val UNKNOWN_HOOK = "unknown hook callback"
         const val PENDING_ELICITATIONS = "pending_elicitation_requests"
         const val CANCEL_REQUEST = "control_cancel_request"
         val DEFAULT_ANSWER_TIMEOUT = 10.seconds

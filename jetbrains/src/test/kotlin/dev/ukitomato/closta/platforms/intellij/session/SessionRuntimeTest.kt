@@ -3,6 +3,7 @@ package dev.ukitomato.closta.platforms.intellij.session
 import com.google.gson.JsonObject
 import dev.ukitomato.closta.core.models.ElicitationAction
 import dev.ukitomato.closta.core.models.ElicitationDecision
+import dev.ukitomato.closta.core.services.DiagnosticsReport
 import dev.ukitomato.closta.core.services.FixedClock
 import dev.ukitomato.closta.platforms.intellij.auth.SignInOutcome
 import dev.ukitomato.closta.platforms.intellij.settings.ProviderLaunch
@@ -502,6 +503,37 @@ class SessionRuntimeTest {
             running.commands.respondToElicitation(ElicitationDecision("e7", ElicitationAction.DECLINE), null)
             val lines = generateSequence { session.nextStdinLine(GUARD.inWholeMilliseconds) }.take(2).toList()
             assertTrue(lines.last().contains("\"request_id\":\"e7\"") && lines.last().contains("decline"), "$lines")
+            runtime.close()
+        }
+
+    @Test
+    @Timeout(TIMEOUT_SECONDS)
+    fun `a report the hooks produce reaches the consumer while the process runs`() =
+        runBlocking {
+            val session = FakeProcess()
+            val reports = kotlinx.coroutines.flow.MutableSharedFlow<Pair<String, DiagnosticsReport>>()
+            val got = CompletableDeferred<Pair<String, DiagnosticsReport>>()
+            val runtime =
+                SessionRuntime(
+                    ID,
+                    childOf(CoroutineScope(SupervisorJob() + Dispatchers.Default)),
+                    planner(spawner(session), emptyMap()),
+                    WORKING_DIR,
+                    RecordingLog(),
+                    versionTimeout = GUARD,
+                    hostHooks = { HostHooks(reports = reports) },
+                    reported = { toolUseId, report -> got.complete(toolUseId to report) },
+                )
+            runtime.start()
+            runtime.running()
+            val report = DiagnosticsReport("/work/project/A.kt", emptyList())
+            withTimeout(GUARD) {
+                while (!got.isCompleted) {
+                    reports.emit("toolu_1" to report)
+                    delay(POLL)
+                }
+            }
+            assertEquals("toolu_1" to report, got.await())
             runtime.close()
         }
 

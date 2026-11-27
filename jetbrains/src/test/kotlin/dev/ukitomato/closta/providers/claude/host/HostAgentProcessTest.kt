@@ -420,6 +420,22 @@ class HostAgentProcessTest {
 
     @Test
     @Timeout(TIMEOUT)
+    fun `type only - a hook_callback with no callback_id is answered with an error too`() =
+        runBlocking {
+            val run = start(listOf(ScriptedServer()), hooks = hooksWith { _, _, _ -> json("{}") })
+            run.process.nextWrite()
+            run.process.emit(
+                """{"type":"control_request","request_id":"H10","request":{"subtype":"hook_callback","input":{}}}""",
+            )
+            val answer = answerOf(withTimeout(guard) { run.process.nextWrite() })
+            assertEquals("error", answer.get("subtype").asString)
+            assertEquals("H10", answer.get("request_id").asString)
+            run.process.end()
+            assertEquals(emptyList<String>(), run.seenSoFar())
+        }
+
+    @Test
+    @Timeout(TIMEOUT)
     fun `type only - with no answerer at all every hook_callback is an unknown id`() =
         runBlocking {
             val run = start(listOf(ScriptedServer()))

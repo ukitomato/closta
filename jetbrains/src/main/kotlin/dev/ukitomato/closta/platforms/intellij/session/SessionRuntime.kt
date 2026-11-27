@@ -4,6 +4,7 @@ import dev.ukitomato.closta.core.interfaces.Clock
 import dev.ukitomato.closta.core.interfaces.SavedSessions
 import dev.ukitomato.closta.core.models.AgentEvent
 import dev.ukitomato.closta.core.models.ConversationState
+import dev.ukitomato.closta.core.services.DiagnosticsReport
 import dev.ukitomato.closta.presenter.view.ControlKind
 import dev.ukitomato.closta.presenter.view.PresenterInput
 import dev.ukitomato.closta.presenter.view.SwitchKind
@@ -96,6 +97,8 @@ class SessionRuntime(
     private val clock: Clock = SystemClock(),
     /** What the host brings besides MCP servers; read once for each process it starts. */
     private val hostHooks: () -> HostHooks = { HostHooks() },
+    /** Receives each report the hooks produce, with the id of the tool call it belongs to. */
+    private val reported: suspend (String, DiagnosticsReport) -> Unit = { _, _ -> },
 ) {
     init {
         // A resumed session is opened by the id it was saved under: the tree's thread, the bridge's checks and the user
@@ -338,16 +341,18 @@ class SessionRuntime(
         }
         val commands = SessionCommands(session, clock, store, beforeSend, log::warn)
         statusFlow.value = SessionStatus.Running(version, commands)
-        // A CLI in the sandbox is asked its settings at once, so a session that writes no `initialize` still
-        // learns whether the sandbox is on.
+        // A CLI in the sandbox is asked its settings at once, without waiting for `initialize` to be answered.
         if (sandboxed) askSettings(commands)
         var ended: ProcessEnd? = null
         coroutineScope {
             val job = launch { ended = collect(session, commands, sandboxed, hooks) }
+            // The hooks' reports are taken for as long as this process runs, and no longer.
+            val reporting = launch { hooks.reports.collect { (toolUseId, report) -> reported(toolUseId, report) } }
             processJob = job
             // A switch marked before this job was known cancels it here: one of the two sides always sees the other.
             if (restartFor != null) job.cancel()
             job.join()
+            reporting.cancel()
         }
         // Whatever the process asked can no longer be answered; a start after a restart says it runs again.
         store.transition { it.requested(PresenterInput.ProcessEnded) }
@@ -469,8 +474,8 @@ class SessionRuntime(
             if (event.sessionId != id) throw SessionStartException(SessionFailure.ForkIdMismatch)
         }
         // The settings in effect (the effort and the model the next request goes with) are asked for
-        // once `initialize` is answered, and again after a model or an effort switch the CLI took. A session
-        // with no `initialize` (no in-process server) asks at its first `system/init`.
+        // once `initialize` is answered, and again after a model or an effort switch the CLI took. A CLI that
+        // refused `initialize` is asked at its first `system/init`.
         val asks =
             store.view.value.transcript.operations
                 .asksForSettings(event) ||
