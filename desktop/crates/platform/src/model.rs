@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 use closta_presenter::cards::ThreadCard;
 use closta_presenter::rows::ThreadRow;
 use closta_shell::card_keys::{OverlayKey, card_choices, card_kind};
-use closta_shell::resume::ResumeStage;
+use closta_shell::resume::{ResumeStage, restore_settled};
 use closta_shell::rows::{RowChange, ScrollDirection, kept, list_top};
 use closta_shell::slot::{SlotId, SlotLaunch};
 use closta_shell::state::{
@@ -336,7 +336,9 @@ impl ShellModel {
             Some(measuring) if !reread => {
                 measuring.record_ms("update_ms", done.saturating_duration_since(began));
                 measuring.note_natural_refresh(slot, done);
-                measuring.resume_restored(slot);
+                if restore_settled(self.shell.status(slot).as_ref()) {
+                    measuring.resume_restored(slot);
+                }
                 done
             }
             Some(measuring) if unchanged => measuring.last_refresh(slot).unwrap_or(done),

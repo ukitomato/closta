@@ -651,6 +651,24 @@ mod tests {
     }
 
     #[test]
+    fn a_reopened_popup_does_not_move_the_frame_window() {
+        let mut reopened = resume("60");
+        reopened.rows.extend(
+            log(&[
+                "2000,resume_opened,0",
+                "2040,frame_ms,30",
+                "2050,resume_list_ms,50",
+            ])
+            .rows,
+        );
+        let judged = verdicts(PerfScene::Resume, &reopened);
+        // The window is the first popup's: the slow frame of the second one is not counted.
+        let frames = verdict(&judged, "frame_ms");
+        assert_eq!(frames.value, Some(9.0));
+        assert_eq!(frames.outcome, Outcome::Pass);
+    }
+
+    #[test]
     fn resume_open_is_shown_and_not_judged() {
         let slow = resume("100");
         let judged = verdicts(PerfScene::Resume, &slow);

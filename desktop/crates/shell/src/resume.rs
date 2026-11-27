@@ -9,6 +9,7 @@ use closta_core::ports::MAX_LISTED;
 // Named here for the screen, which draws the rows of a listing and depends on no lower crate.
 pub use closta_model::SavedSessionSummary;
 use closta_session::history::SavedListing;
+use closta_session::status::SessionStatus;
 use futures_lite::future;
 
 use crate::copy;
@@ -121,6 +122,13 @@ impl ResumePicker {
             ResumeStage::Listed(_) => None,
         }
     }
+}
+
+/// Whether a slot a pick opened shows the earlier conversation's tail: its session runs only
+/// once that conversation is put back, and an end means nothing more is put back. A refresh
+/// while it plans or starts comes before the conversation is there.
+pub fn restore_settled(status: Option<&SessionStatus>) -> bool {
+    status.is_some_and(|it| matches!(it, SessionStatus::Running { .. }) || it.is_end())
 }
 
 // Written by hand: the search text and the titles are the user's.
@@ -237,6 +245,22 @@ mod tests {
             listed(one, "nothing like it").message(),
             Some(copy::RESUME_NO_MATCHES)
         );
+    }
+
+    #[test]
+    fn a_picked_slot_shows_its_conversation_once_it_runs_or_ends() {
+        use closta_session::status::SessionFailure;
+        assert!(!restore_settled(None));
+        assert!(!restore_settled(Some(&SessionStatus::Starting)));
+        let running = SessionStatus::Running {
+            version: "2.1.282".to_owned(),
+        };
+        assert!(restore_settled(Some(&running)));
+        assert!(restore_settled(Some(&SessionStatus::Ended)));
+        assert!(restore_settled(Some(&SessionStatus::Failed(
+            SessionFailure::PlanFailed
+        ))));
+        assert!(restore_settled(Some(&SessionStatus::Closed)));
     }
 
     #[test]

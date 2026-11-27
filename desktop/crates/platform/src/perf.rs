@@ -318,8 +318,8 @@ impl Measuring {
         self.resume_open = Some((slot, Span::begin(Instant::now())));
     }
 
-    /// `slot` refreshed on rows it was told of: for the slot a pick opened, its history is
-    /// restored from here on.
+    /// `slot` refreshed on rows it was told of with its earlier conversation put back (it runs
+    /// or has ended): for the slot a pick opened, the next frame drawn shows that conversation.
     pub(crate) fn resume_restored(&mut self, slot: SlotId) {
         if let Some((picked, span)) = &mut self.resume_open
             && *picked == slot
