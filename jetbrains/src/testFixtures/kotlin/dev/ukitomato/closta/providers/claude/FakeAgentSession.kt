@@ -108,6 +108,14 @@ class FakeAgentSession(
         recorded += Sent.RequestContextUsage(requestId, full)
     }
 
+    override suspend fun renameSession(
+        title: String,
+        sessionId: String,
+        requestId: String,
+    ) {
+        recorded += Sent.RenameSession(title, sessionId, requestId)
+    }
+
     override suspend fun requestUsage(requestId: String) {
         recorded += Sent.RequestUsage(requestId)
     }

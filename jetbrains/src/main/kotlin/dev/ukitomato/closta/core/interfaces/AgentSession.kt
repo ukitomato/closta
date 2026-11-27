@@ -103,6 +103,17 @@ interface AgentSession {
     suspend fun requestUsage(requestId: String)
 
     /**
+     * Names the running session [title], as the user chose it in the host: [sessionId] is the session the name is
+     * for, and the CLI refuses the request when its process has moved to another one. The answer, a `ControlResponse`
+     * carrying [requestId], says whether it took the name. Only issues the request, as [requestContextUsage].
+     */
+    suspend fun renameSession(
+        title: String,
+        sessionId: String,
+        requestId: String,
+    )
+
+    /**
      * Asks for the settings in effect: the answer, a `ControlResponse` carrying [requestId], says the effort
      * and the model the session's next request goes with. Only issues the request, as [requestContextUsage].
      */

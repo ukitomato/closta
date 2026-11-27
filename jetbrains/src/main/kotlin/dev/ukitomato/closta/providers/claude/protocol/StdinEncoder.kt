@@ -266,6 +266,23 @@ object StdinEncoder {
         }
 
     /**
+     * Names the session, as the user chose in the host (`source: "host"`, which the CLI counts as the user's own
+     * rename); [sessionId] makes the CLI refuse the request when its process has moved on to another session
+     * (`SDKControlRenameSessionRequest` in sdk.d.ts 0.3.325).
+     */
+    fun renameSession(
+        requestId: String,
+        title: String,
+        sessionId: String,
+    ): String =
+        controlRequest(requestId) {
+            addProperty("subtype", "rename_session")
+            addProperty("title", title)
+            addProperty("source", "host")
+            addProperty("session_id", sessionId)
+        }
+
+    /**
      * `get_usage`: the session's cost and the plan's limits. [skipBehaviors] spares the CLI the scan of the last seven
      * days' transcripts, whose section the host does not read (capture 43 line 16 holds the answer to it;
      * `SDKControlGetUsageRequest` in sdk.d.ts 0.3.325, which calls the shape experimental).

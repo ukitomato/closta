@@ -160,6 +160,14 @@ class ClaudeSession(
         stdinChannel.send(StdinEncoder.getUsage(requestId))
     }
 
+    override suspend fun renameSession(
+        title: String,
+        sessionId: String,
+        requestId: String,
+    ) {
+        stdinChannel.send(StdinEncoder.renameSession(requestId, title, sessionId))
+    }
+
     // The ids are the caller's, as above.
     override suspend fun requestSettings(requestId: String) {
         stdinChannel.send(StdinEncoder.getSettings(requestId))

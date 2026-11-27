@@ -227,6 +227,18 @@ class CodecEncodeTest {
     }
 
     @Test
+    fun `type only - rename_session carries the title, host as its source and the session id`() {
+        assertEquals(
+            json(
+                """{"type":"control_request","request_id":"r7",""" +
+                    """"request":{"subtype":"rename_session","title":"Fix the \"login\" bug","source":"host",""" +
+                    """"session_id":"336ed47b-2675-4317-b3f5-a3b48abb03a2"}}""",
+            ),
+            json(StdinEncoder.renameSession("r7", "Fix the \"login\" bug", "336ed47b-2675-4317-b3f5-a3b48abb03a2")),
+        )
+    }
+
+    @Test
     fun `get_context_usage asks for the summary unless told otherwise`() {
         assertAll(
             {

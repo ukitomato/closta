@@ -92,6 +92,16 @@ class RecordingAgentSession(
         contextRequests += requestId
     }
 
+    val renames = mutableListOf<Triple<String, String, String>>()
+
+    override suspend fun renameSession(
+        title: String,
+        sessionId: String,
+        requestId: String,
+    ) {
+        renames += Triple(title, sessionId, requestId)
+    }
+
     override suspend fun requestUsage(requestId: String) {
         usageRequests += requestId
     }

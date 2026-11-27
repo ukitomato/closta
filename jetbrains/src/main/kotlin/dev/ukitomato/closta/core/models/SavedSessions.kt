@@ -25,11 +25,18 @@ data class SavedSessionSummary(
  * sub-agent's,
  * the CLI's own notes to the model); [dropped] counts the lines of the conversation that were left out because the
  * record is longer than the host restores, the oldest first. Only counts: what a line said is never kept here.
+ *
+ * [customTitle] is the name the user gave the session, the newest `custom-title` of the record, or null when it has
+ * none (a read that stops before a line, for a fork, gives none: a fork is another session). Like a title, it is the
+ * user's own words: it is shown, and never logged, and [toString] says only whether there is one.
  */
 data class SavedTranscript(
     val events: List<AgentEvent>,
     val skipped: Int,
     val dropped: Int,
+    val customTitle: String? = null,
 ) {
-    override fun toString(): String = "SavedTranscript(${events.size} events, $skipped skipped, $dropped dropped)"
+    override fun toString(): String =
+        "SavedTranscript(${events.size} events, $skipped skipped, $dropped dropped, " +
+            "${if (customTitle == null) "no name" else "named"})"
 }
