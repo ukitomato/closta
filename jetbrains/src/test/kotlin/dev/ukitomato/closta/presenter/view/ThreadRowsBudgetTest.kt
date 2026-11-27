@@ -4,6 +4,7 @@ import dev.ukitomato.closta.platforms.intellij.session.SessionView
 import dev.ukitomato.closta.providers.claude.protocol.StreamJsonCodec
 import dev.ukitomato.closta.providers.claude.synthetic.ReplayScript
 import dev.ukitomato.closta.providers.claude.synthetic.SyntheticSession
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
@@ -16,6 +17,14 @@ import org.junit.jupiter.api.Test
 class ThreadRowsBudgetTest {
     private val history: SessionView by lazy {
         SyntheticSession.turns().foldIndexed(SessionView()) { index, view, turn ->
+            turn.lines.fold(view.sent(PresenterInput.UserSent("u$index", turn.prompt))) { next, line ->
+                next.event(PresenterInput.Event(StreamJsonCodec.decode(line)))
+            }
+        }
+    }
+
+    private val todoHistory: SessionView by lazy {
+        SyntheticSession.turns(SyntheticSession.LARGEST_WITH_TODOS).foldIndexed(SessionView()) { index, view, turn ->
             turn.lines.fold(view.sent(PresenterInput.UserSent("u$index", turn.prompt))) { next, line ->
                 next.event(PresenterInput.Event(StreamJsonCodec.decode(line)))
             }
@@ -44,6 +53,19 @@ class ThreadRowsBudgetTest {
         val runs = List(RUNS) { millis { ThreadRows().of(history.transcript) } }
         val took = median(runs)
         report("largestSessionBuilds", took, runs)
+        assertTrue(took <= BUILD_BUDGET_MS, "building every row took ${took}ms (budget ${BUILD_BUDGET_MS}ms)")
+    }
+
+    @Tag("perf")
+    @Test
+    fun largestSessionWithTodosBuildsWithinBudget() {
+        val lists = ThreadRows().of(todoHistory.transcript).filterIsInstance<TodoRow>()
+        assertEquals(TODO_RUNS, lists.size)
+        assertEquals(TODO_ITEMS, lists.last().items.size)
+        repeat(WARM_UP) { ThreadRows().of(todoHistory.transcript) }
+        val runs = List(RUNS) { millis { ThreadRows().of(todoHistory.transcript) } }
+        val took = median(runs)
+        report("largestSessionWithTodosBuilds", took, runs)
         assertTrue(took <= BUILD_BUDGET_MS, "building every row took ${took}ms (budget ${BUILD_BUDGET_MS}ms)")
     }
 
@@ -93,7 +115,32 @@ class ThreadRowsBudgetTest {
         assertTrue(p99 <= UPDATE_BUDGET_MS, "an update took ${p99}ms at p99 (budget ${UPDATE_BUDGET_MS}ms)")
     }
 
+    @Tag("perf")
+    @Test
+    fun streamingTailWithTodosUpdatesWithinBudget() {
+        val tail = tailLines()
+        val rows = ThreadRows()
+
+        fun round(id: String): Double {
+            var view = todoHistory.sent(PresenterInput.UserSent(id, "続けて"))
+            rows.of(view.transcript)
+            val times =
+                tail.map { line ->
+                    view = view.event(PresenterInput.Event(StreamJsonCodec.decode(line)))
+                    millis { rows.of(view.transcript) }
+                }
+            return times.sorted()[times.size * P99 / PERCENT]
+        }
+        round("todoTailWarmUp")
+        val runs = List(RUNS) { round("todoTail$it") }
+        val p99 = median(runs)
+        report("streamingTailWithTodosUpdateP99", p99, runs)
+        assertTrue(p99 <= UPDATE_BUDGET_MS, "an update took ${p99}ms at p99 (budget ${UPDATE_BUDGET_MS}ms)")
+    }
+
     private companion object {
+        const val TODO_RUNS = 50
+        const val TODO_ITEMS = 150
         const val WARM_UP = 3
         const val RUNS = 5
         const val BUILD_BUDGET_MS = 300.0

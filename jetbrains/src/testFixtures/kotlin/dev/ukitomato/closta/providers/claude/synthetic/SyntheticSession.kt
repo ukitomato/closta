@@ -24,6 +24,7 @@ object SyntheticSession {
         val mcp: Int,
         val totalText: Int,
         val longestText: Int,
+        val todos: Int = 0,
     )
 
     val LARGEST =
@@ -36,6 +37,8 @@ object SyntheticSession {
             totalText = 170_000,
             longestText = 7_500,
         )
+
+    val LARGEST_WITH_TODOS = LARGEST.copy(todos = 150)
 
     private const val NESTED_TOOLS = 4
     private const val SUBAGENT_TEXT = 200
@@ -64,6 +67,9 @@ object SyntheticSession {
 
         var call = 0
         var message = 0
+        var created = 0
+        var todoCalls = 0
+        var open = emptyList<Int>()
         return (0 until shape.turns).map { turn ->
             val script = StreamScript("synthetic")
             val command = "cmd-$turn"
@@ -107,6 +113,17 @@ object SyntheticSession {
                 script.toolResult(id, writer.result(RESULT_TEXT))
                 call++
             }
+            if (turn % TODO_EVERY == 0 && created < shape.todos) {
+                val updates = open.map { id -> todoUpdate(id) }
+                val creates = List(minOf(TODO_RUN, shape.todos - created)) { todoCreate(created + it + 1) }
+                for ((name, input, result) in updates + creates) {
+                    val id = "toolu_todo_${todoCalls++}"
+                    script.assistant("msg_${message++}", listOf(StreamScript.toolUse(id, name, input)))
+                    script.toolResult(id, result)
+                }
+                open = creates.indices.map { created + it + 1 }
+                created += creates.size
+            }
             val length = if (turn in longTurns) shape.longestText else finalLength
             val reply = writer.reply(length)
             script.assistant("msg_${message++}", listOf(StreamScript.text(reply)))
@@ -115,6 +132,29 @@ object SyntheticSession {
             SyntheticTurn("Request ${turn + 1}: ${writer.paragraph(PROMPT_LENGTH)}", script.lines)
         }
     }
+
+    private const val TODO_EVERY = 4
+    private const val TODO_RUN = 3
+
+    private fun todoUpdate(id: Int) =
+        Triple(
+            "TaskUpdate",
+            JsonObject().apply {
+                addProperty("taskId", id.toString())
+                addProperty("status", "completed")
+            },
+            "Updated task #$id status",
+        )
+
+    private fun todoCreate(id: Int) =
+        Triple(
+            "TaskCreate",
+            JsonObject().apply {
+                addProperty("subject", "Todo $id")
+                addProperty("description", "Synthetic todo $id")
+            },
+            "Task #$id created successfully: Todo $id",
+        )
 
     private const val PROMPT_LENGTH = 80
     private const val NESTED_IDS = 10

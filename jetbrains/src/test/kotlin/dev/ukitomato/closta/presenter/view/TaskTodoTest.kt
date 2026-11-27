@@ -84,7 +84,7 @@ class TaskTodoTest {
     }
 
     @Test
-    fun `a task updated to deleted leaves the list`() {
+    fun `a run that leaves no task draws no list and no tool rows`() {
         val transcript =
             replay(
                 turn(
@@ -94,7 +94,37 @@ class TaskTodoTest {
                 ),
             )
 
-        assertEquals(listOf(emptyList<TodoItem>()), todos(transcript).map { it.items })
+        assertEquals(emptyList<TodoRow>(), todos(transcript))
+        assertTrue(ThreadRows().of(transcript).none { it is ToolRow }, "no tool row for the run")
+    }
+
+    @Test
+    fun `a run of creates without a subject draws no list until a subject arrives`() {
+        val bare = TASK_CREATE to input("description" to "no subject")
+        val without = replay(turn("a", bare answered "Task #1 created successfully: x"))
+        assertEquals(emptyList<TodoRow>(), todos(without))
+
+        val with = replay(turn("b", create("write tests") answered "Task #1 created successfully: write tests"))
+        assertEquals(listOf(listOf(TodoItem("write tests", "pending"))), todos(with).map { it.items })
+    }
+
+    @Test
+    fun `a task run read twice gives the same list objects`() {
+        val transcript =
+            replay(
+                turn(
+                    "a",
+                    create("write tests") answered "Task #1 created successfully: write tests",
+                    create("run build") answered "Task #2 created successfully: run build",
+                ),
+            )
+        val rows = ThreadRows()
+        val first = rows.of(transcript).filterIsInstance<TodoRow>()
+        val second = rows.of(transcript).filterIsInstance<TodoRow>()
+
+        assertEquals(1, first.size)
+        assertEquals(2, first.single().items.size)
+        assertSame(first.single(), second.single())
     }
 
     @Test

@@ -120,19 +120,9 @@ internal class ThreadProjection(
             }
             is OtherRecord -> reuseOr(memo as? PartMemo, record, Look(null)) { otherNode(record) }
             is AttachmentRecord -> reuseOr(memo as? PartMemo, record, Look(null)) { attachmentNode(record) }
-            is InformationalRecord ->
-                reuseOr(memo as? PartMemo, record, Look(null)) {
-                    JsonObject.of(
-                        "type" to JsonString("informational"),
-                    )
-                }
-            is ClearedRecord -> reuseOr(memo as? PartMemo, record, Look(null)) { clearedNode() }
-            is CompactedRecord ->
-                reuseOr(memo as? PartMemo, record, Look(null)) {
-                    JsonObject.of(
-                        "type" to JsonString("compacted"),
-                    )
-                }
+            is InformationalRecord -> reuseOr(memo as? PartMemo, record, Look(null)) { typedNode("informational") }
+            is ClearedRecord -> reuseOr(memo as? PartMemo, record, Look(null)) { typedNode("cleared") }
+            is CompactedRecord -> reuseOr(memo as? PartMemo, record, Look(null)) { typedNode("compacted") }
             is ToolCallRecord -> toolCall(key, record, place, memo as? ToolCallMemo)
         }
 

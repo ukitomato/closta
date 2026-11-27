@@ -422,7 +422,7 @@ class ThreadRowViews(
     private fun thinking(row: ThinkingRow): JComponent {
         val key = row.key
         val isOpen = key in open
-        val estimate = row.estimate?.takeIf { row.streaming }
+        val estimate = row.estimate
         val sentence =
             when {
                 estimate != null -> ClostaBundle.message("thread.thinking.runningEstimate", shortTokens(estimate))

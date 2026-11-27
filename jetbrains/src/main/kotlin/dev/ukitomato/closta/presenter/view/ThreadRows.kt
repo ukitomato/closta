@@ -262,15 +262,7 @@ class ThreadRows {
     ): ThreadRow? =
         when (part) {
             is TextRecord if part.reasoning ->
-                ThinkingRow(
-                    key,
-                    part.text,
-                    part.streaming,
-                    opens,
-                    part.estimate.takeIf {
-                        part.streaming
-                    },
-                )
+                ThinkingRow(key, part.text, part.streaming, opens, part.estimate.takeIf { part.streaming })
             is TextRecord ->
                 if (part.text.isBlank() &&
                     !part.streaming
@@ -341,6 +333,7 @@ class ThreadRows {
  */
 private class TaskTodos {
     private var lists = HashMap<String, TodoRow>()
+    private var callsOf = IdentityHashMap<MessageRecord, List<ToolCallRecord>>()
 
     fun folded(
         rows: List<ThreadRow>,
@@ -364,8 +357,9 @@ private class TaskTodos {
                 calls[row.toolUseId]?.let(board::apply)
                 val runGoesOn = rows.getOrNull(index + 1)?.isTask() == true
                 first = if (runGoesOn) opening else null
-                if (!runGoesOn) {
-                    val made = TodoRow(row.key, board.items(), opening.opens)
+                val items = if (runGoesOn) emptyList() else board.items()
+                if (items.isNotEmpty()) {
+                    val made = TodoRow(row.key, items, opening.opens)
                     val list = lists[made.key]?.takeIf { it == made } ?: made
                     nextLists[list.key] = list
                     out += list
@@ -379,13 +373,21 @@ private class TaskTodos {
     private fun ThreadRow.isTask() = this is ToolRow && toolName in TASK_TOOLS
 
     /** The task calls of the thread's own messages by their tool use id: a row kept from before holds no call. */
-    private fun taskCalls(transcript: Transcript): Map<String, ToolCallRecord> =
-        transcript.messages
-            .values()
-            .flatMap { it.parts.values() }
-            .filterIsInstance<ToolCallRecord>()
-            .filter { it.toolName in TASK_TOOLS }
-            .associateBy { it.toolUseId }
+    private fun taskCalls(transcript: Transcript): Map<String, ToolCallRecord> {
+        val nextCalls = IdentityHashMap<MessageRecord, List<ToolCallRecord>>()
+        val byId = HashMap<String, ToolCallRecord>()
+        for (message in transcript.messages.values()) {
+            val calls =
+                callsOf[message] ?: message.parts
+                    .values()
+                    .filterIsInstance<ToolCallRecord>()
+                    .filter { it.toolName in TASK_TOOLS }
+            nextCalls[message] = calls
+            for (call in calls) byId[call.toolUseId] = call
+        }
+        callsOf = nextCalls
+        return byId
+    }
 }
 
 /**
