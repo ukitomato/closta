@@ -120,7 +120,7 @@ impl ShellState {
     }
 
     /// Where the slot can be used: its input, or the band that says why it cannot.
-    fn use_of(&self, slot: SlotId) -> Option<FocusTarget> {
+    pub(super) fn use_of(&self, slot: SlotId) -> Option<FocusTarget> {
         let held = self.slots.get(&slot)?;
         Some(match held.status {
             SessionStatus::Failed(_) => FocusTarget::FailureBand(slot),

@@ -2,6 +2,7 @@
 //! of an earlier reading dropped.
 
 use super::*;
+use crate::new_session::resume_in;
 use crate::projects::display_name;
 use crate::resume::{ResumeRow, ResumeRowState, ResumeStage};
 
@@ -121,6 +122,53 @@ impl ShellState {
                 .min(last);
         }
         Acted::default()
+    }
+
+    /// Resumes the listed session `session_id` in a new slot of the popup's project, or goes to
+    /// the slot that already holds it: two runs never share one session id.
+    pub(super) fn pick_resume(&mut self, session_id: &str) -> Acted {
+        let Some(picker) = self.resume.as_ref() else {
+            return Acted::default();
+        };
+        let ResumeStage::Listed(sessions) = &picker.stage else {
+            return Acted::default();
+        };
+        let Some(summary) = sessions.iter().find(|it| it.id == session_id).cloned() else {
+            return Acted::default();
+        };
+        let project = picker.project.clone();
+        let holding = self
+            .slots
+            .iter()
+            .find(|(_, slot)| slot.session_id == session_id && !slot.closing)
+            .map(|(id, _)| *id);
+        if let Some(slot) = holding {
+            self.close_resume();
+            self.select(slot);
+            return Acted {
+                focus: self.use_of(slot),
+                ..Acted::default()
+            };
+        }
+        if self.resume_row_state(session_id) == ResumeRowState::Closing || self.slots_full() {
+            return Acted::default();
+        }
+        let Some(folder) = self
+            .projects
+            .iter()
+            .find(|it| it.key == project)
+            .map(|it| it.folder.clone())
+        else {
+            return Acted::default();
+        };
+        self.close_resume();
+        let slot = self.open(resume_in(&folder, &summary, &self.ports));
+        self.select(slot);
+        Acted {
+            started: Some(slot),
+            focus: Some(FocusTarget::Composer(slot)),
+            ..Acted::default()
+        }
     }
 
     pub(super) fn close_resume(&mut self) -> Acted {

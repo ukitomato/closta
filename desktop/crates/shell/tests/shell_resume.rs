@@ -17,8 +17,8 @@ use closta_shell::projects::{ProjectKey, project_key};
 use closta_shell::resume::{ResumeRowState, ResumeStage};
 use closta_shell::settings::{SETTINGS_VERSION, SavedProject, Settings};
 use closta_shell::slot::SlotLaunch;
-use closta_shell::state::{Acted, Overlay, ShellAction, ShellState};
-use support::{Harness, drive, running};
+use closta_shell::state::{Acted, FocusTarget, Overlay, Ports, ShellAction, ShellState};
+use support::{Harness, Machine, Planners, RecordingSettings, drive, running};
 
 const A: &str = r"C:\work\alpha";
 const B: &str = r"C:\work\beta";
@@ -475,5 +475,250 @@ fn other_has_no_resume() {
         assert!(acted.listing.is_none());
         assert!(shell.resume().is_none());
         assert_eq!(harness.saved_for.lists_asked(), 0);
+    });
+}
+
+/// `shell_of`, with a count of the planners asked for.
+fn counted(harness: &Harness, folders: &[&str]) -> (ShellState, Arc<Planners>) {
+    harness
+        .saved_for
+        .put(A, FakeSavedSessions::default().with_listed(three()));
+    let planners = Arc::new(Planners::new(Arc::clone(&harness.planner) as _));
+    let mut shell = harness.shell_with(Ports {
+        checks: Arc::new(Machine::default()),
+        planner_for: Arc::clone(&planners) as _,
+        settings: Arc::new(RecordingSettings::default()),
+        saved_for: Arc::clone(&harness.saved_for) as _,
+    });
+    shell.restore_projects(&Settings {
+        version: SETTINGS_VERSION,
+        projects: folders
+            .iter()
+            .map(|folder| SavedProject {
+                folder: (*folder).to_owned(),
+                collapsed: false,
+            })
+            .collect(),
+    });
+    (shell, planners)
+}
+
+fn pick(shell: &mut ShellState, id: &str) -> Acted {
+    shell.act(ShellAction::PickResume {
+        session_id: id.to_owned(),
+    })
+}
+
+async fn end(shell: &mut ShellState, slot: closta_shell::slot::SlotId) {
+    let mut watch = shell.watch(slot).unwrap();
+    while watch.changed().await {}
+    shell.refresh(slot, watch.generation(), 0).unwrap();
+}
+
+#[test]
+fn picking_a_saved_session_resumes_it_in_its_project() {
+    drive(|harness| async move {
+        let (mut shell, planners) = counted(&harness, &[A, B]);
+        open_listed(&mut shell);
+        assert_eq!(planners.planned(), 0);
+
+        let acted = pick(&mut shell, Y);
+        let slot = acted.started.expect("a started slot");
+        assert_eq!(acted.focus, Some(FocusTarget::Composer(slot)));
+        assert_eq!(shell.selected(), Some(slot));
+        assert!(shell.resume().is_none(), "the popup closes");
+        assert_eq!(shell.session_id(slot), Some(Y));
+        assert_eq!(shell.project_of(slot), Some(key(A)).as_ref());
+        harness.control(0).await;
+        let args = harness.launch_args(0).await;
+        assert!(args.contains(&format!("--resume={Y}")), "{args:?}");
+        assert_eq!(shell.live_runs(), 1);
+    });
+}
+
+#[test]
+fn picking_an_open_conversation_goes_to_its_slot() {
+    drive(|harness| async move {
+        let (mut shell, planners) = counted(&harness, &[A]);
+        open_listed(&mut shell);
+        let slot = pick(&mut shell, X).started.expect("the first pick starts");
+        harness.control(0).await;
+        assert_eq!(shell.live_runs(), 1);
+        let planned = planners.planned();
+        assert_eq!(planned, 1);
+
+        // A live slot.
+        let other = shell.open(harness.folder_launch(A));
+        harness.control(1).await;
+        shell.act(ShellAction::Select(other));
+        open_listed(&mut shell);
+        let acted = pick(&mut shell, X);
+        assert!(acted.started.is_none());
+        assert_eq!(acted.focus, Some(FocusTarget::Composer(slot)));
+        assert_eq!(shell.selected(), Some(slot));
+        assert!(shell.resume().is_none());
+
+        // The same slot once it ended.
+        harness.control(0).await.exit(0);
+        end(&mut shell, slot).await;
+        assert!(shell.ended(slot));
+        shell.act(ShellAction::Select(other));
+        open_listed(&mut shell);
+        let acted = pick(&mut shell, X);
+        assert_eq!(acted.focus, Some(FocusTarget::EndedBand(slot)));
+        assert_eq!(shell.selected(), Some(slot));
+        assert_eq!(shell.live_runs(), 1, "the other slot only");
+        assert_eq!(planners.planned(), planned);
+    });
+}
+
+#[test]
+fn picking_a_failed_conversation_goes_to_its_band() {
+    drive(|harness| async move {
+        let (mut shell, planners) = counted(&harness, &[A]);
+        harness.refuse(closta_providers::claude::launch::LaunchError::Spawn(
+            std::io::ErrorKind::NotFound,
+        ));
+        open_listed(&mut shell);
+        let slot = pick(&mut shell, X).started.expect("the first pick starts");
+        end(&mut shell, slot).await;
+        assert!(matches!(
+            shell.status(slot),
+            Some(closta_session::status::SessionStatus::Failed(_))
+        ));
+        let planned = planners.planned();
+        assert_eq!(planned, 1);
+
+        open_listed(&mut shell);
+        let acted = pick(&mut shell, X);
+        assert_eq!(acted.focus, Some(FocusTarget::FailureBand(slot)));
+        assert_eq!(shell.selected(), Some(slot));
+        assert_eq!(planners.planned(), planned);
+    });
+}
+
+#[test]
+fn a_closing_conversation_cannot_be_picked() {
+    drive(|harness| async move {
+        let (mut shell, planners) = counted(&harness, &[A]);
+        harness.stubborn();
+        let slot = shell.open(launch_with_id(&harness, A, Some(X)));
+        harness.control(0).await;
+        shell.act(ShellAction::CloseSlot { slot });
+        assert!(shell.slots().iter().any(|it| it.id == slot && it.closing));
+        open_listed(&mut shell);
+        assert_eq!(state_of(&shell, X), ResumeRowState::Closing);
+        let slots = shell.slots().len();
+        let runs = shell.live_runs();
+        let planned = planners.planned();
+
+        let acted = pick(&mut shell, X);
+        assert!(acted.started.is_none() && acted.focus.is_none());
+        assert_eq!(shell.slots().len(), slots);
+        assert_eq!(shell.live_runs(), runs);
+        assert_eq!(planners.planned(), planned);
+        assert!(shell.resume().is_some(), "the popup stays open");
+    });
+}
+
+#[test]
+fn picking_at_the_limit_does_nothing() {
+    drive(|harness| async move {
+        let (mut shell, planners) = counted(&harness, &[A]);
+        for n in 0..8 {
+            shell.open(launch_with_id(&harness, A, None));
+            harness.control(n).await;
+        }
+        assert!(shell.slots_full());
+        open_listed(&mut shell);
+        let planned = planners.planned();
+        let runs = shell.live_runs();
+
+        let acted = pick(&mut shell, X);
+        assert!(acted.started.is_none());
+        assert_eq!(shell.slots().len(), 8);
+        assert_eq!(shell.live_runs(), runs);
+        assert_eq!(planners.planned(), planned);
+        assert!(shell.resume().is_some());
+    });
+}
+
+#[test]
+fn an_id_not_listed_is_not_picked() {
+    drive(|harness| async move {
+        let (mut shell, planners) = counted(&harness, &[A]);
+        open_listed(&mut shell);
+        shell.act(ShellAction::EditResumeQuery {
+            text: "Fix the CI".to_owned(),
+        });
+        assert_eq!(shell.resume_rows().len(), 1, "X is filtered out of view");
+        let unknown = "3e4c7f85-9d4b-4d76-8d86-ac3a5d7ebf44";
+        let acted = pick(&mut shell, unknown);
+        assert!(acted.started.is_none());
+        assert!(shell.slots().is_empty());
+        assert!(shell.resume().is_some());
+        assert_eq!(planners.planned(), 0);
+
+        let acted = pick(&mut shell, X);
+        assert!(acted.started.is_some(), "a hidden row of the list opens");
+        assert_eq!(shell.session_id(acted.started.unwrap()), Some(X));
+    });
+}
+
+#[test]
+fn an_id_whose_old_run_has_not_returned_cannot_be_picked() {
+    drive(|harness| async move {
+        let (mut shell, planners) = counted(&harness, &[A]);
+        harness.stubborn();
+        let slot = shell.open(launch_with_id(&harness, A, Some(X)));
+        harness.control(0).await;
+        shell
+            .replace(slot, launch_with_id(&harness, A, None))
+            .unwrap();
+        harness.control(1).await;
+        assert!(shell.run_alive(X), "the old run has not returned");
+        open_listed(&mut shell);
+        let runs = shell.live_runs();
+        let planned = planners.planned();
+
+        let acted = pick(&mut shell, X);
+        assert!(acted.started.is_none());
+        assert_eq!(shell.live_runs(), runs);
+        assert_eq!(planners.planned(), planned);
+        assert_eq!(shell.slots().len(), 1);
+    });
+}
+
+#[test]
+fn picking_is_refused_while_closing() {
+    drive(|harness| async move {
+        let (mut shell, planners) = counted(&harness, &[A]);
+        open_listed(&mut shell);
+        shell.act(ShellAction::RequestClose);
+        shell.act(ShellAction::ConfirmClose);
+        assert_eq!(shell.overlay(), Some(Overlay::Closing));
+
+        let acted = pick(&mut shell, X);
+        assert!(acted.started.is_none());
+        assert!(shell.slots().is_empty());
+        assert_eq!(shell.live_runs(), 0);
+        assert_eq!(planners.planned(), 0);
+    });
+}
+
+#[test]
+fn picking_a_slot_of_a_collapsed_project_opens_it() {
+    drive(|harness| async move {
+        let (mut shell, _) = counted(&harness, &[A]);
+        open_listed(&mut shell);
+        let slot = pick(&mut shell, X).started.unwrap();
+        harness.control(0).await;
+        shell.act(ShellAction::ToggleProject { project: key(A) });
+        assert!(shell.projects()[0].collapsed);
+
+        open_listed(&mut shell);
+        let acted = pick(&mut shell, X);
+        assert_eq!(acted.focus, Some(FocusTarget::Composer(slot)));
+        assert!(!shell.projects()[0].collapsed);
     });
 }

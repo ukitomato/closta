@@ -276,6 +276,10 @@ pub enum ShellAction {
         delta: i32,
     },
     CloseResume,
+    /// Opens the popup's saved session `session_id`, or goes to the slot that holds it.
+    PickResume {
+        session_id: String,
+    },
 }
 
 /// The one thing that holds the window's attention; what is behind it takes no answer.
@@ -1093,6 +1097,7 @@ impl ShellState {
                     | ShellAction::OpenResume { .. }
                     | ShellAction::OpenResumeHere
                     | ShellAction::SavedListed { .. }
+                    | ShellAction::PickResume { .. }
             )
         {
             return Acted::default();
@@ -1328,6 +1333,7 @@ impl ShellState {
             ShellAction::EditResumeQuery { text } => self.edit_resume_query(text),
             ShellAction::MoveResume { delta } => self.move_resume(delta),
             ShellAction::CloseResume => self.close_resume(),
+            ShellAction::PickResume { session_id } => self.pick_resume(&session_id),
         }
     }
 
@@ -1460,7 +1466,8 @@ fn behind_overlay(action: &ShellAction, overlay: Overlay) -> bool {
         | ShellAction::OpenResumeHere => true,
         ShellAction::EditResumeQuery { .. }
         | ShellAction::MoveResume { .. }
-        | ShellAction::CloseResume => overlay != Overlay::Resume,
+        | ShellAction::CloseResume
+        | ShellAction::PickResume { .. } => overlay != Overlay::Resume,
         ShellAction::OpenNewSession
         | ShellAction::OpenNewSessionHere
         | ShellAction::StartSession { .. } => overlay != Overlay::NewSession,
