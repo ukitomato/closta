@@ -49,6 +49,9 @@ enum class ControlKind {
 
     /** A message sent during a turn, withdrawn before the CLI starts it; the value is the message's uuid. */
     CANCEL_QUEUED,
+
+    /** `reload_plugins`: it waits in a column of its own. */
+    RELOAD_PLUGINS,
 }
 
 /**
@@ -238,6 +241,14 @@ data class OperationRecords(
     val cancelAsks: Map<String, String> = emptyMap(),
     /** What each withdrawn or withdrawing message says of it, by the message's uuid (the newest [MAX_CANCELS]). */
     val cancels: Map<String, AskCancel> = emptyMap(),
+    /** The ids of the `reload_plugins` requests not answered yet. */
+    val reloadWaiting: List<String> = emptyList(),
+    /** The plugins the CLI last listed (`system/init`, or the answer to a reload); null before the first. */
+    val plugins: PluginsRecord? = null,
+    /** Why the last reload did not happen; null before one, after one that did, and after a launch. */
+    val reloadFailure: ReloadFailure? = null,
+    /** The CLI said in `system/init` that it refuses a reload when the session is busy. */
+    val refuseIfBusy: Boolean = false,
 )
 
 /** The prompt cache as of the `result` the host saw at [lastAtMs]: it lives [ttlMs] from then. */
@@ -301,6 +312,7 @@ internal fun OperationRecords.control(input: PresenterInput.ControlRequested): O
         ControlKind.RENAME -> renameAsked(input)
         ControlKind.PERMISSION_RULES -> copy(rulesWaiting = (rulesWaiting + input.requestId).takeLast(MAX_WAITING))
         ControlKind.CANCEL_QUEUED -> cancelAsked(input)
+        ControlKind.RELOAD_PLUGINS -> copy(reloadWaiting = (reloadWaiting + input.requestId).takeLast(MAX_WAITING))
     }
 }
 
@@ -354,6 +366,10 @@ internal fun OperationRecords.launched(input: PresenterInput.Launched): Operatio
         rulesWaiting = emptyList(),
         rulesFailure = null,
         cancelAsks = emptyMap(),
+        reloadWaiting = emptyList(),
+        reloadFailure = null,
+        // The new CLI says it in its own init.
+        refuseIfBusy = false,
         // A withdrawal that was waiting is no longer asked of anyone; a message withdrawn stays withdrawn.
         cancels = cancels.filterValues { it.phase == CancelPhase.CANCELLED },
     )
@@ -421,6 +437,7 @@ internal fun OperationRecords.sendFailed(requestId: String): OperationRecords =
         requestId in usageWaiting -> copy(usageWaiting = usageWaiting - requestId)
         requestId in renameAsks -> copy(renameAsks = renameAsks - requestId)
         requestId in rulesWaiting -> copy(rulesWaiting = rulesWaiting - requestId)
+        requestId in reloadWaiting -> copy(reloadWaiting = reloadWaiting - requestId)
         requestId in cancelAsks -> cancelSendFailed(requestId)
         // A sandbox check that could not be asked waits for the next settings request.
         requestId in settingsWaiting ->
@@ -442,6 +459,7 @@ private fun OperationRecords.knows(requestId: String): Boolean =
         requestId in usageWaiting ||
         requestId in renameAsks ||
         requestId in rulesWaiting ||
+        requestId in reloadWaiting ||
         requestId in cancelAsks
 
 /**
@@ -468,6 +486,7 @@ internal fun OperationRecords.answered(event: AgentEvent.ControlResponse): Opera
         id in settingsWaiting -> settingsAnswered(id, event)
         id in renameAsks -> renameAnswered(id, event)
         id in rulesWaiting -> rulesAnswered(id, event)
+        id in reloadWaiting -> reloadAnswered(id, event)
         id in cancelAsks -> cancelAnswered(id, event)
         succeeded -> switchApplied(id)
         else ->

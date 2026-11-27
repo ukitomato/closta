@@ -110,8 +110,13 @@ class TranscriptFoldTest {
             detailed.with(Lines.initialized("""{"commands":[{"name":"config","description":"d"}]}""")),
         )
         val empty = HostState()
-        assertUnchanged(empty, empty.with(Lines.init(slashCommands = "{}")))
-        assertUnchanged(empty, empty.with(Lines.init()), "an init with no commands")
+        // An init lists the plugins too, so it is no longer a line that changes nothing: its commands are what stay.
+        assertEquals(empty.transcript.commands, empty.with(Lines.init(slashCommands = "{}")).transcript.commands)
+        assertEquals(
+            empty.transcript.commands,
+            empty.with(Lines.init()).transcript.commands,
+            "an init with no commands",
+        )
     }
 
     @Test

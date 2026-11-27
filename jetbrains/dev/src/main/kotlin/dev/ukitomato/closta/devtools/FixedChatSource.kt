@@ -66,6 +66,8 @@ class FixedChatSource(
 
     override suspend fun requestContextBreakdown() = Unit
 
+    override suspend fun reloadPlugins() = Unit
+
     override suspend fun renameSession(title: String) = Unit
 
     override suspend fun cancelQueued(askKey: String) = Unit

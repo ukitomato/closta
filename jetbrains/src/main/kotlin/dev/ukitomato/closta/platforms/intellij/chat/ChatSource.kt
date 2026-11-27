@@ -99,6 +99,9 @@ interface ChatSource : Disposable {
     /** Asks the CLI for the context's whole breakdown; the answer is the composer's context. */
     suspend fun requestContextBreakdown()
 
+    /** Asks the CLI to reload the plugins; the answer is the view's plugins, and a refusal is the view's sentence. */
+    suspend fun reloadPlugins()
+
     /** Names the running session [title]; the view takes the name when the CLI says it took it. */
     suspend fun renameSession(title: String)
 
@@ -282,6 +285,10 @@ interface ChatSource : Disposable {
 
         override suspend fun requestPermissionRules() {
             commands()?.requestPermissionRules()
+        }
+
+        override suspend fun reloadPlugins() {
+            commands()?.reloadPlugins()
         }
 
         override suspend fun requestContextBreakdown() {

@@ -12,13 +12,15 @@ import com.intellij.ui.content.ContentManagerListener
 import dev.ukitomato.closta.platforms.intellij.ClostaBundle
 import dev.ukitomato.closta.platforms.intellij.chat.ChatDirectory
 import dev.ukitomato.closta.platforms.intellij.chat.McpPanel
+import dev.ukitomato.closta.platforms.intellij.chat.PluginsPanel
 
 /** The id of the bottom tool window (plugin.xml) that lists the sessions of every open project. */
 const val SESSIONS_TOOL_WINDOW_ID = "Closta.Sessions"
 
 /**
- * The bottom Closta tool window: a Sessions tab (the sessions tree and the detail pane) and an MCP tab (the MCP servers
- * of the conversation last in view, asked for again each time the tab is chosen).
+ * The bottom Closta tool window: a Sessions tab (the sessions tree and the detail pane), an MCP tab (the MCP servers
+ * of the conversation last in view, asked for again each time the tab is chosen) and a Plugins tab (its plugins, which
+ * can be reloaded).
  */
 class SessionsToolWindowFactory :
     ToolWindowFactory,
@@ -57,6 +59,14 @@ class SessionsToolWindowFactory :
                 }
             },
         )
+
+        val pluginsParent = Disposer.newDisposable("Closta plugins")
+        val plugins = PluginsPanel(project, pluginsParent)
+        val pluginsContent =
+            ContentFactory.getInstance().createContent(plugins, ClostaBundle.message("toolwindow.tab.plugins"), false)
+        pluginsContent.setDisposer(pluginsParent)
+        pluginsContent.isCloseable = false
+        toolWindow.contentManager.addContent(pluginsContent)
         toolWindow.contentManager.setSelectedContent(content)
         serviceIfCreated<ChatDirectory>()?.let { badge(toolWindow, waitingCount(it.entries.value)) }
     }

@@ -9,6 +9,7 @@ import dev.ukitomato.closta.core.models.ElicitationDecision
 import dev.ukitomato.closta.core.services.CancelQueuedMessage
 import dev.ukitomato.closta.core.services.Interrupt
 import dev.ukitomato.closta.core.services.ReconnectMcpServer
+import dev.ukitomato.closta.core.services.ReloadPlugins
 import dev.ukitomato.closta.core.services.RenameSession
 import dev.ukitomato.closta.core.services.RequestContextUsage
 import dev.ukitomato.closta.core.services.RequestMcpStatus
@@ -75,6 +76,7 @@ class SessionCommands internal constructor(
     private val usageOfPlan = RequestUsage(session)
     private val rulesUseCase = RequestPermissionRules(session)
     private val renameUseCase = RenameSession(session)
+    private val reloadPluginsUseCase = ReloadPlugins(session)
     private val cancelQueuedUseCase = CancelQueuedMessage(session)
     private val settingsUseCase = RequestSettings(session)
     private val effortUseCase = SwitchEffort(session)
@@ -225,6 +227,15 @@ class SessionCommands internal constructor(
         title: String,
         sessionId: String,
     ) = requested(ControlKind.RENAME, title) { renameUseCase(title, sessionId, it) }
+
+    /**
+     * Asks the CLI to reload the plugins from disk, as [switchModel] does. The CLI is asked to refuse while the session
+     * has work going only when its `system/init` said it honors that; the answer is the view's plugins.
+     */
+    suspend fun reloadPlugins() {
+        val refuseIfBusy = conversation.view.value.transcript.operations.refuseIfBusy
+        requested(ControlKind.RELOAD_PLUGINS, null) { reloadPluginsUseCase(refuseIfBusy, it) }
+    }
 
     /**
      * Withdraws the message [messageUuid] the CLI has queued and not started, as [switchModel] does: the row of the
