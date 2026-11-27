@@ -57,4 +57,15 @@ class BehaviourEditorTest {
         assertNull(editor.initialPermissionMode)
         assertTrue(editor.saveBeforeSend)
     }
+
+    @Test
+    fun `the content roots choice is edited, compared and reset like the others`() {
+        val editor = BehaviourEditor(BehaviourSettings())
+        editor.addContentRoots = true
+        assertTrue(editor.isModified())
+        assertTrue(editor.current().addContentRoots)
+        editor.reset(BehaviourSettings())
+        assertEquals(false, editor.addContentRoots)
+        assertFalse(editor.isModified())
+    }
 }

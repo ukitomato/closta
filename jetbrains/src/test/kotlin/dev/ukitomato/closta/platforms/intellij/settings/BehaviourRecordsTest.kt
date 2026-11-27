@@ -41,7 +41,7 @@ class BehaviourRecordsTest {
     }
 
     @Test
-    fun `saving writes all four keys, also when a value is the default`() {
+    fun `saving writes all five keys, also when a value is the default`() {
         val store = FakeSettingsStore()
         BehaviourRecords.save(store, defaults)
         assertEquals(
@@ -50,6 +50,7 @@ class BehaviourRecordsTest {
                 "behaviour.respectGitIgnore" to "true",
                 "behaviour.initialPermissionMode" to "",
                 "behaviour.reportNewErrors" to "true",
+                "behaviour.addContentRoots" to "false",
             ),
             store.entries,
         )
@@ -112,7 +113,7 @@ class BehaviourRecordsTest {
         BehaviourRecords.save(store, BehaviourSettings(saveBeforeSend = false))
         assertEquals("[]", store.entries["providers.v1"])
         assertEquals("x", store.entries["providers.active"])
-        assertEquals(6, store.entries.size)
+        assertEquals(7, store.entries.size)
     }
 
     @Test
@@ -137,5 +138,22 @@ class BehaviourRecordsTest {
         return generateSequence(File("").absoluteFile) { it.parentFile }
             .flatMap { sequenceOf(File(it, relative), File(it, "jetbrains/$relative")) }
             .first { File(it, "BehaviourRecords.kt").isFile }
+    }
+
+    @Test
+    fun `adding the content roots is off by default, and saved and read back`() {
+        assertEquals(false, BehaviourSettings().addContentRoots)
+        assertEquals(false, BehaviourRecords.load(FakeSettingsStore()).addContentRoots)
+        val store = FakeSettingsStore()
+        BehaviourRecords.save(store, BehaviourSettings(addContentRoots = true))
+        assertEquals(true, BehaviourRecords.load(store).addContentRoots)
+        assertEquals("true", store.get(BehaviourRecords.ADD_CONTENT_ROOTS_KEY))
+    }
+
+    @Test
+    fun `a stored word that is not true or false reads the content roots as off`() {
+        val store = FakeSettingsStore()
+        store.set(BehaviourRecords.ADD_CONTENT_ROOTS_KEY, "yes")
+        assertEquals(false, BehaviourRecords.load(store).addContentRoots)
     }
 }

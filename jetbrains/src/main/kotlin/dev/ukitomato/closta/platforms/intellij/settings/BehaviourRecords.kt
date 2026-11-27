@@ -5,12 +5,12 @@ import kotlinx.coroutines.CancellationException
 
 /**
  * How [BehaviourSettings] are kept in the settings: one key each, under [SAVE_BEFORE_SEND_KEY],
- * [RESPECT_GIT_IGNORE_KEY], [INITIAL_PERMISSION_MODE_KEY] and [REPORT_NEW_ERRORS_KEY].
+ * [RESPECT_GIT_IGNORE_KEY], [INITIAL_PERMISSION_MODE_KEY], [REPORT_NEW_ERRORS_KEY] and [ADD_CONTENT_ROOTS_KEY].
  *
  * Reading never throws. A value that is not one of the words this version writes (a flag other than `true` and
  * `false`, an unknown mode, `bypassPermissions`, an empty word) reads as the default, and a store that throws makes
  * the whole result the default, with the type of the exception handed to [log] (never a value). Saving always writes
- * all four keys, even a value equal to the default: a default changed later then does not silently change what a user
+ * all five keys, even a value equal to the default: a default changed later then does not silently change what a user
  * had chosen. "No mode" is written as an empty word.
  *
  * Free of `com.intellij` (a test reads this file to keep it so).
@@ -20,6 +20,7 @@ object BehaviourRecords {
     const val RESPECT_GIT_IGNORE_KEY = "behaviour.respectGitIgnore"
     const val INITIAL_PERMISSION_MODE_KEY = "behaviour.initialPermissionMode"
     const val REPORT_NEW_ERRORS_KEY = "behaviour.reportNewErrors"
+    const val ADD_CONTENT_ROOTS_KEY = "behaviour.addContentRoots"
 
     /** The behaviour saved in [store]; the defaults for anything not readable. Never throws. */
     @Suppress("TooGenericExceptionCaught")
@@ -34,6 +35,7 @@ object BehaviourRecords {
                 respectGitIgnore = flag(store.get(RESPECT_GIT_IGNORE_KEY), defaults.respectGitIgnore),
                 initialPermissionMode = InitialPermissionMode.of(store.get(INITIAL_PERMISSION_MODE_KEY)),
                 reportNewErrors = flag(store.get(REPORT_NEW_ERRORS_KEY), defaults.reportNewErrors),
+                addContentRoots = flag(store.get(ADD_CONTENT_ROOTS_KEY), defaults.addContentRoots),
             )
         } catch (cancel: CancellationException) {
             throw cancel
@@ -43,7 +45,7 @@ object BehaviourRecords {
         }
     }
 
-    /** Saves all four values to [store]. */
+    /** Saves all five values to [store]. */
     fun save(
         store: SettingsStore,
         settings: BehaviourSettings,
@@ -52,6 +54,7 @@ object BehaviourRecords {
         store.set(RESPECT_GIT_IGNORE_KEY, settings.respectGitIgnore.toString())
         store.set(INITIAL_PERMISSION_MODE_KEY, settings.initialPermissionMode?.wire.orEmpty())
         store.set(REPORT_NEW_ERRORS_KEY, settings.reportNewErrors.toString())
+        store.set(ADD_CONTENT_ROOTS_KEY, settings.addContentRoots.toString())
     }
 
     private fun flag(

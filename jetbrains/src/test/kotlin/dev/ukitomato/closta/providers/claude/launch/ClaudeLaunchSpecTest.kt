@@ -176,4 +176,54 @@ class ClaudeLaunchSpecTest {
         // The spec's own env and its toString are as before: the secret count is of the spec's env only.
         assertTrue(ClaudeLaunchSpec(sessionId = "s", env = mapOf("K" to "v")).toString().contains("env=<1 redacted>"))
     }
+
+    @Test
+    fun `working directories follow the permission prompt flag, one --add-dir each in order`() {
+        val argv =
+            ClaudeLaunchSpec(
+                sessionId = "s",
+                permissionPromptToolStdio = true,
+                additionalDirectories = listOf("/data/a", "/data/b"),
+            ).toArgv()
+        assertEquals(
+            listOf("--permission-prompt-tool", "stdio", "--add-dir=/data/a", "--add-dir=/data/b"),
+            argv.dropWhile { it != "--permission-prompt-tool" },
+        )
+    }
+
+    @Test
+    fun `no working directories adds no --add-dir`() {
+        assertFalse(
+            ClaudeLaunchSpec(sessionId = "s", permissionPromptToolStdio = true).toArgv().any {
+                it.startsWith("--add-dir")
+            },
+        )
+    }
+
+    @Test
+    fun `toString says how many working directories and never which`() {
+        val shown = ClaudeLaunchSpec("s", additionalDirectories = listOf("/data/secret-a", "/data/b")).toString()
+        assertTrue(shown.contains("addDirs=2"), shown)
+        assertFalse(shown.contains("secret-a"), shown)
+    }
+
+    @Test
+    fun `the logged argv hides every working directory and keeps everything else`() {
+        val spec =
+            ClaudeLaunchSpec(
+                sessionId = "s",
+                model = "opus",
+                permissionPromptToolStdio = true,
+                additionalDirectories = listOf("/home/u/secret-a", "/home/u/secret-b"),
+            )
+        val logged = spec.toLoggedArgv()
+        assertFalse(logged.any { it.contains("secret") }) { logged.joinToString(" ") }
+        assertEquals(2, logged.count { it == "--add-dir=<redacted>" })
+        assertEquals(
+            spec.toArgv().filterNot { it.startsWith("--add-dir=") },
+            logged.filterNot { it.startsWith("--add-dir=") },
+        )
+        assertEquals(spec.toArgv().size, logged.size)
+        assertTrue(logged.contains(ClaudeLaunchSpec.TOOL_USE_PROMPT))
+    }
 }

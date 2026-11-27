@@ -417,7 +417,7 @@ class SessionRuntime(
                 }
                 throw start
             }
-        log.info("claude session $id: started ${launch.spec.toArgv()}")
+        log.info("claude session $id: started ${launch.spec.toLoggedArgv()}")
         return process
     }
 

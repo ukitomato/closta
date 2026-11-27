@@ -4,10 +4,12 @@ import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
+import com.intellij.openapi.components.serviceIfCreated
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.ProjectCloseListener
 import com.intellij.openapi.util.Disposer
 import dev.ukitomato.closta.platforms.intellij.session.ClaudeSessionService
+import dev.ukitomato.closta.platforms.intellij.session.ContentRoots
 import dev.ukitomato.closta.platforms.intellij.session.SessionOpening
 import dev.ukitomato.closta.platforms.intellij.session.heldSessionOf
 import dev.ukitomato.closta.platforms.intellij.session.savedId
@@ -89,6 +91,7 @@ class ChatSessions(
     /** Stops the session's CLI and takes it out of the list; a screen still showing it shows it ended. */
     fun stop(sessionId: String) {
         directory().unregister(sessionId)
+        project.serviceIfCreated<ContentRoots>()?.forget(sessionId)
         sources[sessionId]?.let { rememberClearedTabs(project, listOf(it)) }
         sources.remove(sessionId)?.let { source ->
             Disposer.dispose(source)

@@ -91,7 +91,8 @@ class ClaudeSessionService(
                 { WslSpawner(it, ideWsl::runnerFor) },
                 IdeSessionLog,
             )
-        val gated = TrustGatedPlanner({ TrustedProjects.isProjectTrusted(project) }, wslAware)
+        val withRoots = project.service<ContentRoots>().planner(wslAware) { behaviour().addContentRoots }
+        val gated = TrustGatedPlanner({ TrustedProjects.isProjectTrusted(project) }, withRoots)
         val runtimeScope = scope.childScope("Claude session $id")
         val runtime =
             SessionRuntime(

@@ -12,13 +12,14 @@ import dev.ukitomato.closta.providers.claude.launch.ProcessSpawner
  * How one session's `claude` is started: the [spawner] that creates the process and the [spec] it runs.
  *
  * Not a data class: [spec] carries the launch environment, which holds credentials once a provider supplies them, and a
- * generated `toString` would hand it to any log line or string template. Only the argv is printed.
+ * generated `toString` would hand it to any log line or string template. Only the argv is printed, without the
+ * folders it adds.
  */
 class SessionLaunch(
     val spawner: ProcessSpawner,
     val spec: ClaudeLaunchSpec,
 ) {
-    override fun toString(): String = "SessionLaunch(argv=${spec.toArgv()})"
+    override fun toString(): String = "SessionLaunch(argv=${spec.toLoggedArgv()})"
 }
 
 /**

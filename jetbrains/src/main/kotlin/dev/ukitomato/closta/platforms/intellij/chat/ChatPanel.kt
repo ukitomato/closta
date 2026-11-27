@@ -34,7 +34,9 @@ import dev.ukitomato.closta.platforms.intellij.composer.sendBlockOf
 import dev.ukitomato.closta.platforms.intellij.composer.tip
 import dev.ukitomato.closta.platforms.intellij.ide.htmlEscaped
 import dev.ukitomato.closta.platforms.intellij.session.ClaudeSessionService
+import dev.ukitomato.closta.platforms.intellij.session.ContentRoots
 import dev.ukitomato.closta.platforms.intellij.session.SessionNotice
+import dev.ukitomato.closta.platforms.intellij.session.SessionOpening
 import dev.ukitomato.closta.platforms.intellij.session.SessionRelaunch
 import dev.ukitomato.closta.platforms.intellij.session.SessionView
 import dev.ukitomato.closta.platforms.intellij.settings.ProvidersConfigurable
@@ -155,6 +157,7 @@ class ChatPanel(
             onStop = { task -> scope.launch(failures) { source.stopTask(task.taskId) } },
         )
     private val limitBanner = RateLimitBanner()
+    private val rootsBanner = RootsBanner()
 
     init {
         Disposer.register(parent, surface)
@@ -196,7 +199,14 @@ class ChatPanel(
                         add(
                             JPanel(BorderLayout()).apply {
                                 isOpaque = false
-                                add(limitBanner, BorderLayout.NORTH)
+                                add(
+                                    JPanel(BorderLayout()).apply {
+                                        isOpaque = false
+                                        add(rootsBanner, BorderLayout.NORTH)
+                                        add(limitBanner, BorderLayout.CENTER)
+                                    },
+                                    BorderLayout.NORTH,
+                                )
                                 add(running.component, BorderLayout.CENTER)
                             },
                             BorderLayout.NORTH,
@@ -451,7 +461,19 @@ class ChatPanel(
         composer.onMode = { mode -> scope.launch(failures) { source.switchMode(mode) } }
         composer.onSandbox = { on -> scope.launch(failures) { source.switchSandbox(on) } }
         wireRequests()
+        wireBanners()
+    }
+
+    /**
+     * The limit banner's close goes to the presenter; the banner for the IDE's folders changing is up while the
+     * watch says this session has the notice.
+     */
+    private fun wireBanners() {
         limitBanner.onDismiss = { seq -> scope.launch(failures) { source.dismissRateLimit(seq) } }
+        rootsBanner.onRestart = ::restartForRoots
+        scope.launch(Dispatchers.EDT) {
+            project.service<ContentRoots>().pending.collect { rootsBanner.showUp(source.sessionId in it) }
+        }
     }
 
     /** The composer's popups ask the CLI for what they show. */
@@ -538,21 +560,36 @@ class ChatPanel(
     }
 
     /** A new session where this one is: this place closes and the session's CLI is stopped, then the new one opens. */
-    private fun restart() {
+    private fun restart() = relaunch(SessionOpening.New)
+
+    /**
+     * Starts this conversation again so that it is given the IDE's folders as they are now: the same conversation put
+     * back (a new one while nothing was said), refused while a turn runs, which a restart would cut off.
+     */
+    private fun restartForRoots() {
+        val view = source.view.value
+        if (threadIsRunning(view.conversation, view.transcript)) {
+            composer.refused(ClostaBundle.message("chat.roots.busy"))
+            return
+        }
+        relaunch(if (view.transcript.messages.size > 0) SessionOpening.Resume(source.resumeId) else SessionOpening.New)
+    }
+
+    private fun relaunch(opening: SessionOpening) {
         val old = source.sessionId
         val placement = place.placement
         // Taken now: closing this place disposes the source, and the draft goes with it.
         val carried = drafts.snapshot(source)
         SessionRelaunch(
-            open = { _, opening, folder ->
-                openNewChat(project, placement, opening, workingDirectory = folder, carry = carried)
+            open = { _, opened, folder ->
+                openNewChat(project, placement, opened, workingDirectory = folder, carry = carried)
             },
             close = {
                 place.close()
                 project.service<ChatSessions>().stopFromScreen(old)
             },
             workingDirectory = source.workingDirectory,
-        ).restart()
+        ).relaunch(null, opening)
     }
 
     /** Says why a rewind or fork did not happen in a balloon where it was clicked, else on the composer's line. */

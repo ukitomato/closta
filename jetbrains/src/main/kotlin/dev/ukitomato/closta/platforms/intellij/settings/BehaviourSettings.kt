@@ -35,4 +35,6 @@ data class BehaviourSettings(
     val initialPermissionMode: InitialPermissionMode? = null,
     /** Tell Claude about the IDE errors its edits introduce. */
     val reportNewErrors: Boolean = true,
+    /** Give the IDE's content roots outside a session's folder to its CLI as working directories. */
+    val addContentRoots: Boolean = false,
 )
