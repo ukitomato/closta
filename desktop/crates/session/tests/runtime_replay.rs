@@ -143,6 +143,15 @@ fn the_new_kinds_leave_none_of_their_text_in_the_log() {
         assert_eq!(Some(expected), decoded, "{line}");
     }
     let sentences = [
+        ("command name of 01", first_command_field("name")),
+        (
+            "command description of 01",
+            first_command_field("description"),
+        ),
+        (
+            "command argumentHint of 01",
+            first_command_field("argumentHint"),
+        ),
         (
             "message of 44",
             field_at("44-permission-denied", 23, "message"),
@@ -163,6 +172,14 @@ fn the_new_kinds_leave_none_of_their_text_in_the_log() {
     lines.extend(common::non_blank_lines(&common::text_of(
         "41-clear-reset.ndjson",
     )));
+    // Last, and only the two `commands_changed` lines of 01 (6 and 7): they give the transcript
+    // the 59 commands with their sentences after the `initialize` responses of the others, and
+    // leave the session the one 41's last init names.
+    lines.extend(
+        common::non_blank_lines(&common::text_of("01-baseline-text.ndjson"))[5..7]
+            .iter()
+            .cloned(),
+    );
 
     let spawner = Arc::new(FakeSpawner::new(move |launch| {
         Ok(if launch.args == ["--version"] {
@@ -223,6 +240,21 @@ fn the_new_kinds_leave_none_of_their_text_in_the_log() {
     assert_eq!(1, notices, "the hand-written warning is a part");
     // Nor does the transcript's `Debug`, which a log line could carry.
     let shown = format!("{transcript:?}");
+    // The command list is in the transcript (else it could not leak), and its Debug leaves the
+    // names and sentences out.
+    assert_eq!(59, transcript.commands.items.len(), "01's 59 commands");
+    assert!(transcript.commands.detailed, "from its commands_changed");
+    let commands_shown = format!("{:?}", transcript.commands);
+    for (name, text) in [
+        ("command name", first_command_field("name")),
+        ("command description", first_command_field("description")),
+        ("command argumentHint", first_command_field("argumentHint")),
+    ] {
+        assert!(
+            !commands_shown.contains(&text),
+            "the commands' Debug shows the {name}"
+        );
+    }
     for (name, text) in [
         ("decision_reason", "hand-written reason sentence"),
         ("content", "hand-written content sentence"),
@@ -350,6 +382,24 @@ fn the_usage_answer_leaves_its_cost_and_reset_time_out_of_the_log_and_the_debug(
             .collect();
         assert!(leaks.is_empty(), "the {name} is in log lines {leaks:?}");
     }
+}
+
+/// The text of `field` of the first command of 01's `commands_changed` (line 6), which must not be
+/// empty.
+fn first_command_field(field: &str) -> String {
+    let line = common::non_blank_lines(&common::text_of("01-baseline-text.ndjson"))[5].clone();
+    let value: serde_json::Value = serde_json::from_str(&line).unwrap();
+    assert_eq!(
+        59,
+        value["commands"].as_array().map_or(0, Vec::len),
+        "01's 59 commands"
+    );
+    let text = value["commands"][0][field]
+        .as_str()
+        .unwrap_or_default()
+        .to_owned();
+    assert!(!text.is_empty(), "01 line 6 has no command {field}");
+    text
 }
 
 /// The text of the member at `path` of 43's line 16, which must hold a number or a string.

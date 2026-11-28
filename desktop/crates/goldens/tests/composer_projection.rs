@@ -72,16 +72,18 @@ fn the_commands_of_the_initialize_response_reach_the_thread_with_their_sentence_
             .map(|it| str(it, "name"))
             .collect::<Vec<_>>()
     );
-    assert_eq!(
-        Some("Set a setting by key"),
-        str(commands[0], "description")
-    );
-    assert_eq!(Some("key=value"), str(commands[0], "argumentHint"));
-    assert_eq!(
-        None,
-        commands[1].get("argumentHint"),
-        "an empty hint is no hint"
-    );
+    let named = |name: &str| {
+        let found: Vec<_> = commands
+            .iter()
+            .filter(|it| str(it, "name") == Some(name))
+            .collect();
+        assert_eq!(1, found.len(), "one command is called {name}");
+        *found[0]
+    };
+    let (config, help) = (named("config"), named("help"));
+    assert_eq!(Some("Set a setting by key"), str(config, "description"));
+    assert_eq!(Some("key=value"), str(config, "argumentHint"));
+    assert_eq!(None, help.get("argumentHint"), "an empty hint is no hint");
 }
 
 #[test]

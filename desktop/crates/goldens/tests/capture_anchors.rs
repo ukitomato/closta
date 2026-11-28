@@ -875,31 +875,42 @@ fn captures_01_and_16_show_the_session_the_cli_started_the_mode_16s_status_chang
 }
 
 #[test]
-fn capture_03_offers_the_commands_of_its_initialize_response_with_their_sentences_and_01_the_names_system_init_gave()
+fn capture_03_offers_its_initialize_commands_with_their_sentences_and_01_those_of_its_commands_changed()
  {
     let tree = final_tree("03-initialize-handshake");
     let detailed = objects(thread_of(&tree), "commands");
     assert_eq!(59, detailed.len());
-    let config: Vec<&&Object> = detailed
-        .iter()
-        .filter(|c| str(c, "name") == Some("config"))
-        .collect();
-    assert_eq!(1, config.len());
-    assert_eq!(Some("Set a setting by key"), str(config[0], "description"));
-    assert_eq!(Some("key=value"), str(config[0], "argumentHint"));
+    let config = command_named(&detailed, "config");
+    assert_eq!(Some("Set a setting by key"), str(config, "description"));
+    assert_eq!(Some("key=value"), str(config, "argumentHint"));
     assert!(detailed.iter().all(|c| {
         !str(c, "description").expect("a description").is_empty()
             || str(c, "name") != Some("config")
     }));
     let tree = final_tree("01-baseline-text");
     let names = objects(thread_of(&tree), "commands");
-    assert!(!names.is_empty(), "system/init alone names the commands");
-    assert!(
-        names
-            .iter()
-            .all(|c| str(c, "description") == Some("") && c.get("argumentHint").is_none()),
-        "and only names"
+    assert_eq!(59, names.len());
+    let design = command_named(&names, "design");
+    assert_eq!(
+        Some("Grant or revoke Claude agent access to your Design projects"),
+        str(design, "description")
     );
+    assert_eq!(Some("consent | revoke"), str(design, "argumentHint"));
+    assert_eq!(
+        Some("design"),
+        str(names[0], "name"),
+        "and it is the first the CLI listed"
+    );
+}
+
+/// The command called `name`, the only one of that name in `commands`.
+fn command_named<'a>(commands: &[&'a Object], name: &str) -> &'a Object {
+    let found: Vec<&&Object> = commands
+        .iter()
+        .filter(|c| str(c, "name") == Some(name))
+        .collect();
+    assert_eq!(1, found.len(), "one command is called {name}");
+    found[0]
 }
 
 #[test]

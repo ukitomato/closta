@@ -19,7 +19,9 @@ use closta_model::{
 };
 use serde_json::Value;
 
-use crate::fold::commands::{fold_commands_of_init, fold_commands_of_response};
+use crate::fold::commands::{
+    fold_commands_of_change, fold_commands_of_init, fold_commands_of_response,
+};
 use crate::fold::operations::{fold_operation, with_operations};
 use crate::fold::paths::replace_routing;
 use crate::fold::sent::{fold_send_failed, fold_sent};
@@ -175,6 +177,9 @@ fn fold_event(
         AgentEvent::SystemCompactBoundary { .. } | AgentEvent::SystemStatus { .. } => {
             session_line::fold_compaction(transcript, event)
         }
+        AgentEvent::SystemCommandsChanged { commands, .. } => {
+            fold_commands_of_change(transcript, commands)
+        }
         AgentEvent::SystemInit { slash_commands, .. } => {
             fold_commands_of_init(transcript, slash_commands)
         }
@@ -213,7 +218,6 @@ fn fold_event(
         | AgentEvent::SystemThinkingTokens { .. }
         | AgentEvent::SystemTaskUpdated { .. }
         | AgentEvent::SystemTaskNotification { .. }
-        | AgentEvent::SystemCommandsChanged { .. }
         | AgentEvent::SystemUiInvalidate { .. }
         | AgentEvent::SystemApiRetry { .. }
         | AgentEvent::UnknownKind { .. }
