@@ -147,7 +147,7 @@ pub fn tool_detail(call: &ToolCallRecord) -> ToolDetail {
     }
 }
 
-fn result_text(content: &Value) -> String {
+pub(crate) fn result_text(content: &Value) -> String {
     match content {
         Value::String(text) => text.clone(),
         Value::Array(items) => items

@@ -19,7 +19,8 @@ use crate::records::turn_end::TurnChangesRecord;
 use crate::rewind_targets::live_asks;
 use crate::text::kt_is_blank;
 use crate::tool_line::{
-    AgentSummary, ToolDetail, ToolLine, ToolLineState, agent_summary, tool_detail, tool_line,
+    AgentSummary, ToolDetail, ToolLine, ToolLineState, agent_summary, result_text, tool_detail,
+    tool_line,
 };
 use crate::transcript::{
     ApprovalRecord, MessageRecord, PartRecord, Role, ToolCallRecord, Transcript,
@@ -181,7 +182,7 @@ impl ExploredRow {
     }
 }
 
-/// The to-do list a `TodoWrite` call wrote.
+/// The to-do list a `TodoWrite` call wrote, or a run of `TaskCreate` and `TaskUpdate` calls left.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct TodoRow {
     pub key: String,
@@ -297,6 +298,16 @@ impl fmt::Debug for NoticeRow {
 pub const READ_ONLY_TOOLS: [&str; 4] = ["Read", "Grep", "Glob", "LS"];
 
 const TODO_TOOL: &str = "TodoWrite";
+const TASK_CREATE: &str = "TaskCreate";
+const TASK_UPDATE: &str = "TaskUpdate";
+
+fn is_task_tool(name: &str) -> bool {
+    name == TASK_CREATE || name == TASK_UPDATE
+}
+
+fn is_task_row(row: &ThreadRow) -> bool {
+    matches!(row, ThreadRow::Tool(tool) if is_task_tool(&tool.tool_name))
+}
 
 /// An `Arc` as a key by its address (Kotlin's `IdentityHashMap`). The key holds the `Arc`, so the
 /// address cannot be freed and given to another record while the table has it.
@@ -358,6 +369,7 @@ pub struct ThreadRows {
     groups: HashMap<String, Arc<ExploredRow>>,
     cards: HashMap<ByPtr<ApprovalRecord>, Arc<CardRow>>,
     ends: HashMap<String, Arc<TurnEndRow>>,
+    tasks: TaskTodos,
 }
 
 impl ThreadRows {
@@ -428,7 +440,8 @@ impl ThreadRows {
         self.parts = next_parts;
         self.cards = next_cards;
         self.ends = next_ends;
-        self.grouped(rows)
+        let grouped = self.grouped(rows);
+        self.tasks.folded(grouped, transcript)
     }
 
     fn turn_end_row(
@@ -654,6 +667,201 @@ fn row_of(key: String, part: &PartRecord, opens: bool) -> Option<ThreadRow> {
             opens,
         }))),
         PartRecord::Other(_) | PartRecord::Attachment(_) => None,
+    }
+}
+
+/// Replaces the task calls' tool rows with the to-do list they build, one list per run of calls
+/// with nothing between them. The list starts empty and again after each `/clear`; a list that
+/// did not change is the same `Arc` as before.
+#[derive(Default)]
+struct TaskTodos {
+    lists: HashMap<String, Arc<TodoRow>>,
+}
+
+impl TaskTodos {
+    fn folded(&mut self, rows: Vec<ThreadRow>, transcript: &Transcript) -> Vec<ThreadRow> {
+        if !rows.iter().any(is_task_row) {
+            self.lists = HashMap::new();
+            return rows;
+        }
+        let calls = task_calls(transcript);
+        let mut out = Vec::with_capacity(rows.len());
+        let mut next_lists = HashMap::new();
+        let mut board = TaskBoard::default();
+        let mut first: Option<bool> = None;
+        for (index, row) in rows.iter().enumerate() {
+            if let ThreadRow::Divider(it) = row
+                && matches!(it.divider, Divider::Cleared { .. })
+            {
+                board.clear();
+            }
+            let ThreadRow::Tool(tool) = row else {
+                out.push(row.clone());
+                continue;
+            };
+            if !is_task_tool(&tool.tool_name) {
+                out.push(row.clone());
+                continue;
+            }
+            let opening = first.unwrap_or(tool.opens);
+            if let Some(call) = calls.get(tool.tool_use_id.as_str()) {
+                board.apply(call);
+            }
+            let run_goes_on = rows.get(index + 1).is_some_and(is_task_row);
+            first = run_goes_on.then_some(opening);
+            if !run_goes_on {
+                let made = TodoRow {
+                    key: tool.key.clone(),
+                    items: board.items(),
+                    opens: opening,
+                };
+                let list = match self.lists.get(&made.key) {
+                    Some(kept) if **kept == made => Arc::clone(kept),
+                    _ => Arc::new(made),
+                };
+                next_lists.insert(list.key.clone(), Arc::clone(&list));
+                out.push(ThreadRow::Todo(list));
+            }
+        }
+        self.lists = next_lists;
+        out
+    }
+}
+
+/// The task calls of the thread's own messages by their tool use id: a row kept from before holds
+/// no call.
+fn task_calls(transcript: &Transcript) -> HashMap<&str, &ToolCallRecord> {
+    transcript
+        .messages
+        .values()
+        .flat_map(|message| message.parts.values())
+        .filter_map(|part| match part.as_ref() {
+            PartRecord::ToolCall(call) if is_task_tool(&call.tool_name) => Some(call),
+            _ => None,
+        })
+        .map(|call| (call.tool_use_id.as_str(), call))
+        .collect()
+}
+
+/// What a `TaskCreate` result says first (`Task #1 created successfully: write tests`): the
+/// number after `Task #` of the first place that reads `Task #<digits> created`.
+fn task_created(text: &str) -> Option<&str> {
+    const HEAD: &str = "Task #";
+    text.match_indices(HEAD).find_map(|(at, _)| {
+        let rest = &text[at + HEAD.len()..];
+        let digits = rest.bytes().take_while(u8::is_ascii_digit).count();
+        (digits > 0 && rest[digits..].starts_with(" created")).then(|| &rest[..digits])
+    })
+}
+
+/// The tasks as the calls so far left them, by id, in the order they were created. A create not
+/// yet answered takes the number after the largest so far, the one the CLI gives next; if an
+/// answer later names that number, the unanswered one moves on to the next free number, so two
+/// tasks never share an id.
+#[derive(Default)]
+struct TaskBoard {
+    items: Vec<(String, TodoItem)>,
+    unanswered: HashSet<String>,
+}
+
+impl TaskBoard {
+    fn clear(&mut self) {
+        self.items.clear();
+        self.unanswered.clear();
+    }
+
+    fn items(&self) -> Vec<TodoItem> {
+        self.items.iter().map(|(_, item)| item.clone()).collect()
+    }
+
+    fn apply(&mut self, call: &ToolCallRecord) {
+        let Some(input) = call.input.as_deref().and_then(Value::as_object) else {
+            return;
+        };
+        if call.tool_name == TASK_CREATE {
+            self.create(call, input);
+        } else {
+            self.update(input);
+        }
+    }
+
+    fn create(&mut self, call: &ToolCallRecord, input: &serde_json::Map<String, Value>) {
+        let Some(subject) = input.string("subject") else {
+            return;
+        };
+        let item = TodoItem {
+            content: subject.to_owned(),
+            status: "pending".to_owned(),
+        };
+        let said = call
+            .result
+            .as_ref()
+            .and_then(|result| result.content.as_deref())
+            .and_then(|content| task_created(&result_text(content)).map(str::to_owned));
+        let Some(said) = said else {
+            let id = self.next_id();
+            self.unanswered.insert(id.clone());
+            self.put(id, item);
+            return;
+        };
+        if self.unanswered.contains(&said) {
+            self.move_on(&said);
+        }
+        self.put(said, item);
+    }
+
+    /// Sets the task `id`, keeping its place when the list holds it.
+    fn put(&mut self, id: String, item: TodoItem) {
+        match self.items.iter_mut().find(|(key, _)| *key == id) {
+            Some(slot) => slot.1 = item,
+            None => self.items.push((id, item)),
+        }
+    }
+
+    fn next_id(&self) -> String {
+        let largest = self
+            .items
+            .iter()
+            .filter_map(|(key, _)| key.parse::<i64>().ok())
+            .max()
+            .unwrap_or(0);
+        (largest + 1).to_string()
+    }
+
+    /// Gives the unanswered task `id` the next free number, keeping its place in the list.
+    fn move_on(&mut self, id: &str) {
+        let moved = self.next_id();
+        self.unanswered.remove(id);
+        self.unanswered.insert(moved.clone());
+        for (key, _) in &mut self.items {
+            if key == id {
+                key.clone_from(&moved);
+            }
+        }
+    }
+
+    /// An update of a task this list does not hold changes nothing.
+    fn update(&mut self, input: &serde_json::Map<String, Value>) {
+        let id = match input.get("taskId") {
+            Some(Value::String(text)) => text.clone(),
+            Some(Value::Number(number)) => number.to_string(),
+            _ => return,
+        };
+        let Some(at) = self.items.iter().position(|(key, _)| *key == id) else {
+            return;
+        };
+        let status = input.string("status");
+        if status == Some("deleted") {
+            self.items.remove(at);
+        } else {
+            let item = &mut self.items[at].1;
+            if let Some(subject) = input.string("subject") {
+                subject.clone_into(&mut item.content);
+            }
+            if let Some(status) = status {
+                status.clone_into(&mut item.status);
+            }
+        }
     }
 }
 
