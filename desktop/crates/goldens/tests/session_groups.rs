@@ -436,6 +436,23 @@ fn the_first_line_of_the_first_request_names_a_session() {
     );
 }
 
+/// Not in Kotlin's SessionTitleTest (the 6d-R design's `/clear` section): after a `/clear` a
+/// session is named by the first request after the divider, 41's third, cut to the name's length.
+#[test]
+fn the_title_after_a_clear_is_the_first_request_after_the_divider() {
+    let all = replay("41-clear-reset");
+    let transcript = &all
+        .last()
+        .unwrap_or_else(|| panic!("a last step"))
+        .view
+        .transcript;
+    assert!(transcript.cleared_at.is_some(), "41 is divided");
+    assert_eq!(
+        Some("Which word did I ask you to remember? If you do not know, re".to_owned()),
+        session_title(transcript)
+    );
+}
+
 #[test]
 fn a_long_request_is_cut() {
     let long = format!("{}\n二行目", "あ".repeat(100));

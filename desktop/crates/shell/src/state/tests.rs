@@ -103,7 +103,7 @@ fn launch() -> SlotLaunch {
 fn restart_does_nothing_while_the_ended_slots_run_has_not_returned() {
     let (mut shell, _held, spawned) = held_shell();
     let slot = shell.open(launch());
-    let id = shell.session_id(slot).unwrap().to_owned();
+    let id = shell.session_id(slot).unwrap();
     // The session showed its end; its run, kept unpolled, has not returned.
     shell.slots.get_mut(&slot).unwrap().status = SessionStatus::Ended;
     assert!(shell.ended(slot));
@@ -114,6 +114,6 @@ fn restart_does_nothing_while_the_ended_slots_run_has_not_returned() {
     assert!(acted.started.is_none() && acted.rows.is_none());
     assert_eq!(spawned.load(Ordering::SeqCst), 1);
     assert_eq!(shell.live_runs(), 1);
-    assert_eq!(shell.session_id(slot), Some(id.as_str()));
+    assert_eq!(shell.session_id(slot).as_deref(), Some(id.as_str()));
     assert!(shell.ended(slot));
 }

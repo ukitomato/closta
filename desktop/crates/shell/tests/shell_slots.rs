@@ -9,16 +9,20 @@ mod support;
 use std::io::ErrorKind;
 use std::sync::LazyLock;
 
+use closta_model::SavedSessionSummary;
 use closta_providers::claude::launch::LaunchError;
 use closta_session::runtime::SessionRuntime;
 use closta_session::status::SessionStatus;
 use closta_shell::closing::{CloseQuestion, CloseStage};
+use closta_shell::copy;
 use closta_shell::needs_you::NeedsYouItem;
+use closta_shell::new_session::{launch_in, resume_in};
 use closta_shell::slot::{SlotId, SlotMark};
 use closta_shell::state::{Refresh, ShellAction, ShellState};
 use support::{
-    Ask, Harness, ask_in, drive, emit_capture, relaunchable, replay_launch, running, until,
-    waiting_slot, waits_on,
+    AFTER_CLEAR, Ask, BEFORE_CLEAR, Harness, ask_in, drive, emit_capture, end_slot, open_cleared,
+    play_after_clear, play_cleared, relaunchable, replay_launch, running, until, waiting_slot,
+    waits_on,
 };
 
 const SANDBOX: &str = "36-sandbox-unavailable.ndjson";
@@ -492,5 +496,131 @@ fn closing_an_ended_slot_removes_it_at_once() {
         assert_eq!(acted.removed, vec![slot]);
         assert!(shell.slots().is_empty());
         until(|| shell.live_runs() == 0).await;
+    });
+}
+
+const CLEARED_FOLDER: &str = r"C:\work\cleared";
+
+/// 41's third request cut to a session name's length (60 UTF-16 units of ASCII text).
+const AFTER_CLEAR_TITLE: &str = "Which word did I ask you to remember? If you do not know, re";
+
+/// The 6d-R design's `/clear` section, shell (3): Copy Session ID copies the id the CLI goes on
+/// under after a `/clear`, read once the session ended (only an ended or failed slot copies).
+#[test]
+fn copy_session_id_after_a_clear_copies_the_new_id() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let ports = harness.ports();
+        let (slot, runtime, control) =
+            open_cleared(&harness, &mut shell, launch_in(CLEARED_FOLDER, &ports), 0).await;
+        assert_eq!(shell.session_id(slot).as_deref(), Some(BEFORE_CLEAR));
+        play_cleared(&mut shell, slot, &runtime, &control, 22).await;
+        end_slot(&mut shell, slot, &control).await;
+
+        let acted = shell.act(ShellAction::CopySessionId { slot });
+        assert_eq!(acted.clipboard.as_deref(), Some(AFTER_CLEAR));
+        assert_eq!(shell.session_id(slot).as_deref(), Some(AFTER_CLEAR));
+    });
+}
+
+/// The 6d-R design's `/clear` section, shell (4): after a `/clear` the slot is named by the
+/// first request after the divider, a slot opened under a saved conversation's title too.
+#[test]
+fn after_a_clear_the_title_is_the_first_request_after_the_divider() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let ports = harness.ports();
+        let saved = SavedSessionSummary {
+            id: BEFORE_CLEAR.to_owned(),
+            title: "Remember the word kumquat".to_owned(),
+            updated_at_ms: 1,
+            bytes: 10,
+        };
+        let launches = [
+            launch_in(CLEARED_FOLDER, &ports),
+            resume_in(CLEARED_FOLDER, &saved, &ports),
+        ];
+        for (n, launch) in launches.into_iter().enumerate() {
+            let resumed = launch.resume.is_some();
+            let (slot, runtime, control) = open_cleared(&harness, &mut shell, launch, n).await;
+            let opened_as = if resumed {
+                saved.title.as_str()
+            } else {
+                copy::NEW_SESSION_TITLE
+            };
+            assert_eq!(shell.slot_title(slot).as_deref(), Some(opened_as));
+            play_cleared(&mut shell, slot, &runtime, &control, 22).await;
+            play_after_clear(&mut shell, slot, &runtime, &control).await;
+            assert_eq!(
+                shell.slot_title(slot).as_deref(),
+                Some(AFTER_CLEAR_TITLE),
+                "resumed: {resumed}"
+            );
+            end_slot(&mut shell, slot, &control).await;
+        }
+    });
+}
+
+/// The 6d-R design's `/clear` section (session): a Restart after a `/clear` resumes the id the
+/// CLI goes on under, not the one the slot was opened with.
+#[test]
+fn a_restart_after_a_clear_resumes_the_new_id() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let ports = harness.ports();
+        let (slot, runtime, control) =
+            open_cleared(&harness, &mut shell, launch_in(CLEARED_FOLDER, &ports), 0).await;
+        play_cleared(&mut shell, slot, &runtime, &control, 22).await;
+        end_slot(&mut shell, slot, &control).await;
+        until(|| shell.live_runs() == 0).await;
+        assert!(shell.restart_resumes(slot));
+
+        let acted = shell.act(ShellAction::Restart { slot });
+        assert_eq!(acted.started, Some(slot));
+        let args = harness.launch_args(1).await;
+        assert!(
+            args.contains(&format!("--resume={AFTER_CLEAR}")),
+            "{args:?}"
+        );
+        assert!(
+            !args.contains(&format!("--resume={BEFORE_CLEAR}")),
+            "{args:?}"
+        );
+        assert!(
+            !args.iter().any(|it| it.starts_with("--session-id")),
+            "{args:?}"
+        );
+        assert_eq!(shell.session_id(slot).as_deref(), Some(AFTER_CLEAR));
+    });
+}
+
+/// Not ported from Kotlin (the 6d-R2 plan's Review Focus 2, ClearResetTest's "between the reset
+/// and the next init the old id is gone, and the host's is used"): a process that ends after the
+/// reset and before the next init leaves no id of the CLI's, and a Restart resumes the host's.
+#[test]
+fn a_restart_between_the_reset_and_the_next_init_resumes_the_host_id() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let ports = harness.ports();
+        let (slot, runtime, control) =
+            open_cleared(&harness, &mut shell, launch_in(CLEARED_FOLDER, &ports), 0).await;
+        // Through line 19: the reset (line 18) folded, the init after it (line 20) not come.
+        play_cleared(&mut shell, slot, &runtime, &control, 19).await;
+        assert!(runtime.view().conversation.session.is_none());
+        end_slot(&mut shell, slot, &control).await;
+        until(|| shell.live_runs() == 0).await;
+        assert!(shell.restart_resumes(slot));
+        assert_eq!(shell.session_id(slot).as_deref(), Some(BEFORE_CLEAR));
+
+        shell.act(ShellAction::Restart { slot });
+        let args = harness.launch_args(1).await;
+        assert!(
+            args.contains(&format!("--resume={BEFORE_CLEAR}")),
+            "{args:?}"
+        );
+        assert!(
+            !args.contains(&format!("--resume={AFTER_CLEAR}")),
+            "{args:?}"
+        );
     });
 }

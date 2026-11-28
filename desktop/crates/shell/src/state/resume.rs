@@ -17,6 +17,7 @@ impl ShellState {
         let Some(picker) = &self.resume else {
             return Vec::new();
         };
+        let held = self.held_ids();
         picker
             .filtered()
             .into_iter()
@@ -24,7 +25,7 @@ impl ShellState {
                 id: summary.id.clone(),
                 title: summary.title.clone(),
                 updated_at_ms: summary.updated_at_ms,
-                state: self.resume_row_state(&summary.id),
+                state: resume_row_state(&held, &summary.id),
             })
             .collect()
     }
@@ -51,17 +52,16 @@ impl ShellState {
         self.overlay().is_none() && self.pending_new.is_none()
     }
 
-    fn resume_row_state(&self, session_id: &str) -> ResumeRowState {
-        let mut holding = self
-            .slots
-            .iter()
-            .filter(|(_, slot)| slot.session_id == session_id);
-        if let Some((id, _)) = holding.clone().find(|(_, slot)| !slot.closing) {
-            ResumeRowState::OpenHere(*id)
-        } else if holding.next().is_some() || self.run_alive(session_id) {
-            ResumeRowState::Closing
-        } else {
-            ResumeRowState::Closed
+    /// Each slot's current id and whether it closes, and the current ids of the runs that have
+    /// not returned: read once, not for each row.
+    fn held_ids(&self) -> HeldIds {
+        HeldIds {
+            slots: self
+                .slots
+                .iter()
+                .map(|(id, slot)| (*id, slot.runtime.resume_id(), slot.closing))
+                .collect(),
+            runs: self.live_ids(),
         }
     }
 
@@ -149,12 +149,9 @@ impl ShellState {
             return Acted::default();
         };
         let project = picker.project.clone();
-        let holding = self
-            .slots
-            .iter()
-            .find(|(_, slot)| slot.session_id == session_id && !slot.closing)
-            .map(|(id, _)| *id);
-        if let Some(slot) = holding {
+        let held = self.held_ids();
+        let state = resume_row_state(&held, session_id);
+        if let ResumeRowState::OpenHere(slot) = state {
             self.close_resume();
             self.select(slot);
             return Acted {
@@ -162,7 +159,7 @@ impl ShellState {
                 ..Acted::default()
             };
         }
-        if self.resume_row_state(session_id) == ResumeRowState::Closing || self.slots_full() {
+        if state == ResumeRowState::Closing || self.slots_full() {
             return Acted::default();
         }
         let Some(folder) = self.folder_of(&project) else {
@@ -183,5 +180,24 @@ impl ShellState {
             picker.halt();
         }
         Acted::default()
+    }
+}
+
+/// What [`ShellState::held_ids`] read.
+struct HeldIds {
+    slots: Vec<(SlotId, String, bool)>,
+    runs: HashSet<String>,
+}
+
+/// Whether a slot holds the conversation `session_id`, or one that closes or a run that has not
+/// returned still does.
+fn resume_row_state(held: &HeldIds, session_id: &str) -> ResumeRowState {
+    let mut holding = held.slots.iter().filter(|(_, id, _)| id == session_id);
+    if let Some((slot, _, _)) = holding.clone().find(|(_, _, closing)| !closing) {
+        ResumeRowState::OpenHere(*slot)
+    } else if holding.next().is_some() || held.runs.contains(session_id) {
+        ResumeRowState::Closing
+    } else {
+        ResumeRowState::Closed
     }
 }

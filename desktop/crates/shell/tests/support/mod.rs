@@ -29,7 +29,7 @@ use closta_shell::header::app_header;
 use closta_shell::new_session::{ClaudeOnPath, LaunchChecks, PlannerFor, SavedFor};
 use closta_shell::settings::{MemorySettings, Settings, SettingsSink};
 use closta_shell::slot::{SlotId, SlotLaunch, Spawn};
-use closta_shell::state::{Ports, ShellState};
+use closta_shell::state::{Ports, ShellAction, ShellState};
 use futures_lite::future;
 use smol::{Executor, Timer};
 
@@ -568,4 +568,130 @@ pub async fn waiting_slot(
     let generation = shell.watch(slot).unwrap().generation();
     shell.refresh(slot, generation, now_ms).unwrap();
     (slot, control, runtime)
+}
+
+/// Capture 41: a turn, `/clear`, then a turn of the conversation the clear started.
+pub const CLEARED: &str = "41-clear-reset.ndjson";
+/// 41's session before the `/clear` (its non-blank lines 2 to 18).
+pub const BEFORE_CLEAR: &str = "a6635625-53e9-40b5-adfb-977a4e9163b2";
+/// 41's session after the `/clear`: the init after the reset (non-blank line 20) names it.
+pub const AFTER_CLEAR: &str = "b3c1b6ae-517a-4b6a-8b61-f3693facb4f1";
+/// What the host sent in 41 (CaptureReplay.kt's SENT): the capture has no line of the user's.
+pub const CLEARED_SENT: [&str; 3] = [
+    "Remember the word kumquat. Respond with exactly one word: pong",
+    "/clear",
+    "Which word did I ask you to remember? If you do not know, respond with exactly: unknown",
+];
+
+/// A slot of `launch` (a launch in a folder, with its relaunch) under 41's first session id,
+/// whose companion hands over the runtime; it returns once the session runs.
+pub async fn open_cleared(
+    harness: &Harness,
+    shell: &mut ShellState,
+    launch: SlotLaunch,
+    n: usize,
+) -> (SlotId, SessionRuntime, LiveControl) {
+    let (with_runtime, runtime) = harness.launch("41");
+    let slot = shell.open(SlotLaunch {
+        session_id: Some(BEFORE_CLEAR.to_owned()),
+        companion: with_runtime.companion,
+        ..launch
+    });
+    let runtime = runtime.recv().await.unwrap();
+    until(|| runtime.commands().is_some()).await;
+    let control = harness.control(n).await;
+    control.skip_initialize().await;
+    (slot, runtime, control)
+}
+
+/// Sends `text` from the slot and waits until the process has read it.
+pub async fn send_text(shell: &mut ShellState, slot: SlotId, control: &LiveControl, text: &str) {
+    shell.act(ShellAction::EditDraft {
+        slot,
+        text: text.to_owned(),
+    });
+    shell.act(ShellAction::Send { slot });
+    control.next_stdin_line().await.expect("the request");
+}
+
+/// Reads the slot again at time 0.
+pub fn refresh_slot(shell: &mut ShellState, slot: SlotId) {
+    let generation = shell.watch(slot).unwrap().generation();
+    shell.refresh(slot, generation, 0).unwrap();
+}
+
+/// Plays capture 41 as the host lives it, up to its non-blank line `through` (counted from 1):
+/// the first request sent, its turn (lines 2 to 14), `/clear` sent, then lines 15 to `through`.
+/// Line 1 answers the initialize, which the live process answered. It returns once both sends
+/// and the reset are folded (and the init after it, from line 20) and the slot has read them.
+pub async fn play_cleared(
+    shell: &mut ShellState,
+    slot: SlotId,
+    runtime: &SessionRuntime,
+    control: &LiveControl,
+    through: usize,
+) {
+    assert!(through >= 18, "the reset is line 18");
+    let lines = crate::common::non_blank_lines(&crate::common::text_of(CLEARED));
+    send_text(shell, slot, control, CLEARED_SENT[0]).await;
+    for line in &lines[1..14] {
+        control.emit(line);
+    }
+    send_text(shell, slot, control, CLEARED_SENT[1]).await;
+    for line in &lines[14..through] {
+        control.emit(line);
+    }
+    until(|| {
+        let view = runtime.view();
+        view.transcript.routing.sends == 2
+            && view.transcript.cleared_at.is_some()
+            && (through < 20) == view.conversation.session.is_none()
+    })
+    .await;
+    if through >= 22 {
+        until(|| {
+            let view = runtime.view();
+            !closta_presenter::thread_running::thread_is_running(
+                &view.conversation,
+                &view.transcript,
+            )
+        })
+        .await;
+    }
+    assert!(runtime.sent());
+    refresh_slot(shell, slot);
+}
+
+/// After [`play_cleared`] through line 22: sends 41's third request and plays lines 23 to the
+/// last, then reads the slot once that turn is over.
+pub async fn play_after_clear(
+    shell: &mut ShellState,
+    slot: SlotId,
+    runtime: &SessionRuntime,
+    control: &LiveControl,
+) {
+    let lines = crate::common::non_blank_lines(&crate::common::text_of(CLEARED));
+    send_text(shell, slot, control, CLEARED_SENT[2]).await;
+    for line in &lines[22..] {
+        control.emit(line);
+    }
+    until(|| {
+        let view = runtime.view();
+        view.transcript.routing.sends == 3
+            && !closta_presenter::thread_running::thread_is_running(
+                &view.conversation,
+                &view.transcript,
+            )
+    })
+    .await;
+    refresh_slot(shell, slot);
+}
+
+/// Ends the slot's process and waits until its run has returned and the slot shows it ended.
+pub async fn end_slot(shell: &mut ShellState, slot: SlotId, control: &LiveControl) {
+    let mut watch = shell.watch(slot).unwrap();
+    control.exit(0);
+    while watch.changed().await {}
+    shell.refresh(slot, watch.generation(), 0).unwrap();
+    assert_eq!(shell.status(slot), Some(SessionStatus::Ended));
 }

@@ -329,12 +329,15 @@ fn last_segments(path: &str) -> String {
 /// How long a session's name in the sessions list may be, in UTF-16 units.
 pub const TITLE_MAX: usize = 60;
 
-/// A session's name in the sessions list: the first line of the user's first request, cut short;
-/// `None` before one.
+/// A session's name in the sessions list: the first line of the user's first request after the
+/// last `/clear`'s divider, cut short; `None` before one.
 pub fn session_title(transcript: &Transcript) -> Option<String> {
+    // After a `/clear`, the conversation starts with the first request after the divider.
+    let after = transcript.cleared_at.map_or(0, |at| at + 1);
     let first_request = transcript
         .messages
         .values()
+        .skip(after)
         .find(|message| message.role == Role::User)?;
     let line = first_request
         .parts

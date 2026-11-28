@@ -719,7 +719,7 @@ fn a_resumed_launch_starts_its_id_with_its_record() {
             !args.iter().any(|it| it.starts_with("--session-id")),
             "{args:?}"
         );
-        assert_eq!(shell.session_id(slot), Some(saved.id.as_str()));
+        assert_eq!(shell.session_id(slot).as_deref(), Some(saved.id.as_str()));
         assert_eq!(shell.slot_title(slot).as_deref(), Some("Fix the parser"));
         assert_eq!(shell.slots()[0].title, "Fix the parser");
 
@@ -740,8 +740,8 @@ fn a_new_launch_starts_a_new_id() {
         let second = shell.open(launch_in(FOLDER, &ports));
         harness.control(1).await;
         let (one, two) = (
-            shell.session_id(first).unwrap().to_owned(),
-            shell.session_id(second).unwrap().to_owned(),
+            shell.session_id(first).unwrap(),
+            shell.session_id(second).unwrap(),
         );
         assert_ne!(one, two);
         for (n, id) in [(0, &one), (1, &two)] {
@@ -801,10 +801,10 @@ fn replacing_a_slot_rewrites_its_session_id() {
         let saved = summary_of("0b1f4c52-6a1e-4a43-9a53-7f0d2a4b8c11", "Fix the parser");
         let slot = shell.open(resume_in(FOLDER, &saved, &ports));
         harness.control(0).await;
-        assert_eq!(shell.session_id(slot), Some(saved.id.as_str()));
+        assert_eq!(shell.session_id(slot).as_deref(), Some(saved.id.as_str()));
         shell.replace(slot, launch_in(FOLDER, &ports)).unwrap();
         harness.control(1).await;
-        let id = shell.session_id(slot).unwrap().to_owned();
+        let id = shell.session_id(slot).unwrap();
         assert_ne!(id, saved.id);
         let args = harness.launch_args(1).await;
         assert!(args.contains(&format!("--session-id={id}")), "{args:?}");
@@ -849,7 +849,7 @@ fn a_replace_with_the_same_id_keeps_both_runs() {
         let (mut launch, _) = harness.launch("next");
         launch.session_id = Some("same-id".to_owned());
         shell.replace(slot, launch).unwrap();
-        assert_eq!(shell.session_id(slot), Some("same-id"));
+        assert_eq!(shell.session_id(slot).as_deref(), Some("same-id"));
         assert_eq!(shell.live_runs(), 2, "the old run has not returned");
         assert!(shell.run_alive("same-id"));
 
@@ -916,7 +916,7 @@ fn a_restart_after_a_request_continues_the_conversation() {
         let ports = harness.ports();
         let (slot, control) =
             running_slot(&harness, &mut shell, launch_in(FOLDER, &ports), 0).await;
-        let id = shell.session_id(slot).unwrap().to_owned();
+        let id = shell.session_id(slot).unwrap();
         send_from(&mut shell, slot, &control, "hello").await;
         end_and_return(&mut shell, slot, &control).await;
         assert!(shell.restart_resumes(slot));
@@ -929,7 +929,7 @@ fn a_restart_after_a_request_continues_the_conversation() {
             !args.iter().any(|it| it.starts_with("--session-id")),
             "{args:?}"
         );
-        assert_eq!(shell.session_id(slot), Some(id.as_str()));
+        assert_eq!(shell.session_id(slot).as_deref(), Some(id.as_str()));
         assert!(shell.resumed(slot));
     });
 }
@@ -941,7 +941,7 @@ fn a_restart_with_nothing_sent_starts_the_same_id_again() {
         let ports = harness.ports();
         let (slot, control) =
             running_slot(&harness, &mut shell, launch_in(FOLDER, &ports), 0).await;
-        let id = shell.session_id(slot).unwrap().to_owned();
+        let id = shell.session_id(slot).unwrap();
         end_and_return(&mut shell, slot, &control).await;
         assert!(!shell.restart_resumes(slot));
         assert_eq!(shell.restart_note(slot), Some(copy::RESTART_AGAIN));
@@ -953,7 +953,7 @@ fn a_restart_with_nothing_sent_starts_the_same_id_again() {
             !args.iter().any(|it| it.starts_with("--resume")),
             "{args:?}"
         );
-        assert_eq!(shell.session_id(slot), Some(id.as_str()));
+        assert_eq!(shell.session_id(slot).as_deref(), Some(id.as_str()));
         assert!(!shell.resumed(slot));
     });
 }
@@ -975,7 +975,7 @@ fn a_restart_of_a_resumed_slot_continues_and_keeps_its_title() {
             !args.iter().any(|it| it.starts_with("--session-id")),
             "{args:?}"
         );
-        assert_eq!(shell.session_id(slot), Some(saved.id.as_str()));
+        assert_eq!(shell.session_id(slot).as_deref(), Some(saved.id.as_str()));
         assert_eq!(shell.slot_title(slot).as_deref(), Some("Fix the parser"));
     });
 }

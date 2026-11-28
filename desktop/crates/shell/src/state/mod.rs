@@ -386,11 +386,10 @@ struct Slot {
     title: String,
     /// The first request of the conversation as of the last refresh, once there is one.
     asked_title: Option<String>,
-    /// The id of the session the slot holds.
-    session_id: String,
     /// Whether the session puts a saved one back.
     resumed: bool,
-    /// The title of the saved conversation a resumed session was opened from.
+    /// The title of the saved conversation a resumed session was opened from, until a `/clear`
+    /// starts another conversation.
     saved_title: Option<String>,
     /// The project the slot is listed in; `None` is no project.
     project: Option<ProjectKey>,
@@ -463,8 +462,8 @@ impl Slot {
 type Runs = Arc<Mutex<BTreeMap<u64, RunEntry>>>;
 
 struct RunEntry {
-    session_id: String,
-    /// The handle to kill the run's process.
+    /// The handle to kill the run's process, and to read the id its conversation is saved
+    /// under now.
     runtime: SessionRuntime,
     /// Closes when the run has returned.
     finished: Receiver<()>,
@@ -475,7 +474,6 @@ struct Started {
     runtime: SessionRuntime,
     /// Closes once the run has returned.
     finished: Receiver<()>,
-    session_id: String,
     /// Whether it puts a saved session back.
     resumed: bool,
     /// The title of that conversation, if the launch gave one.
@@ -564,7 +562,6 @@ impl ShellState {
         let Started {
             runtime,
             finished,
-            session_id,
             resumed,
             saved_title,
         } = self.start(launch);
@@ -573,7 +570,6 @@ impl ShellState {
             Slot {
                 title,
                 asked_title: None,
-                session_id,
                 resumed,
                 saved_title,
                 project,
@@ -624,7 +620,6 @@ impl ShellState {
         held.title = title;
         held.asked_title = None;
         held.resumed = started.resumed;
-        held.session_id = started.session_id;
         held.saved_title = started.saved_title;
         held.relaunch = relaunch;
         held.settles_on_failure = settles_on_failure;
@@ -684,7 +679,6 @@ impl ShellState {
         lock(&self.runs).insert(
             number,
             RunEntry {
-                session_id: id.clone(),
                 runtime: runtime.clone(),
                 finished: finished.clone(),
             },
@@ -701,7 +695,6 @@ impl ShellState {
         Started {
             runtime,
             finished,
-            session_id: id,
             resumed,
             saved_title,
         }
@@ -712,11 +705,19 @@ impl ShellState {
         lock(&self.runs).len()
     }
 
-    /// Whether a run of this session id has not returned.
+    /// Whether a run whose conversation is saved under this session id now has not returned:
+    /// after a `/clear` that is the CLI's id, not the one the run was started with.
     pub fn run_alive(&self, session_id: &str) -> bool {
+        self.live_ids().contains(session_id)
+    }
+
+    /// The ids the conversations of the runs that have not returned are saved under now.
+    fn live_ids(&self) -> HashSet<String> {
+        // The lock order is `runs`, then each run's store: no path takes them the other way.
         lock(&self.runs)
             .values()
-            .any(|run| run.session_id == session_id)
+            .map(|run| run.runtime.resume_id())
+            .collect()
     }
 
     /// The slots in the order they were opened.
@@ -751,9 +752,10 @@ impl ShellState {
         self.slots.get(&slot).is_some_and(|it| it.resumed)
     }
 
-    /// The id of the session the slot holds; `None` for a slot that is not there.
-    pub fn session_id(&self, slot: SlotId) -> Option<&str> {
-        self.slots.get(&slot).map(|it| it.session_id.as_str())
+    /// The id the slot's conversation is saved under now: after a `/clear`, the one the CLI goes
+    /// on under once its next init names it. `None` for a slot that is not there.
+    pub fn session_id(&self, slot: SlotId) -> Option<String> {
+        self.slots.get(&slot).map(|it| it.runtime.resume_id())
     }
 
     /// The slot's rows as of its last refresh; none for a slot that is not there.
@@ -908,6 +910,10 @@ impl ShellState {
                 .any(|(alert, _)| request_of(alert) == Some(id.as_str()))
         });
         held.asked_title = session_title(&view.transcript);
+        if view.transcript.cleared_at.is_some() {
+            // The conversation the slot was opened from is behind the divider.
+            held.saved_title = None;
+        }
         let group = session_summary(&view.conversation, &view.transcript, held.unread).group;
         held.since = Some(group_since_after(held.since.as_ref(), group, now_ms));
         held.last = Some(view);
@@ -1142,7 +1148,7 @@ impl ShellState {
                 self.project_checked(&project, exists)
             }
             ShellAction::CopySessionId { slot } => {
-                let id = self.session_id(slot).map(str::to_owned);
+                let id = self.session_id(slot);
                 Acted {
                     clipboard: if self.copyable(slot) { id } else { None },
                     ..Acted::default()
@@ -1414,7 +1420,7 @@ impl ShellState {
             return Acted::default();
         };
         let mut launch = relaunch();
-        launch.session_id = Some(held.session_id.clone());
+        launch.session_id = Some(held.runtime.resume_id());
         if self.restart_resumes(slot) {
             let folder = held
                 .project

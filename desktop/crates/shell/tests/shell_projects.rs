@@ -604,7 +604,7 @@ fn copy_session_id_copies_the_slot_s_session_id() {
         end(&mut shell, slot).await;
         assert!(shell.ended(slot));
         assert!(summary(&shell, slot).can_copy_id, "the precondition");
-        assert_eq!(shell.session_id(slot), Some(saved.id.as_str()));
+        assert_eq!(shell.session_id(slot).as_deref(), Some(saved.id.as_str()));
         assert_eq!(
             shell
                 .act(ShellAction::CopySessionId { slot })

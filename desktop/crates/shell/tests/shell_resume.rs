@@ -12,13 +12,16 @@ use closta_core::ports::SavedSessionsError;
 use closta_model::SavedSessionSummary;
 use closta_providers::claude::fake::saved::FakeSavedSessions;
 use closta_session::history::SavedListing;
-use closta_shell::new_session::resume_in;
+use closta_shell::new_session::{launch_in, resume_in};
 use closta_shell::projects::{ProjectKey, project_key};
 use closta_shell::resume::{ResumeRowState, ResumeStage};
 use closta_shell::settings::{SETTINGS_VERSION, SavedProject, Settings};
 use closta_shell::slot::SlotLaunch;
 use closta_shell::state::{Acted, FocusTarget, Overlay, Ports, ShellAction, ShellState};
-use support::{Harness, Machine, Planners, RecordingSettings, drive, running};
+use support::{
+    AFTER_CLEAR, BEFORE_CLEAR, Harness, Machine, Planners, RecordingSettings, drive, open_cleared,
+    play_cleared, running,
+};
 
 const A: &str = r"C:\work\alpha";
 const B: &str = r"C:\work\beta";
@@ -449,12 +452,112 @@ fn a_row_whose_old_run_has_not_returned_is_closing() {
             .replace(slot, launch_with_id(&harness, A, None))
             .unwrap();
         harness.control(1).await;
-        assert_ne!(shell.session_id(slot), Some(X));
+        assert_ne!(shell.session_id(slot).as_deref(), Some(X));
         assert!(shell.run_alive(X), "the old run has not returned");
 
         open_listed(&mut shell);
         assert_eq!(state_of(&shell, X), ResumeRowState::Closing);
         assert_eq!(state_of(&shell, Y), ResumeRowState::Closed);
+    });
+}
+
+/// Capture 41's two conversations as the popup lists them.
+fn cleared_listing() -> Vec<SavedSessionSummary> {
+    vec![
+        summary(BEFORE_CLEAR, "Remember the word kumquat"),
+        summary(AFTER_CLEAR, "Which word did I ask you to remember?"),
+    ]
+}
+
+/// Opens the popup on `A` and hands it 41's two conversations.
+fn open_cleared_listed(shell: &mut ShellState) {
+    let acted = open(shell, A);
+    shell.act(ShellAction::SavedListed {
+        generation: generation(&acted),
+        listing: listed(cleared_listing()),
+    });
+    assert_eq!(shell.resume_rows().len(), 2);
+}
+
+/// The 6d-R design's `/clear` section, shell (1): the conversation before a `/clear` is another
+/// conversation, closed while the slot that cleared it runs on, and it can be opened.
+#[test]
+fn after_a_clear_the_old_conversation_is_closed_and_can_be_opened() {
+    drive(|harness| async move {
+        let (mut shell, _) = shell_of(&harness, &[A]);
+        let ports = harness.ports();
+        let (slot, runtime, control) =
+            open_cleared(&harness, &mut shell, launch_in(A, &ports), 0).await;
+        open_cleared_listed(&mut shell);
+        assert_eq!(
+            state_of(&shell, BEFORE_CLEAR),
+            ResumeRowState::OpenHere(slot)
+        );
+        shell.act(ShellAction::CloseResume);
+
+        // Through the init after the reset (line 20): the slot runs on in the clear's turn.
+        play_cleared(&mut shell, slot, &runtime, &control, 20).await;
+        assert!(matches!(
+            shell.status(slot),
+            Some(closta_session::status::SessionStatus::Running { .. })
+        ));
+        open_cleared_listed(&mut shell);
+        assert_eq!(state_of(&shell, BEFORE_CLEAR), ResumeRowState::Closed);
+        assert_eq!(
+            state_of(&shell, AFTER_CLEAR),
+            ResumeRowState::OpenHere(slot)
+        );
+
+        let acted = pick(&mut shell, BEFORE_CLEAR);
+        let opened = acted.started.expect("the old conversation opens");
+        assert_ne!(opened, slot);
+        assert_eq!(shell.session_id(opened).as_deref(), Some(BEFORE_CLEAR));
+        harness.control(1).await;
+        let args = harness.launch_args(1).await;
+        assert!(
+            args.contains(&format!("--resume={BEFORE_CLEAR}")),
+            "{args:?}"
+        );
+        assert_eq!(shell.live_runs(), 2);
+    });
+}
+
+/// The 6d-R design's `/clear` section, shell (2): a slot closed after a `/clear` holds the new
+/// id until its run returns; the old id is free.
+#[test]
+fn after_a_clear_the_closing_slot_holds_the_new_id_not_the_old() {
+    drive(|harness| async move {
+        let (mut shell, planners) = counted(&harness, &[A]);
+        harness.stubborn();
+        let ports = harness.ports();
+        let (slot, runtime, control) =
+            open_cleared(&harness, &mut shell, launch_in(A, &ports), 0).await;
+        open_cleared_listed(&mut shell);
+        assert_eq!(
+            state_of(&shell, BEFORE_CLEAR),
+            ResumeRowState::OpenHere(slot)
+        );
+        shell.act(ShellAction::CloseResume);
+
+        // Through line 22: the clear's turn is over and the slot closes at once.
+        play_cleared(&mut shell, slot, &runtime, &control, 22).await;
+        shell.act(ShellAction::CloseSlot { slot });
+        assert!(shell.slots().iter().any(|it| it.id == slot && it.closing));
+        assert!(shell.run_alive(AFTER_CLEAR), "the run has not returned");
+        assert!(!shell.run_alive(BEFORE_CLEAR));
+
+        open_cleared_listed(&mut shell);
+        assert_eq!(state_of(&shell, AFTER_CLEAR), ResumeRowState::Closing);
+        assert_eq!(state_of(&shell, BEFORE_CLEAR), ResumeRowState::Closed);
+        let slots = shell.slots().len();
+        let runs = shell.live_runs();
+        let planned = planners.planned();
+        let acted = pick(&mut shell, AFTER_CLEAR);
+        assert!(acted.started.is_none() && acted.focus.is_none());
+        assert_eq!(shell.slots().len(), slots);
+        assert_eq!(shell.live_runs(), runs);
+        assert_eq!(planners.planned(), planned);
+        assert!(shell.resume().is_some(), "the popup stays open");
     });
 }
 
@@ -528,7 +631,7 @@ fn picking_a_saved_session_resumes_it_in_its_project() {
         assert_eq!(shell.selected(), Some(slot));
         assert!(shell.resume().is_none(), "the popup closes");
         assert!(harness.saved_for.stopped(0), "the popup's reading gives up");
-        assert_eq!(shell.session_id(slot), Some(Y));
+        assert_eq!(shell.session_id(slot).as_deref(), Some(Y));
         assert_eq!(shell.project_of(slot), Some(key(A)).as_ref());
         harness.control(0).await;
         let args = harness.launch_args(0).await;
@@ -663,7 +766,7 @@ fn an_id_not_listed_is_not_picked() {
 
         let acted = pick(&mut shell, X);
         assert!(acted.started.is_some(), "a hidden row of the list opens");
-        assert_eq!(shell.session_id(acted.started.unwrap()), Some(X));
+        assert_eq!(shell.session_id(acted.started.unwrap()).as_deref(), Some(X));
     });
 }
 
