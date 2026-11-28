@@ -9,6 +9,7 @@ import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.ex.FileEditorManagerEx
 import com.intellij.openapi.fileTypes.PlainTextFileType
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.Key
 import com.intellij.openapi.util.text.StringUtil
 import com.intellij.openapi.vfs.VirtualFile
@@ -30,6 +31,7 @@ import dev.ukitomato.closta.presenter.view.PlanChoice
 import dev.ukitomato.closta.presenter.view.PlanGo
 import dev.ukitomato.closta.presenter.view.planAnswer
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.awt.BorderLayout
@@ -110,27 +112,47 @@ class PlanTabs(
         )
     }
 
-    // Wherever the request is answered, withdrawn or lost (a card scrolled out of sight is not made again), the tab
-    // goes read-only and its bar goes.
+    // Wherever the request is answered, withdrawn or lost (a card scrolled out of sight is not made again), or its
+    // session ends or is stopped, the tab goes read-only and its bar goes, and the tab is forgotten.
     private fun watchRequest(
         file: LightVirtualFile,
         tab: PlanTab,
     ) {
         val source = project.service<ChatSessions>().source(tab.sessionId)
-        val ended = ApplicationManager.getApplication()
-        val gone = { closed(file) }
         if (source == null) {
-            ended.invokeLater(gone, project.disposed)
+            finish(file, tab)
             return
         }
-        opened.scope.launch {
-            source.view.first { view ->
-                val approval = view.transcript.approvals[tab.requestId]
-                val pending = view.conversation.pendingApprovals.any { it.requestId == tab.requestId }
-                !planStillOpen(approval?.outcome != null, pending, true)
+        val guard = Disposer.newDisposable("Closta plan tab")
+        val watch =
+            opened.scope.launch {
+                combine(source.view, source.canSend) { view, running ->
+                    val outcome = view.transcript.approvals[tab.requestId]?.outcome
+                    planRequestOpen(
+                        outcome,
+                        view.conversation.pendingApprovals.map { it.requestId },
+                        tab.requestId,
+                        running,
+                    )
+                }.first { !it }
+                ApplicationManager.getApplication().invokeLater({ Disposer.dispose(guard) }, project.disposed)
             }
-            ended.invokeLater(gone, project.disposed)
+        Disposer.register(guard) {
+            watch.cancel()
+            finish(file, tab)
         }
+        // Stopping the session disposes its source without a change the watch could see.
+        Disposer.register(source, guard)
+    }
+
+    private fun finish(
+        file: LightVirtualFile,
+        tab: PlanTab,
+    ) {
+        closed(file)
+        opened.tabs.remove(file)
+        opened.files.remove(tab.requestId)
+        EditorNotifications.getInstance(project).updateNotifications(file)
     }
 
     private fun closed(file: LightVirtualFile) {

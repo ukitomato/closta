@@ -1,6 +1,9 @@
 package dev.ukitomato.closta.platforms.intellij.thread
 
+import dev.ukitomato.closta.presenter.view.ApprovalOutcome
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class PlanBarTest {
@@ -38,5 +41,18 @@ class PlanBarTest {
         assertEquals(false, planStillOpen(answered = true, pending = true, sessionRunning = true))
         assertEquals(false, planStillOpen(answered = false, pending = false, sessionRunning = true))
         assertEquals(false, planStillOpen(answered = false, pending = true, sessionRunning = false))
+    }
+
+    @Test
+    fun aRequestHeldByARunningCliIsOpen() = assertTrue(planRequestOpen(null, listOf("a", "r"), "r", running = true))
+
+    @Test
+    fun aRequestWhoseCliEndedIsClosedEvenIfStillHeld() =
+        assertFalse(planRequestOpen(null, listOf("r"), "r", running = false))
+
+    @Test
+    fun aRequestOutOfTheHeldOnesOrWithAnOutcomeIsClosed() {
+        assertFalse(planRequestOpen(null, listOf("a"), "r", running = true))
+        assertFalse(planRequestOpen(ApprovalOutcome.CANCELLED, listOf("r"), "r", running = true))
     }
 }
