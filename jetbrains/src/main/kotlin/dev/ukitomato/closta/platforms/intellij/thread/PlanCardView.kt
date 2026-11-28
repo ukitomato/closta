@@ -150,7 +150,41 @@ class PlanTabs(
     fun noteTyped(
         requestId: String,
         text: String,
-    ) = project.service<PlanNotes>().typedOnCard(requestId, text)
+    ) {
+        project.service<PlanNotes>().typedOnCard(requestId, text)
+        if (opened.noted.add(requestId)) watchNote(requestId)
+    }
+
+    /** What was typed on this plan's card so far: a card made again starts with it, so what is shown is sent. */
+    fun noteOnCard(requestId: String): String = project.service<PlanNotes>()[requestId]?.card.orEmpty()
+
+    // A note is forgotten when its request leaves (answered, withdrawn, session ended), with or without a tab.
+    private fun watchNote(requestId: String) {
+        val source = project.service<ChatSessions>().source(sessionId())
+        if (source == null) {
+            project.service<PlanNotes>().forget(requestId)
+            return
+        }
+        val guard = Disposer.newDisposable("Closta plan note")
+        val watch =
+            opened.scope.launch {
+                combine(source.view, source.canSend) { view, running ->
+                    planRequestOpen(
+                        view.transcript.approvals[requestId]?.outcome,
+                        view.conversation.pendingApprovals.map { it.requestId },
+                        requestId,
+                        running,
+                    )
+                }.first { !it }
+                ApplicationManager.getApplication().invokeLater({ Disposer.dispose(guard) }, project.disposed)
+            }
+        Disposer.register(guard) {
+            watch.cancel()
+            opened.noted.remove(requestId)
+            project.service<PlanNotes>().forget(requestId)
+        }
+        Disposer.register(source, guard)
+    }
 
     private fun finish(
         file: LightVirtualFile,
@@ -197,6 +231,7 @@ private class Opened(
     val files = ConcurrentHashMap<String, LightVirtualFile>()
     val tabs = ConcurrentHashMap<VirtualFile, PlanTab>()
     val shown: MutableSet<String> = ConcurrentHashMap.newKeySet()
+    val noted: MutableSet<String> = ConcurrentHashMap.newKeySet()
 }
 
 private val OPENED = Key.create<Opened>("closta.plan.tabs")
@@ -284,6 +319,10 @@ internal class PlanView(
         getAccessibleContext().accessibleName =
             listOfNotNull(ClostaBundle.message("thread.plan.title"), planTitle(card.plan)).joinToString(": ")
         comment.addActionListener { decide(PlanChoice.KEEP_PLANNING) }
+        tabs.noteOnCard(card.requestId).takeIf { it.isNotEmpty() }?.let {
+            comment.text = it
+            commentRow.visible(true)
+        }
         comment.document.addDocumentListener(
             object : DocumentAdapter() {
                 override fun textChanged(e: javax.swing.event.DocumentEvent) =
