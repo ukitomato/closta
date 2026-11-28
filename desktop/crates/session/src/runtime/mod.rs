@@ -17,7 +17,7 @@ use closta_core::ports::SavedSessions;
 use closta_model::AgentEvent;
 use closta_presenter::input::{Launched, PresenterInput};
 use closta_presenter::records::operations::asks_for_settings;
-use closta_presenter::session::SessionView;
+use closta_presenter::session::{SessionView, resume_id_of};
 use closta_providers::claude::launch::spec::LaunchSpec;
 use closta_providers::claude::launch::version::{VERSION_TIMEOUT, check_version_within};
 use closta_providers::claude::launch::{Launch, LaunchError};
@@ -217,6 +217,14 @@ impl SessionRuntime {
         &self.shared.id
     }
 
+    /// The id the conversation is saved under now: the CLI's after a `/clear` once its next init
+    /// named it, [`SessionRuntime::id`] otherwise.
+    pub fn resume_id(&self) -> String {
+        self.shared
+            .store
+            .read(|view| resume_id_of(view, &self.shared.id))
+    }
+
     /// Where the session is now.
     pub fn status(&self) -> SessionStatus {
         self.shared.state().status.clone()
@@ -387,7 +395,9 @@ async fn life(
                     let view = shared.store.view();
                     let spec = restart_spec(
                         &first,
-                        sent_of(&view),
+                        sent_of(&view)
+                            .then(|| resume_id_of(&view, &shared.id))
+                            .as_deref(),
                         config.opening,
                         &carried_choices(&view),
                         true,

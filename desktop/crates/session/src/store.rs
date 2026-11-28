@@ -35,6 +35,12 @@ impl ConversationStore {
         self.lock().view.clone()
     }
 
+    /// What `f` reads of the view, under the lock: no copy of the view is made. `f` must not
+    /// touch the store again.
+    pub fn read<R>(&self, f: impl FnOnce(&SessionView) -> R) -> R {
+        f(&self.lock().view)
+    }
+
     /// Core's state alone.
     pub fn conversation(&self) -> ConversationState {
         self.lock().view.conversation.clone()

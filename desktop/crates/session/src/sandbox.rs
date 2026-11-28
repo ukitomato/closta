@@ -49,21 +49,23 @@ fn applied(view: &SessionView, kind: SwitchKind) -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
-/// The spec a restart launches. After a message was `sent`, or in a session opened as a resume,
-/// it resumes the session by its own id (`--resume=<session_id>`, without the fork and the cut);
-/// a new session with nothing sent starts as it was launched (keeping its `--session-id`:
-/// capture 40). The `carried` mode, model and effort win over the launch's, and `sandbox` is the
-/// given value.
+/// The spec a restart launches. `sent_under` is the id the conversation is saved under now once a
+/// message was sent (the launch's own id, or the CLI's new one after a `/clear`), `None` while
+/// none was. After a message, or in a session opened as a resume, it resumes the session by that
+/// id (`--resume=<id>`, without the fork and the cut); a resume with nothing sent by its own id. A
+/// new session with nothing sent starts as it was launched (keeping its `--session-id`: capture
+/// 40). The `carried` mode, model and effort win over the launch's, and `sandbox` is the given
+/// value.
 pub fn restart_spec(
     launched: &LaunchSpec,
-    sent: bool,
+    sent_under: Option<&str>,
     opening: SessionOpening,
     carried: &CarriedChoices,
     sandbox: bool,
 ) -> LaunchSpec {
     let mut spec = launched.clone();
-    if sent || opening == SessionOpening::Resume {
-        spec.resume = Some(launched.session_id.clone());
+    if sent_under.is_some() || opening == SessionOpening::Resume {
+        spec.resume = Some(sent_under.map_or_else(|| launched.session_id.clone(), str::to_owned));
         spec.fork_session = false;
         spec.resume_session_at = None;
     }
@@ -225,7 +227,7 @@ mod tests {
     fn after_a_message_resumes_the_session() {
         let argv = args(&restart_spec(
             &LaunchSpec::new(ID),
-            true,
+            Some(ID),
             SessionOpening::New,
             &none(),
             true,
@@ -240,10 +242,32 @@ mod tests {
     }
 
     #[test]
+    fn a_restart_after_a_clear_resumes_the_id_it_was_sent_under() {
+        // AfterAClearResumesTheConversationTheClearStarted (SandboxRestartTest.kt, fed67ce), with
+        // the id capture 41's init after its reset names (41 line 20).
+        let cleared = "b3c1b6ae-517a-4b6a-8b61-f3693facb4f1";
+
+        let argv = args(&restart_spec(
+            &LaunchSpec::new(ID),
+            Some(cleared),
+            SessionOpening::New,
+            &none(),
+            true,
+        ));
+
+        assert!(argv.contains(&format!("--resume={cleared}")), "{argv:?}");
+        assert!(!argv.contains(&format!("--resume={ID}")), "{argv:?}");
+        assert!(
+            !argv.iter().any(|it| it.starts_with("--session-id")),
+            "{argv:?}"
+        );
+    }
+
+    #[test]
     fn before_the_first_message_keeps_the_session_id() {
         let argv = args(&restart_spec(
             &LaunchSpec::new(ID),
-            false,
+            None,
             SessionOpening::New,
             &none(),
             true,
@@ -261,7 +285,7 @@ mod tests {
     fn a_resumed_session_restarts_with_resume_even_with_nothing_sent() {
         let argv = args(&restart_spec(
             &LaunchSpec::new(ID),
-            false,
+            None,
             SessionOpening::Resume,
             &none(),
             true,
@@ -285,7 +309,7 @@ mod tests {
 
         let argv = args(&restart_spec(
             &launched,
-            true,
+            Some(ID),
             SessionOpening::New,
             &none(),
             true,
@@ -318,7 +342,7 @@ mod tests {
         };
         assert_eq!(
             Some("acceptEdits"),
-            restart_spec(&launched, true, SessionOpening::New, &carried, true)
+            restart_spec(&launched, Some(ID), SessionOpening::New, &carried, true)
                 .permission_mode
                 .as_deref()
         );
@@ -338,7 +362,7 @@ mod tests {
             effort: Some("high".to_owned()),
         };
 
-        let spec = restart_spec(&launched, true, SessionOpening::New, &carried, true);
+        let spec = restart_spec(&launched, Some(ID), SessionOpening::New, &carried, true);
 
         assert_eq!(
             (Some("plan"), Some("opus"), Some("high")),
@@ -379,7 +403,7 @@ mod tests {
         assert_eq!(None, carried.effort);
         let argv = args(&restart_spec(
             &LaunchSpec::new(ID),
-            true,
+            Some(ID),
             SessionOpening::New,
             &carried,
             true,

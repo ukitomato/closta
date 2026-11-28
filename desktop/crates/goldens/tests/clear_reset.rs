@@ -14,13 +14,14 @@ use closta_presenter::rewind_targets::{
     ForkFrom, RewindConversation, RewindRefusal, ask_actions, turn_end_actions,
 };
 use closta_presenter::rows::{AskRow, Divider, DividerRow, ThreadRow, ThreadRows};
-use closta_presenter::session::SessionView;
+use closta_presenter::session::{SessionView, resume_id_of};
 use closta_presenter::transcript::{MessageSource, PartRecord, Role, Transcript};
 
 const SCENARIO: &str = "41-clear-reset";
 const FIRST_SESSION: &str = "a6635625-53e9-40b5-adfb-977a4e9163b2";
 const SECOND_SESSION: &str = "b3c1b6ae-517a-4b6a-8b61-f3693facb4f1";
 const THIRD_SESSION: &str = "session-after-the-second-clear";
+const HOST_ID: &str = "host-id";
 /// The `/clear` command's uuid: its lifecycle, 41 lines 16, 17 and 22.
 const CLEAR_UUID: &str = "84d712ce-9cd0-4cec-b51e-4dfe8cf10d9a";
 /// The third message's uuid: its lifecycle and its result, 41 lines 23 and 96.
@@ -289,6 +290,86 @@ fn capture_41_the_session_id_is_the_second_inits_after_the_fold() {
     );
 }
 
+/// Between the reset and the next init the old id is gone, and the host's is used.
+#[test]
+fn capture_41_between_the_reset_and_the_next_init_the_old_id_is_gone_and_the_hosts_is_used() {
+    let steps = steps();
+    let reset = steps
+        .iter()
+        .position(|step| {
+            matches!(
+                step.input,
+                PresenterInput::Event(AgentEvent::ConversationReset { .. })
+            )
+        })
+        .unwrap_or_else(|| panic!("41 has a reset"));
+    let init = steps
+        .iter()
+        .enumerate()
+        .skip(reset + 1)
+        .find(|(_, step)| {
+            matches!(
+                step.input,
+                PresenterInput::Event(AgentEvent::SystemInit { .. })
+            )
+        })
+        .map(|(_, step)| &step.view)
+        .unwrap_or_else(|| panic!("41 has an init after the reset"));
+    let before = &steps[reset - 1].view;
+    let cleared = &steps[reset].view;
+
+    assert_eq!(
+        Some(FIRST_SESSION),
+        before
+            .conversation
+            .session
+            .as_ref()
+            .map(|it| it.session_id.as_str())
+    );
+    assert_eq!(HOST_ID, resume_id_of(before, HOST_ID), "no clear yet");
+    assert_eq!(
+        None, cleared.conversation.session,
+        "the reset forgets the old session"
+    );
+    assert_eq!(HOST_ID, resume_id_of(cleared, HOST_ID));
+    assert_eq!(
+        Some(SECOND_SESSION),
+        init.conversation
+            .session
+            .as_ref()
+            .map(|it| it.session_id.as_str())
+    );
+    assert_eq!(SECOND_SESSION, resume_id_of(init, HOST_ID));
+}
+
+/// Not ported from Kotlin (resumeIdOf in SessionView.kt, fed67ce): the CLI's id is the one to
+/// resume only once the conversation was cleared; otherwise the host's, whatever the CLI says.
+#[test]
+fn resume_id_of_is_the_clis_id_only_after_a_clear() {
+    let steps = steps();
+    let last = last(&steps);
+    assert!(last.transcript.cleared_at.is_some(), "41 is cleared");
+    assert!(last.conversation.session.is_some(), "and its init came");
+    let cleared_without_session = SessionView {
+        conversation: closta_model::ConversationState {
+            session: None,
+            ..last.conversation.clone()
+        },
+        transcript: Arc::clone(&last.transcript),
+    };
+    let session_without_clear = SessionView {
+        conversation: last.conversation.clone(),
+        transcript: Arc::new(Transcript {
+            cleared_at: None,
+            ..(*last.transcript).clone()
+        }),
+    };
+
+    assert_eq!(SECOND_SESSION, resume_id_of(last, HOST_ID));
+    assert_eq!(HOST_ID, resume_id_of(&cleared_without_session, HOST_ID));
+    assert_eq!(HOST_ID, resume_id_of(&session_without_clear, HOST_ID));
+}
+
 /// A reset that says no trigger still divides the thread.
 #[test]
 fn capture_41_a_reset_that_says_no_trigger_still_divides_the_thread() {
@@ -352,6 +433,11 @@ fn capture_41_two_clears_make_two_dividers_and_only_the_ask_after_the_last_can_r
         ask_actions(&state.transcript, false, "send-5")
             .rewind
             .is_some()
+    );
+    assert_eq!(
+        THIRD_SESSION,
+        resume_id_of(&state, HOST_ID),
+        "the id follows the second"
     );
 }
 

@@ -44,6 +44,11 @@ use support::{
 const TURN: &str = "01-baseline-text.ndjson";
 const GET_SETTINGS: &str = r#""subtype":"get_settings""#;
 const UNAVAILABLE: &str = "36-sandbox-unavailable.ndjson";
+const CLEARED: &str = "41-clear-reset.ndjson";
+/// The session id capture 41's first init names (41 line 4): the conversation `/clear` left.
+const BEFORE_CLEAR: &str = "a6635625-53e9-40b5-adfb-977a4e9163b2";
+/// The session id capture 41's init after its reset names (41 line 20).
+const AFTER_CLEAR: &str = "b3c1b6ae-517a-4b6a-8b61-f3693facb4f1";
 /// What a shell reports for a process ended by SIGTERM.
 const SIGTERM_EXIT: i32 = 143;
 
@@ -108,6 +113,43 @@ async fn one_turn(runtime: &SessionRuntime, commands: &SessionCommands, control:
             && !thread_is_running(&view.conversation, &view.transcript)
     })
     .await;
+}
+
+/// Capture 41 as the host lives it: the first message sent, its turn (non-blank lines 2 to 14),
+/// `/clear` sent, then the non-blank lines `after_clear` (numbered from 1). The capture has no
+/// line of the user's; the host sends both. Line 1 answers the initialize, which the live process
+/// answered. It returns once both sends are folded, the thread is divided and at rest: a switch
+/// of the sandbox is refused while a turn runs.
+async fn cleared(
+    runtime: &SessionRuntime,
+    commands: &SessionCommands,
+    control: &LiveControl,
+    after_clear: &[usize],
+) {
+    let lines = common::non_blank_lines(&common::text_of(CLEARED));
+    commands
+        .send_message(SendId::new("m1").expect("a key"), "ping", &[])
+        .expect("sent");
+    for line in &lines[1..14] {
+        control.emit(line);
+    }
+    commands
+        .send_message(SendId::new("m2").expect("a key"), "/clear", &[])
+        .expect("sent");
+    for number in after_clear {
+        control.emit(&lines[number - 1]);
+    }
+    until(|| {
+        let view = runtime.view();
+        view.transcript.routing.sends == 2
+            && view.transcript.cleared_at.is_some()
+            && !thread_is_running(&view.conversation, &view.transcript)
+    })
+    .await;
+}
+
+fn session_of(runtime: &SessionRuntime) -> Option<String> {
+    runtime.view().conversation.session.map(|it| it.session_id)
 }
 
 fn success(id: &str) -> String {
@@ -453,7 +495,7 @@ fn turning_on_restarts_with_resume_and_settings() {
                 .expect("planned");
         let expected = restart_spec(
             &planned.spec,
-            true,
+            Some(ID),
             SessionOpening::New,
             &carried_choices(&before),
             true,
@@ -477,6 +519,95 @@ fn turning_on_restarts_with_resume_and_settings() {
             before.transcript.messages.len()
         );
         assert!(processes.controls()[0].destroyed());
+        runtime.close();
+        within(run).await;
+    });
+}
+
+/// Not ported from Kotlin (the design's `/clear` section): a restart after `/clear` resumes the
+/// conversation the init after the reset named, not the one the session was launched under.
+#[test]
+fn a_sandbox_restart_after_a_clear_resumes_the_new_id() {
+    drive(|executor| async move {
+        let processes = Processes::new();
+        let (runtime, run, _log) = runtime(&processes, |_| {});
+        let run = executor.spawn(run);
+        let commands = running_on(&runtime, &processes, 1).await;
+        // Through 41 line 22: the init after the reset (line 20), and the `/clear`'s turn over.
+        let after_clear: Vec<usize> = (15..=22).collect();
+        cleared(&runtime, &commands, &processes.controls()[0], &after_clear).await;
+        assert!(runtime.sent());
+        assert!(runtime.view().transcript.cleared_at.is_some());
+        assert_eq!(Some(AFTER_CLEAR.to_owned()), session_of(&runtime));
+        assert_eq!(AFTER_CLEAR, runtime.resume_id());
+        assert_eq!(
+            ID,
+            runtime.id(),
+            "the runtime keeps the id it was started with"
+        );
+
+        assert!(runtime.turn_sandbox_on());
+        running_on(&runtime, &processes, 2).await;
+
+        let args = processes.session_args();
+        assert!(
+            has_arg(&args[1], &format!("--resume={AFTER_CLEAR}")),
+            "{:?}",
+            args[1]
+        );
+        assert!(
+            !has_arg(&args[1], &format!("--resume={ID}")),
+            "{:?}",
+            args[1]
+        );
+        assert!(
+            !has_arg(&args[1], &format!("--resume={BEFORE_CLEAR}")),
+            "{:?}",
+            args[1]
+        );
+        runtime.close();
+        within(run).await;
+    });
+}
+
+/// Not ported from Kotlin (the plan's Review Focus 2): from the reset until the next init there
+/// is no session, and a restart resumes the host's id, never the conversation that was cleared.
+#[test]
+fn a_sandbox_restart_between_the_reset_and_the_next_init_resumes_the_host_id() {
+    drive(|executor| async move {
+        let processes = Processes::new();
+        let (runtime, run, _log) = runtime(&processes, |_| {});
+        let run = executor.spawn(run);
+        let commands = running_on(&runtime, &processes, 1).await;
+        // Through 41 line 18, the reset, and the `/clear`'s turn over (lines 21 and 22) with the
+        // init after the reset (line 20) not come: in 41 the turn ends only after that init, and
+        // a switch of the sandbox is refused while it runs.
+        cleared(
+            &runtime,
+            &commands,
+            &processes.controls()[0],
+            &[15, 16, 17, 18, 19, 21, 22],
+        )
+        .await;
+        assert!(runtime.sent());
+        assert!(runtime.view().transcript.cleared_at.is_some());
+        assert_eq!(None, session_of(&runtime));
+        assert_eq!(ID, runtime.resume_id());
+
+        assert!(runtime.turn_sandbox_on());
+        running_on(&runtime, &processes, 2).await;
+
+        let args = processes.session_args();
+        assert!(
+            has_arg(&args[1], &format!("--resume={ID}")),
+            "{:?}",
+            args[1]
+        );
+        assert!(
+            !has_arg(&args[1], &format!("--resume={BEFORE_CLEAR}")),
+            "{:?}",
+            args[1]
+        );
         runtime.close();
         within(run).await;
     });

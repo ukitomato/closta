@@ -70,6 +70,18 @@ impl SessionView {
     }
 }
 
+/// The id `view`'s conversation is saved under. A session launched or resumed by the host's
+/// `host_id` keeps it; once the conversation was cleared the CLI goes on under a new one, which
+/// its init after the clear names. From the clear until that init it is `host_id` again, never the
+/// id of the conversation that was cleared (resumeIdOf in SessionView.kt).
+pub fn resume_id_of(view: &SessionView, host_id: &str) -> String {
+    view.conversation
+        .session
+        .as_ref()
+        .filter(|_| view.transcript.cleared_at.is_some())
+        .map_or_else(|| host_id.to_owned(), |session| session.session_id.clone())
+}
+
 #[cfg(test)]
 mod tests {
     use closta_model::{AgentEvent, ApprovalDecision, RawJson};
