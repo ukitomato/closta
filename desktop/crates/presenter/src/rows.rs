@@ -190,11 +190,23 @@ pub struct TodoRow {
     pub opens: bool,
 }
 
-/// One to-do; `status` is the CLI's word for it (`pending`, `in_progress`, `completed`).
-#[derive(Clone, PartialEq, Eq, Debug)]
+/// One to-do; `status` is the CLI's word for it (`pending`, `in_progress`, `completed`). Its
+/// `Debug` shows the subject's length, not the subject (the user's or the CLI's words).
+#[derive(Clone, PartialEq, Eq)]
 pub struct TodoItem {
     pub content: String,
     pub status: String,
+}
+
+impl fmt::Debug for TodoItem {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "TodoItem(content {} bytes, status={})",
+            self.content.len(),
+            self.status
+        )
+    }
 }
 
 /// A card for one request of the CLI, after the message it came with.

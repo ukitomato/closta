@@ -500,3 +500,21 @@ fn a_list_read_as_the_lines_come_ends_as_one_read_at_the_end() {
         read.last().cloned().unwrap_or_default()
     );
 }
+
+/// F6 of the 6d-R2 final fixes: a to-do's subject is the user's or the CLI's words, and neither
+/// the item's `Debug` nor its list's shows it; the status, the CLI's word for it, is shown.
+#[test]
+fn a_to_dos_debug_shows_its_status_but_not_its_subject() {
+    let steps = capture_20();
+    let transcript = &steps.last().expect("20 has steps").view.transcript;
+    let lists = todos(transcript);
+    let list = lists.last().expect("20 makes lists");
+    assert_eq!("write tests", list.items[0].content);
+    assert_eq!("run build", list.items[1].content);
+
+    for shown in [format!("{:?}", list.items[0]), format!("{list:?}")] {
+        assert!(!shown.contains("write tests"), "{shown}");
+        assert!(!shown.contains("run build"), "the list's Debug");
+        assert!(shown.contains("pending"), "{shown}");
+    }
+}
