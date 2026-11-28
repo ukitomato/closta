@@ -36,7 +36,7 @@ fn sum(times: &[Duration]) -> Duration {
 fn fold_time_per_line_stays_flat() {
     // Twice the largest session, as one conversation: the ids are the generator's own, so none
     // repeats.
-    let steps = synthetic::steps(&DOUBLED);
+    let steps = synthetic::steps_with_session_lines(&DOUBLED);
     assert!(
         steps.len() > LONG_SESSION,
         "the conversation has {} lines",
@@ -73,7 +73,7 @@ fn fold_time_per_line_stays_flat() {
 #[ignore = "perf"]
 #[allow(clippy::print_stdout)]
 fn largest_fold_within_budget() {
-    let steps = synthetic::steps(&LARGEST);
+    let steps = synthetic::steps_with_session_lines(&LARGEST);
     for _ in 0..WARM_UP {
         timed(&steps);
     }

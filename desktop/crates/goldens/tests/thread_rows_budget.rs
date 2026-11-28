@@ -24,7 +24,7 @@ const PERCENT: usize = 100;
 /// The largest session, folded. nextest runs each test in a process of its own, so each test
 /// builds it once.
 fn history() -> SessionView {
-    synthetic::steps(&LARGEST)
+    synthetic::steps_with_session_lines(&LARGEST)
         .iter()
         .fold(SessionView::default(), |view, step| view.fold(step))
 }

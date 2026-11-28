@@ -117,3 +117,102 @@ fn the_same_seed_gives_the_same_session() {
         synthetic::session(&LARGEST, 7)
     );
 }
+
+/// A turn is mixed in per this many turns of the shape.
+const INTERVAL: usize = 200;
+/// The `/clear`: the user's line, queued, started, the reset, the new init, completed.
+const CLEAR_STEPS: usize = 1 + 2 + 1 + 1 + 1;
+/// The compaction: the user's line, queued, started, `compacting`, the boundary, the status that
+/// ends it, the result, completed.
+const COMPACT_STEPS: usize = 1 + 2 + 1 + 1 + 1 + 1 + 1;
+/// The tasks: the user's line, queued, started, three creates and two updates with their answers,
+/// the result, completed.
+const TASKS_STEPS: usize = 1 + 2 + (3 + 2) * 2 + 1 + 1;
+
+fn fold_all(steps: &[PresenterInput]) -> SessionView {
+    steps
+        .iter()
+        .fold(SessionView::default(), |view, step| view.fold(step))
+}
+
+#[test]
+fn the_session_lines_are_mixed_in_at_their_interval() {
+    use closta_presenter::rows::{Divider, ThreadRow, ThreadRows};
+
+    let plain = synthetic::steps(&LARGEST);
+    let mixed = synthetic::steps_with_session_lines(&LARGEST);
+    let rows = ThreadRows::default().of(&fold_all(&mixed).transcript);
+    let plain_rows = ThreadRows::default().of(&fold_all(&plain).transcript);
+
+    let cleared = rows
+        .iter()
+        .filter(|row| {
+            matches!(row, ThreadRow::Divider(it) if matches!(it.divider, Divider::Cleared { .. }))
+        })
+        .count();
+    let compacted = rows
+        .iter()
+        .filter(|row| {
+            matches!(row, ThreadRow::Divider(it) if matches!(it.divider, Divider::Compacted { .. }))
+        })
+        .count();
+    let todos = rows
+        .iter()
+        .filter(|row| matches!(row, ThreadRow::Todo(_)))
+        .count();
+    let turns = LARGEST.turns / INTERVAL;
+    assert!(
+        !plain_rows
+            .iter()
+            .any(|row| matches!(row, ThreadRow::Divider(_) | ThreadRow::Todo(_))),
+        "the plain session has none of these rows"
+    );
+    assert_eq!(1, cleared, "one clear in the whole conversation");
+    assert_eq!(turns, compacted);
+    assert_eq!(turns, todos);
+    assert_eq!(
+        plain.len() + CLEAR_STEPS + turns * (COMPACT_STEPS + TASKS_STEPS),
+        mixed.len()
+    );
+}
+
+#[test]
+fn a_longer_session_gets_a_compaction_and_a_task_list_per_interval_but_one_clear() {
+    use closta_presenter::rows::{Divider, ThreadRow, ThreadRows};
+
+    let rows = ThreadRows::default()
+        .of(&fold_all(&synthetic::steps_with_session_lines(&synthetic::DOUBLED)).transcript);
+    let count = |wanted: fn(&ThreadRow) -> bool| rows.iter().filter(|row| wanted(row)).count();
+    let turns = synthetic::DOUBLED.turns / INTERVAL;
+    assert_eq!(2, turns);
+    assert_eq!(
+        1,
+        count(
+            |row| matches!(row, ThreadRow::Divider(it) if matches!(it.divider, Divider::Cleared { .. }))
+        )
+    );
+    assert_eq!(
+        turns,
+        count(
+            |row| matches!(row, ThreadRow::Divider(it) if matches!(it.divider, Divider::Compacted { .. }))
+        )
+    );
+    assert_eq!(turns, count(|row| matches!(row, ThreadRow::Todo(_))));
+}
+
+#[test]
+fn the_clear_comes_three_quarters_of_the_way_so_most_rows_stay_in_the_measured_conversation() {
+    use closta_presenter::rows::{Divider, ThreadRow, ThreadRows};
+
+    let rows = ThreadRows::default()
+        .of(&fold_all(&synthetic::steps_with_session_lines(&LARGEST)).transcript);
+    let at = rows
+        .iter()
+        .position(|row| matches!(row, ThreadRow::Divider(it) if matches!(it.divider, Divider::Cleared { .. })))
+        .unwrap_or_else(|| panic!("no clear"));
+    assert!(
+        (rows.len() / 2..rows.len() * 9 / 10).contains(&at),
+        "the clear is row {at} of {}",
+        rows.len()
+    );
+}
