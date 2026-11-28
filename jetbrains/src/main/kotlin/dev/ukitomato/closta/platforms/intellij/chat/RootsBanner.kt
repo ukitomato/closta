@@ -20,6 +20,7 @@ class RootsBanner : JPanel(BorderLayout()) {
         isOpaque = false
         border = JBUI.Borders.empty(0, ThreadStyle.INSET)
         isVisible = false
+        getAccessibleContext().accessibleName = ClostaBundle.message("chat.roots.name")
         val banner =
             InlineBanner(ClostaBundle.message("chat.roots.changed"), EditorNotificationPanel.Status.Info)
                 .showCloseButton(false)

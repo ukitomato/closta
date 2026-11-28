@@ -1,7 +1,6 @@
 package dev.ukitomato.closta.platforms.intellij.chat
 
 import com.intellij.openapi.Disposable
-import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.popup.JBPopup
 import com.intellij.openapi.ui.popup.JBPopupFactory
@@ -14,6 +13,7 @@ import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import dev.ukitomato.closta.platforms.intellij.ClostaBundle
 import dev.ukitomato.closta.platforms.intellij.session.SessionView
+import dev.ukitomato.closta.platforms.intellij.thread.ThreadStyle
 import dev.ukitomato.closta.platforms.intellij.ui.noHtml
 import dev.ukitomato.closta.presenter.view.OutputPoll
 import dev.ukitomato.closta.presenter.view.RunningTask
@@ -21,7 +21,6 @@ import dev.ukitomato.closta.presenter.view.outputPoll
 import dev.ukitomato.closta.presenter.view.visible
 import java.awt.BorderLayout
 import java.awt.Dimension
-import java.awt.Font
 import javax.swing.JPanel
 import javax.swing.SwingUtilities
 import javax.swing.Timer
@@ -49,7 +48,7 @@ class TaskOutputPopup(
         JBTextArea().apply {
             isEditable = false
             lineWrap = false
-            font = Font(EditorColorsManager.getInstance().globalScheme.editorFontName, Font.PLAIN, font.size)
+            font = ThreadStyle.mono
         }
     private val scroll = JBScrollPane(area)
     private val content =
