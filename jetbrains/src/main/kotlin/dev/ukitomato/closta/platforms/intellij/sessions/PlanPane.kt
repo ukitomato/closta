@@ -1,6 +1,7 @@
 package dev.ukitomato.closta.platforms.intellij.sessions
 
 import com.intellij.icons.AllIcons
+import com.intellij.openapi.components.service
 import com.intellij.ui.dsl.builder.AlignX
 import com.intellij.ui.dsl.builder.RightGap
 import com.intellij.ui.dsl.builder.TopGap
@@ -10,6 +11,7 @@ import dev.ukitomato.closta.platforms.intellij.thread.CardAnswer
 import dev.ukitomato.closta.platforms.intellij.thread.CardKey
 import dev.ukitomato.closta.platforms.intellij.thread.CardKind
 import dev.ukitomato.closta.platforms.intellij.thread.PLAN_CHOICES
+import dev.ukitomato.closta.platforms.intellij.thread.PlanNotes
 import dev.ukitomato.closta.platforms.intellij.thread.buttonLine
 import dev.ukitomato.closta.platforms.intellij.thread.cardButton
 import dev.ukitomato.closta.platforms.intellij.thread.enterNeverPresses
@@ -34,7 +36,9 @@ internal class PlanPane(
             ClostaBundle.message("sessions.window.detail.plan.placeholder"),
             ClostaBundle.message("sessions.window.detail.plan.keepSend"),
             context.ask,
-        ) { decide(PlanChoice.KEEP_PLANNING, it) }
+            { decide(PlanChoice.KEEP_PLANNING, it) },
+            { context.project.service<PlanNotes>().typedInPane(card.requestId, it) },
+        )
 
     init {
         val buttons =

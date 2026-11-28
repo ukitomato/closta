@@ -14,6 +14,7 @@ import com.intellij.openapi.util.Key
 import com.intellij.openapi.util.text.StringUtil
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.testFramework.LightVirtualFile
+import com.intellij.ui.DocumentAdapter
 import com.intellij.ui.EditorNotifications
 import com.intellij.ui.components.JBTextField
 import com.intellij.ui.dsl.builder.AlignX
@@ -145,10 +146,17 @@ class PlanTabs(
         Disposer.register(source, guard)
     }
 
+    /** The sentence typed on the plan's card, kept for the tab's bar. */
+    fun noteTyped(
+        requestId: String,
+        text: String,
+    ) = project.service<PlanNotes>().typedOnCard(requestId, text)
+
     private fun finish(
         file: LightVirtualFile,
         tab: PlanTab,
     ) {
+        project.service<PlanNotes>().forget(tab.requestId)
         opened.tabs.remove(file)
         opened.files.remove(tab.requestId)
         // Not now: this can run while the project closes and the editor's services go.
@@ -165,6 +173,7 @@ class PlanTabs(
 
     /** The plan was answered: its tab can no longer be edited, and its bar goes. */
     fun answered(card: PlanCard) {
+        project.service<PlanNotes>().forget(card.requestId)
         opened.files[card.requestId]?.let(::closed)
     }
 }
@@ -275,6 +284,12 @@ internal class PlanView(
         getAccessibleContext().accessibleName =
             listOfNotNull(ClostaBundle.message("thread.plan.title"), planTitle(card.plan)).joinToString(": ")
         comment.addActionListener { decide(PlanChoice.KEEP_PLANNING) }
+        comment.document.addDocumentListener(
+            object : DocumentAdapter() {
+                override fun textChanged(e: javax.swing.event.DocumentEvent) =
+                    tabs.noteTyped(card.requestId, comment.text)
+            },
+        )
         noteKeys(comment, this, letGo) { showNote(false) }
         cardKeys(this, CardKind.PLAN, { buttons.size }) { key ->
             when (key) {

@@ -3,6 +3,7 @@ package dev.ukitomato.closta.platforms.intellij.sessions
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.text.StringUtil
+import com.intellij.ui.DocumentAdapter
 import com.intellij.ui.components.JBTextField
 import com.intellij.ui.dsl.builder.AlignX
 import com.intellij.ui.dsl.builder.Cell
@@ -157,6 +158,7 @@ internal class ReasonLine(
     sendText: String,
     ask: AnswerGate.Ask,
     private val send: (String) -> Unit,
+    private val typed: (String) -> Unit = {},
 ) {
     private val field = JBTextField().apply { emptyText.text = placeholder }
     private val button = cardButton(sendText) { send(field.text.trim()) }
@@ -165,6 +167,11 @@ internal class ReasonLine(
 
     init {
         field.addActionListener { send(field.text.trim()) }
+        field.document.addDocumentListener(
+            object : DocumentAdapter() {
+                override fun textChanged(e: javax.swing.event.DocumentEvent) = typed(field.text)
+            },
+        )
         ask.guard(button)
     }
 

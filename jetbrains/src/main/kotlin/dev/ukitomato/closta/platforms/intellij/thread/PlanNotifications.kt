@@ -53,7 +53,14 @@ class PlanNotifications :
         val card = approval?.let { planCardOf(it, PlanGo.AUTO) }
         val document = FileDocumentManager.getInstance().getDocument(file) ?: return null
         val plan = card?.plan
-        val feedback = plan?.let { planFeedback(it, textOf(document), "") }
+        val feedback =
+            plan?.let {
+                planFeedback(
+                    it,
+                    textOf(document),
+                    planNote(project.service<PlanNotes>()[tab.requestId]),
+                )
+            }
         val bar =
             planBar(
                 planPresent = plan != null,
@@ -95,7 +102,8 @@ class PlanNotifications :
                 ?.transcript
                 ?.approvals
                 ?.get(tab.requestId)
-        val feedback = card.plan?.let { planFeedback(it, textOf(document), "") }
+        val feedback =
+            card.plan?.let { planFeedback(it, textOf(document), planNote(project.service<PlanNotes>()[tab.requestId])) }
         if (source != null && approval != null && feedback != null) {
             val made = planAnswerWithFeedback(card, approval, feedback)
             val answer = CardAnswer(card.requestId, made.decision, made.payload, made.passedOn, made.modeAfter)
