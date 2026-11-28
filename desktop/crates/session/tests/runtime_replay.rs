@@ -8,7 +8,7 @@ mod support;
 
 use std::sync::{Arc, Mutex, PoisonError};
 
-use closta_model::ConversationState;
+use closta_model::{AgentEventKind, ConversationState};
 use closta_providers::claude::fake::process::ProcessScript;
 use closta_providers::claude::fake::spawner::FakeSpawner;
 use closta_providers::claude::launch::env::SecretEnv;
@@ -98,6 +98,38 @@ fn the_new_kinds_leave_none_of_their_text_in_the_log() {
         r#"{"type":"system","subtype":"informational","content":"hand-written content sentence","level":"warning","uuid":"u1","session_id":"s"}"#,
         r#"{"type":"system","subtype":"api_retry","attempt":2,"max_retries":10,"retry_delay_ms":2500,"error_status":529,"error":"hand-written error sentence","uuid":"u2","session_id":"s"}"#,
     ];
+    // Each line the sentences come from decodes to its new kind: an `UnknownKind` would also keep
+    // its text out of the log, and then the test would hold nothing.
+    let kinds = [
+        (
+            "44:23",
+            common::capture_line("44-permission-denied", 23).kind(),
+            AgentEventKind::SystemPermissionDenied,
+        ),
+        (
+            "10:72",
+            common::capture_line("10-background-task", 72).kind(),
+            AgentEventKind::SystemPermissionDenied,
+        ),
+        (
+            "informational",
+            common::parse(hand_written[0]).kind(),
+            AgentEventKind::SystemInformational,
+        ),
+        (
+            "api_retry",
+            common::parse(hand_written[1]).kind(),
+            AgentEventKind::SystemApiRetry,
+        ),
+        (
+            "41:18",
+            common::capture_line("41-clear-reset", 18).kind(),
+            AgentEventKind::ConversationReset,
+        ),
+    ];
+    for (line, decoded, expected) in kinds {
+        assert_eq!(Some(expected), decoded, "{line}");
+    }
     let sentences = [
         (
             "message of 44",
