@@ -4,6 +4,7 @@
 //! before ([`ThreadRow::same`]), which is how a surface knows what it may leave alone.
 
 use std::collections::{HashMap, HashSet};
+use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
@@ -17,7 +18,9 @@ use crate::records::attachment::AttachmentRecord;
 use crate::records::turn_end::TurnChangesRecord;
 use crate::rewind_targets::live_asks;
 use crate::text::kt_is_blank;
-use crate::tool_line::{AgentSummary, ToolDetail, ToolLine, agent_summary, tool_detail, tool_line};
+use crate::tool_line::{
+    AgentSummary, ToolDetail, ToolLine, ToolLineState, agent_summary, tool_detail, tool_line,
+};
 use crate::transcript::{
     ApprovalRecord, CompactionMark, CompactionOutcome, MessageRecord, PartRecord, Role,
     ToolCallRecord, Transcript,
@@ -37,6 +40,7 @@ pub enum ThreadRow {
     SignIn(Arc<SignInRow>),
     Compaction(Arc<CompactionRow>),
     Divider(Arc<DividerRow>),
+    Notice(Arc<NoticeRow>),
 }
 
 impl ThreadRow {
@@ -53,6 +57,7 @@ impl ThreadRow {
             Self::SignIn(row) => &row.key,
             Self::Compaction(row) => &row.key,
             Self::Divider(row) => &row.key,
+            Self::Notice(row) => &row.key,
         }
     }
 
@@ -70,6 +75,7 @@ impl ThreadRow {
             Self::SignIn(_) => false,
             Self::Compaction(row) => row.opens,
             Self::Divider(row) => row.opens,
+            Self::Notice(row) => row.opens,
         }
     }
 
@@ -87,6 +93,7 @@ impl ThreadRow {
             (Self::SignIn(a), Self::SignIn(b)) => Arc::ptr_eq(a, b),
             (Self::Compaction(a), Self::Compaction(b)) => Arc::ptr_eq(a, b),
             (Self::Divider(a), Self::Divider(b)) => Arc::ptr_eq(a, b),
+            (Self::Notice(a), Self::Notice(b)) => Arc::ptr_eq(a, b),
             _ => false,
         }
     }
@@ -147,6 +154,20 @@ pub struct ExploredRow {
 impl ExploredRow {
     pub fn lines(&self) -> Vec<&ToolLine> {
         self.members.iter().map(|it| &it.line).collect()
+    }
+
+    /// The one state the folded line shows: a failure first, then a refusal, then a call still
+    /// running; done when all are.
+    pub fn state(&self) -> ToolLineState {
+        let has = |state: ToolLineState| self.members.iter().any(|it| it.line.state == state);
+        [
+            ToolLineState::Error,
+            ToolLineState::Denied,
+            ToolLineState::Running,
+        ]
+        .into_iter()
+        .find(|it| has(*it))
+        .unwrap_or(ToolLineState::Ok)
     }
 
     /// How many different files (or searches) the calls looked at: the same file read twice is
@@ -234,6 +255,48 @@ pub enum Divider {
     /// The conversation was cleared; `at` is when, as the CLI wrote it (ISO 8601, UTC), `None`
     /// when it did not say.
     Cleared { at: Option<String> },
+}
+
+/// What an [`InformationalRecord`](crate::transcript::InformationalRecord) says of its level, as
+/// the CLI draws it: grey, or more prominent.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum NoticeLevel {
+    Notice,
+    Suggestion,
+    Warning,
+}
+
+/// The CLI's `suggestion` and `warning` are prominent; `notice` and any level not known are the
+/// quiet one.
+pub fn notice_level_of(level: &str) -> NoticeLevel {
+    match level {
+        "suggestion" => NoticeLevel::Suggestion,
+        "warning" => NoticeLevel::Warning,
+        _ => NoticeLevel::Notice,
+    }
+}
+
+/// A line of the CLI's own (`content`); `stopped` when the CLI did not go on after it. `Debug`
+/// shows the level and the length of `content`, never its words.
+#[derive(Clone, PartialEq, Eq)]
+pub struct NoticeRow {
+    pub key: String,
+    pub level: NoticeLevel,
+    pub content: String,
+    pub stopped: bool,
+    pub opens: bool,
+}
+
+impl fmt::Debug for NoticeRow {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "NoticeRow({:?}, {} bytes{})",
+            self.level,
+            self.content.len(),
+            if self.stopped { ", stopped" } else { "" }
+        )
+    }
 }
 
 /// The tools that only read; two or more in a row fold into one [`ExploredRow`].
@@ -618,6 +681,13 @@ fn row_of(key: String, part: &PartRecord, opens: bool) -> Option<ThreadRow> {
             },
             opens,
         }))),
+        PartRecord::Informational(notice) => Some(ThreadRow::Notice(Arc::new(NoticeRow {
+            key,
+            level: notice_level_of(&notice.level),
+            content: notice.content.clone(),
+            stopped: notice.stopped,
+            opens,
+        }))),
         PartRecord::Other(_) | PartRecord::Attachment(_) => None,
     }
 }
@@ -702,6 +772,68 @@ mod tests {
         Transcript {
             messages: Keyed::new().put("m".into(), Arc::new(message)),
             ..Transcript::default()
+        }
+    }
+
+    fn explored_of(states: &[ToolLineState]) -> ExploredRow {
+        let members = states
+            .iter()
+            .enumerate()
+            .map(|(n, state)| {
+                Arc::new(ToolRow {
+                    key: format!("t{n}"),
+                    line: ToolLine {
+                        state: *state,
+                        label: "Read(a.rs)".into(),
+                        added: None,
+                        removed: None,
+                        denial: None,
+                    },
+                    tool_use_id: format!("t{n}"),
+                    tool_name: "Read".into(),
+                    depth: 0,
+                    opens: false,
+                    detail: None,
+                    agent: None,
+                })
+            })
+            .collect();
+        ExploredRow {
+            key: "t0".into(),
+            members,
+            depth: 0,
+            opens: false,
+        }
+    }
+
+    // The words are the CLI's and may say anything: a log shows the level and the length.
+    #[test]
+    fn a_notice_rows_debug_shows_its_level_not_its_words() {
+        let row = NoticeRow {
+            key: "m/notice".into(),
+            level: NoticeLevel::Warning,
+            content: "secret words".into(),
+            stopped: true,
+            opens: false,
+        };
+
+        let shown = format!("{row:?}");
+
+        assert!(shown.contains("Warning"), "{shown}");
+        assert!(!shown.contains("secret words"), "{shown}");
+    }
+
+    // ThreadViews.kt's explored line: a failure first, then a refusal, then one still running.
+    #[test]
+    fn an_explored_row_is_failed_then_denied_then_running_then_done() {
+        use ToolLineState::{Denied, Error, Ok, Running};
+        for (states, expected) in [
+            (vec![Ok, Denied, Error, Running], Error),
+            (vec![Ok, Running, Denied], Denied),
+            (vec![Ok, Running], Running),
+            (vec![Ok, Ok], Ok),
+        ] {
+            assert_eq!(expected, explored_of(&states).state(), "{states:?}");
         }
     }
 

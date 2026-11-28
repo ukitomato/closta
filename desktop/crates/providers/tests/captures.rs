@@ -1062,6 +1062,14 @@ fn a_new_kind_missing_a_required_field_is_unknown() {
             "conversation_reset",
             r#"{"type":"conversation_reset","trigger":"clear","uuid":"u","session_id":"s"}"#,
         ),
+        (
+            "system/informational",
+            r#"{"type":"system","subtype":"informational","content":"hi","uuid":"u","session_id":"s"}"#,
+        ),
+        (
+            "system/ui_invalidate",
+            r#"{"type":"system","subtype":"ui_invalidate","event":"ui.render","session_id":"s"}"#,
+        ),
     ];
     for (wire_type, line) in cases {
         let event = parse(line);

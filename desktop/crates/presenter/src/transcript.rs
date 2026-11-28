@@ -70,6 +70,9 @@ pub struct Transcript {
     /// last [`ClearedRecord`], `None` while it never was. What comes before it belongs to a
     /// conversation the CLI no longer has.
     pub cleared_at: Option<usize>,
+    /// Refusals whose call has no line yet, by the call's key; each is put on its line when the
+    /// line is made.
+    pub denials: HashMap<String, Denial>,
 }
 
 /// One compaction as the conversation shows it: after `after`, the key of the last message when
@@ -143,6 +146,53 @@ pub enum PartRecord {
     Other(OtherRecord),
     Attachment(AttachmentRecord),
     Cleared(ClearedRecord),
+    Informational(InformationalRecord),
+}
+
+/// A line the CLI would print in its own terminal (`system/informational`), of a `level` other
+/// than `info`. `stopped` is true when the CLI stopped going on after it. `Debug` shows the level
+/// and the length of `content`, never its words.
+#[derive(Clone, PartialEq, Eq)]
+pub struct InformationalRecord {
+    pub key: String,
+    pub level: String,
+    pub content: String,
+    pub stopped: bool,
+}
+
+impl fmt::Debug for InformationalRecord {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "InformationalRecord({}, {} bytes{})",
+            self.level,
+            self.content.len(),
+            if self.stopped { ", stopped" } else { "" }
+        )
+    }
+}
+
+/// Why the CLI refused a call on its own: the kind of decision (`mode`, `rule`, `classifier`...)
+/// and its own words, each when it gave them. `Debug` shows the kind and the length of `reason`,
+/// never its words.
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub struct Denial {
+    pub reason_type: Option<String>,
+    pub reason: Option<String>,
+}
+
+impl fmt::Debug for Denial {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Denial({}, ",
+            self.reason_type.as_deref().unwrap_or("no kind")
+        )?;
+        match &self.reason {
+            Some(reason) => write!(f, "reason of {} bytes)", reason.len()),
+            None => write!(f, "no reason)"),
+        }
+    }
 }
 
 /// Where the CLI discarded the conversation (`conversation_reset`): what came before stays shown,
@@ -188,6 +238,8 @@ pub struct ToolCallRecord {
     /// A sub-agent's conversation, when this call started one.
     pub messages: Keyed<MessageRecord>,
     pub streaming: bool,
+    /// Set when the CLI refused this call on its own (`permission_denied`), without asking.
+    pub denied: Option<Denial>,
 }
 
 /// The `tool_result` for a call. `content` is `None` when the block carried none. `duration_ms`

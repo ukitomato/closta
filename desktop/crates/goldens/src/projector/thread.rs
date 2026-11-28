@@ -283,6 +283,8 @@ impl<'a> ThreadProjection<'a> {
             // A part of its own type, which a client that does not know it shows as unknown
             // (TreeNodes.kt's `clearedNode`).
             PartRecord::Cleared(_) => json!({ "type": "cleared" }),
+            // The CLI's own line, of a type of its own (ThreadProjection.kt).
+            PartRecord::Informational(_) => json!({ "type": "informational" }),
             PartRecord::ToolCall(call) => return self.tool_call(key, call, place),
         };
         Projected {
@@ -303,7 +305,15 @@ impl<'a> ThreadProjection<'a> {
             .task_by_tool
             .get(record.tool_use_id.as_str())
             .copied();
-        let (status, error) = tool_status(pending, task, record.result.is_some(), place.running);
+        let (status, error) = match &record.denied {
+            None => tool_status(pending, task, record.result.is_some(), place.running),
+            // The CLI refused it on its own: it never ran, whatever result the refusal's message
+            // came back as.
+            Some(denied) => (
+                Status::Failed,
+                denied.reason.clone().or_else(|| denied.reason_type.clone()),
+            ),
+        };
         let look = Look {
             status: Some(status),
             error,

@@ -5,11 +5,12 @@
 use closta_presenter::cards::plan::{PlanCard, PlanGo};
 use closta_presenter::cards::{SuggestionLine, ThreadCard};
 use closta_presenter::rows::{
-    CardRow, CompactionRow, Divider, DividerRow, ExploredRow, TurnEndRow,
+    CardRow, CompactionRow, Divider, DividerRow, ExploredRow, NoticeRow, TurnEndRow,
 };
 use closta_presenter::sessions::groups::AlertKind;
-use closta_presenter::tool_line::{AgentSummary, ToolLineState};
-use closta_presenter::transcript::{ApprovalOutcome, CompactionOutcome};
+use closta_presenter::text::kt_is_blank;
+use closta_presenter::tool_line::{AgentSummary, ToolLine, ToolLineState};
+use closta_presenter::transcript::{ApprovalOutcome, CompactionOutcome, Denial};
 use closta_providers::claude::process::ProcessFailure;
 use closta_session::status::SessionFailure;
 
@@ -51,6 +52,13 @@ pub const SIGN_IN_ACTION: &str = "Sign in in the terminal";
 pub const TOOL_RUNNING: &str = "Running";
 pub const TOOL_DONE: &str = "Done";
 pub const TOOL_FAILED: &str = "Failed";
+/// A call the CLI refused on its own, when it said nothing of why (`thread.tool.denied`).
+pub const TOOL_DENIED: &str = "Denied without asking";
+pub const DENIED_MODE: &str = "Denied without asking in this permission mode";
+pub const DENIED_RULE: &str = "Denied by a rule";
+pub const DENIED_CLASSIFIER: &str = "Denied by the automatic check";
+/// After a notice of the CLI's that stopped it (`thread.notice.stopped`).
+pub const NOTICE_STOPPED: &str = "Claude stopped here";
 /// A card no one has answered yet (`thread.jump.waiting`).
 pub const CARD_WAITING: &str = "Waiting for your answer";
 
@@ -109,6 +117,50 @@ pub fn tool_state(state: ToolLineState) -> &'static str {
         ToolLineState::Running => TOOL_RUNNING,
         ToolLineState::Ok => TOOL_DONE,
         ToolLineState::Error => TOOL_FAILED,
+        ToolLineState::Denied => TOOL_DENIED,
+    }
+}
+
+/// `line`'s state in words; for a refused call, why it was refused (ThreadStyle.kt's
+/// `stateWord(line)`).
+pub fn tool_line_state(line: &ToolLine) -> String {
+    if line.state == ToolLineState::Denied {
+        denied_text(line.denial.as_ref())
+    } else {
+        tool_state(line.state).to_owned()
+    }
+}
+
+/// Why the CLI refused a call without asking (DeniedText.kt): its own words first when it gave
+/// some, then the kind of decision in ours (`mode`, `rule`, `classifier`; any other kind as the
+/// CLI named it). A blank word counts as none; a refusal that says nothing is [`TOOL_DENIED`].
+pub fn denied_text(denial: Option<&Denial>) -> String {
+    fn said(it: Option<&String>) -> Option<&str> {
+        it.map(String::as_str).filter(|it| !kt_is_blank(it))
+    }
+    let kind = denial
+        .and_then(|it| said(it.reason_type.as_ref()))
+        .map(|kind| match kind {
+            "mode" => DENIED_MODE,
+            "rule" => DENIED_RULE,
+            "classifier" => DENIED_CLASSIFIER,
+            other => other,
+        });
+    let reason = denial.and_then(|it| said(it.reason.as_ref()));
+    let words: Vec<&str> = reason.into_iter().chain(kind).collect();
+    if words.is_empty() {
+        TOOL_DENIED.to_owned()
+    } else {
+        words.join(" — ")
+    }
+}
+
+/// A notice of the CLI's in one line: its words, then that it stopped when it did.
+pub fn notice_line(row: &NoticeRow) -> String {
+    if row.stopped {
+        format!("{} {NOTICE_STOPPED}", row.content)
+    } else {
+        row.content.clone()
     }
 }
 
@@ -608,9 +660,11 @@ mod tests {
     use closta_presenter::cards::plan::{PlanCard, PlanGo};
     use closta_presenter::cards::{PermissionCard, QuestionCard, QuestionView, ThreadCard};
     use closta_presenter::records::turn_end::{ChangedFile, TurnChangesRecord};
-    use closta_presenter::rows::{CardRow, ExploredRow, ToolRow, TurnEndRow};
+    use closta_presenter::rows::{
+        CardRow, ExploredRow, NoticeLevel, NoticeRow, ToolRow, TurnEndRow,
+    };
     use closta_presenter::tool_line::{AgentSummary, ToolDetail, ToolLine, ToolLineState};
-    use closta_presenter::transcript::ApprovalOutcome;
+    use closta_presenter::transcript::{ApprovalOutcome, Denial};
 
     use super::*;
 
@@ -622,6 +676,7 @@ mod tests {
                 label: format!("{name}({target})"),
                 added: None,
                 removed: None,
+                denial: None,
             },
             tool_use_id: key.to_owned(),
             tool_name: name.to_owned(),
@@ -1139,6 +1194,11 @@ mod tests {
             ("toolwindow.tab.sessions", SESSIONS),
             ("sessions.window.detail.working", WORKING),
             ("thread.divider.clearedNoTime", CLEARED),
+            ("thread.tool.denied", TOOL_DENIED),
+            ("thread.tool.denied.mode", DENIED_MODE),
+            ("thread.tool.denied.rule", DENIED_RULE),
+            ("thread.tool.denied.classifier", DENIED_CLASSIFIER),
+            ("thread.notice.stopped", NOTICE_STOPPED),
         ] {
             assert_eq!(bundle.get(key).map(String::as_str), Some(text), "{key}");
         }
@@ -1209,6 +1269,105 @@ mod tests {
             compaction_line(&compaction(CompactionOutcome::Failed)),
             "Compaction failed"
         );
+    }
+
+    // DeniedToolTest.kt: the words for a refusal are the reason first, then the kind in our words.
+    #[test]
+    fn the_words_for_a_refusal_are_the_reason_first_then_the_kind_in_our_words() {
+        let denial = |reason_type: Option<&str>, reason: Option<&str>| Denial {
+            reason_type: reason_type.map(str::to_owned),
+            reason: reason.map(str::to_owned),
+        };
+        for (expected, said) in [
+            (
+                "Denied without asking in this permission mode",
+                denied_text(Some(&denial(Some("mode"), None))),
+            ),
+            (
+                "Denied by a rule",
+                denied_text(Some(&denial(Some("rule"), None))),
+            ),
+            (
+                "Denied by the automatic check",
+                denied_text(Some(&denial(Some("classifier"), None))),
+            ),
+            (
+                "asyncAgent",
+                denied_text(Some(&denial(Some("asyncAgent"), None))),
+            ),
+            (
+                "Not on the list — Denied by a rule",
+                denied_text(Some(&denial(Some("rule"), Some("Not on the list")))),
+            ),
+            (
+                "Denied without asking",
+                denied_text(Some(&denial(None, None))),
+            ),
+            ("Denied without asking", denied_text(None)),
+        ] {
+            assert_eq!(expected, said);
+        }
+    }
+
+    // DeniedText.kt's `isNotBlank`: a reason or a kind of spaces alone says nothing.
+    #[test]
+    fn a_blank_reason_or_kind_is_left_out() {
+        let blank = Denial {
+            reason_type: Some(" ".to_owned()),
+            reason: Some(String::new()),
+        };
+        let blank_kind = Denial {
+            reason_type: Some(" \t".to_owned()),
+            reason: Some("Not on the list".to_owned()),
+        };
+
+        assert_eq!("Denied without asking", denied_text(Some(&blank)));
+        assert_eq!("Not on the list", denied_text(Some(&blank_kind)));
+    }
+
+    // ThreadViews.kt's `notice`: the CLI's words, then that it stopped when it did.
+    #[test]
+    fn a_notice_that_stopped_says_so() {
+        let notice = |stopped: bool| NoticeRow {
+            key: "m/notice".to_owned(),
+            level: NoticeLevel::Warning,
+            content: "Stop hook said no".to_owned(),
+            stopped,
+            opens: false,
+        };
+
+        assert_eq!(
+            "Stop hook said no Claude stopped here",
+            notice_line(&notice(true))
+        );
+        assert_eq!("Stop hook said no", notice_line(&notice(false)));
+    }
+
+    // ThreadStyle.kt's `stateWord(line)`: a refused call says why; any other its state.
+    #[test]
+    fn a_refused_line_says_why_and_any_other_its_state() {
+        let line = |state: ToolLineState, denial: Option<Denial>| ToolLine {
+            state,
+            label: "Bash(ls)".to_owned(),
+            added: None,
+            removed: None,
+            denial,
+        };
+        let rule = Denial {
+            reason_type: Some("rule".to_owned()),
+            reason: None,
+        };
+
+        assert_eq!(
+            "Denied by a rule",
+            tool_line_state(&line(ToolLineState::Denied, Some(rule)))
+        );
+        assert_eq!(
+            "Denied without asking",
+            tool_line_state(&line(ToolLineState::Denied, None))
+        );
+        assert_eq!("Failed", tool_line_state(&line(ToolLineState::Error, None)));
+        assert_eq!("Done", tool_line_state(&line(ToolLineState::Ok, None)));
     }
 
     // DividerText.kt: the time is said by the screen of stage 6g; until then the words alone,

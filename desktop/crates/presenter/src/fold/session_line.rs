@@ -1,15 +1,60 @@
 //! The lines about the session itself rather than its content (SessionLineFold.kt): a reset
-//! divides the thread. Each goes in the message receiving content, or in one of its own
+//! divides the thread, a refusal marks the call it refused and an informational line adds a note.
+//! A divider or a note goes in the message receiving content, or in one of its own
 //! ([`with_part`]).
 
 use std::sync::Arc;
 
+use crate::fold::paths::mark_denied;
 use crate::keyed::{Keyed, of_cli_id};
 use crate::transcript::{
-    ClearedRecord, MessageRecord, MessageSource, PartRecord, Role, Transcript,
+    ClearedRecord, Denial, InformationalRecord, MessageRecord, MessageSource, PartRecord, Role,
+    Transcript,
 };
 
 const CLEARED_PART: &str = "cleared";
+const NOTICE_PART: &str = "notice";
+const INFO_LEVEL: &str = "info";
+
+/// The CLI refused the call `tool_use_id` on its own: its line says so, now or when it is made.
+pub(crate) fn fold_denied(
+    transcript: &Arc<Transcript>,
+    tool_use_id: &str,
+    decision_reason_type: Option<&str>,
+    decision_reason: Option<&str>,
+) -> Arc<Transcript> {
+    mark_denied(
+        transcript,
+        &of_cli_id(tool_use_id),
+        Denial {
+            reason_type: decision_reason_type.map(str::to_owned),
+            reason: decision_reason.map(str::to_owned),
+        },
+    )
+}
+
+/// A line of level `info` is for the CLI's transcript mode and is not shown; any level this
+/// version does not know is shown as a notice.
+pub(crate) fn fold_informational(
+    transcript: &Arc<Transcript>,
+    uuid: &str,
+    level: &str,
+    content: &str,
+    prevent_continuation: Option<bool>,
+) -> Arc<Transcript> {
+    if level == INFO_LEVEL {
+        return Arc::clone(transcript);
+    }
+    with_part(transcript, uuid, NOTICE_PART, |key| {
+        PartRecord::Informational(InformationalRecord {
+            key,
+            level: level.to_owned(),
+            content: content.to_owned(),
+            stopped: prevent_continuation == Some(true),
+        })
+    })
+    .0
+}
 
 /// A reset divides the thread in the message receiving content (the `/clear`'s own turn), or in
 /// one of its own when none is, whatever its trigger says: the CLI asks its consumers to reset on

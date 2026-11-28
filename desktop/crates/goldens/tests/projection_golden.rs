@@ -51,20 +51,13 @@ struct Pending {
 /// The golden differences the presenter features of stage R2 will port, row by row. Each R2 task
 /// deletes its own rows (a row it no longer needs fails the test); the last R2 task deletes the
 /// table and the types. Do not merge to main while this table is here.
-const PENDING_6DR2: [Pending; 5] = [
+const PENDING_6DR2: [Pending; 3] = [
     Pending {
         scenario: "01-baseline-text",
         pointer: "/threads/byId/thread-1/commands",
         before: Before::Json(COMMANDS_BEFORE_4B24F89),
         commit: "4b24f89",
         r2_task: "the command list",
-    },
-    Pending {
-        scenario: "10-background-task",
-        pointer: "/threads/byId/thread-1/messages/byId/d4fed6c0-ab40-495c-9ef9-ef10a67ccae1/parts/byId/toolu_012izVu2hY9Yn9ShDBzDM6r9/messages/byId/msg_011CScrubbed2bdfKJKmxWno/parts/byId/toolu_01Hvch5dCrw4nDo6NEv1PNcx/status",
-        before: Before::Json(r#"{"type":"complete"}"#),
-        commit: "76a2767",
-        r2_task: "the denied tool",
     },
     Pending {
         scenario: "21-compact",
@@ -79,13 +72,6 @@ const PENDING_6DR2: [Pending; 5] = [
         before: Before::Absent,
         commit: "9a9d5a7",
         r2_task: "the compaction",
-    },
-    Pending {
-        scenario: "44-permission-denied",
-        pointer: "/threads/byId/thread-1/messages/byId/9659e6c9-b4b3-458e-ad59-7d912d365a4c/parts/byId/toolu_01LeMqLTAqR4JiZqRuLiYC21/status",
-        before: Before::Json(r#"{"type":"complete"}"#),
-        commit: "76a2767",
-        r2_task: "the denied tool",
     },
 ];
 

@@ -158,6 +158,7 @@ mod tests {
                 label: "Read(a.rs)".to_owned(),
                 added: None,
                 removed: None,
+                denial: None,
             },
             tool_use_id: format!("id-{key}"),
             tool_name: "Read".to_owned(),

@@ -9,6 +9,8 @@ mod support;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use closta_model::{AgentEventKind, ConversationState};
+use closta_presenter::fold::paths::message_at;
+use closta_presenter::transcript::PartRecord;
 use closta_providers::claude::fake::process::ProcessScript;
 use closta_providers::claude::fake::spawner::FakeSpawner;
 use closta_providers::claude::launch::env::SecretEnv;
@@ -97,6 +99,8 @@ fn the_new_kinds_leave_none_of_their_text_in_the_log() {
     let hand_written = [
         r#"{"type":"system","subtype":"informational","content":"hand-written content sentence","level":"warning","uuid":"u1","session_id":"s"}"#,
         r#"{"type":"system","subtype":"api_retry","attempt":2,"max_retries":10,"retry_delay_ms":2500,"error_status":529,"error":"hand-written error sentence","uuid":"u2","session_id":"s"}"#,
+        // A refusal of 44's Bash call (44 line 23) with the CLI's own words, which no capture has.
+        r#"{"type":"system","subtype":"permission_denied","tool_name":"Bash","tool_use_id":"toolu_01LeMqLTAqR4JiZqRuLiYC21","decision_reason_type":"rule","decision_reason":"hand-written reason sentence","message":"m","uuid":"u3","session_id":"s"}"#,
     ];
     // Each line the sentences come from decodes to its new kind: an `UnknownKind` would also keep
     // its text out of the log, and then the test would hold nothing.
@@ -122,6 +126,11 @@ fn the_new_kinds_leave_none_of_their_text_in_the_log() {
             AgentEventKind::SystemApiRetry,
         ),
         (
+            "permission_denied",
+            common::parse(hand_written[2]).kind(),
+            AgentEventKind::SystemPermissionDenied,
+        ),
+        (
             "41:18",
             common::capture_line("41-clear-reset", 18).kind(),
             AgentEventKind::ConversationReset,
@@ -141,6 +150,7 @@ fn the_new_kinds_leave_none_of_their_text_in_the_log() {
         ),
         ("content", "hand-written content sentence".to_owned()),
         ("error", "hand-written error sentence".to_owned()),
+        ("decision_reason", "hand-written reason sentence".to_owned()),
     ];
     let mut lines = common::non_blank_lines(&common::text_of("44-permission-denied.ndjson"));
     lines.extend(common::non_blank_lines(&common::text_of(
@@ -179,6 +189,46 @@ fn the_new_kinds_leave_none_of_their_text_in_the_log() {
         id,
         "the session is the one the init after 41's reset names"
     );
+    // The refusal and the notice went into the transcript: else they could not have leaked.
+    let transcript = runtime.view().transcript;
+    let bash = transcript
+        .routing
+        .tools
+        .get("toolu_01LeMqLTAqR4JiZqRuLiYC21")
+        .and_then(|at| message_at(&transcript.messages, at))
+        .and_then(|message| message.parts.get("toolu_01LeMqLTAqR4JiZqRuLiYC21"))
+        .map(|part| match part.as_ref() {
+            PartRecord::ToolCall(call) => call
+                .denied
+                .as_ref()
+                .is_some_and(|it| it.reason.as_deref() == Some("hand-written reason sentence")),
+            _ => false,
+        });
+    assert_eq!(
+        Some(true),
+        bash,
+        "44's Bash call carries the hand-written refusal"
+    );
+    let notices = transcript
+        .messages
+        .values()
+        .flat_map(|message| message.parts.values().cloned().collect::<Vec<_>>())
+        .filter(
+            |part| matches!(part.as_ref(), PartRecord::Informational(it) if it.level == "warning"),
+        )
+        .count();
+    assert_eq!(1, notices, "the hand-written warning is a part");
+    // Nor does the transcript's `Debug`, which a log line could carry.
+    let shown = format!("{transcript:?}");
+    for (name, text) in [
+        ("decision_reason", "hand-written reason sentence"),
+        ("content", "hand-written content sentence"),
+    ] {
+        assert!(
+            !shown.contains(text),
+            "the transcript's Debug shows the {name}"
+        );
+    }
     let written = log.lines();
     assert!(!written.is_empty(), "the run wrote nothing to the log");
     // Line numbers and sentence names only: the log lines themselves are not shown.

@@ -3,6 +3,8 @@
 //! projection made (CaptureAnchorsTest.kt). Ids and texts are read off the `.ndjson` files and
 //! `recorder/scenarios.mjs`.
 
+use std::collections::HashSet;
+
 use closta_goldens::common::{known_unplaced, legacy_excerpt};
 use closta_goldens::projector::project_tree;
 use closta_goldens::replay::{Step, THREAD, final_tree, inputs, replay, replay_from, scenarios};
@@ -426,6 +428,17 @@ fn capture_08_while_the_sub_agent_works_the_agent_call_runs() {
 /// the one `cut` names from its line on, which must end cut off.
 fn assert_no_call_cut_off(steps: &[Step], scenario: &str, cut: Option<Cut>) {
     let mut line = 0;
+    // A call the CLI refused on its own is shown refused (incomplete) from the refusal until its
+    // result comes: it is not a call something cut off.
+    let refused: HashSet<&str> = steps
+        .iter()
+        .filter_map(|step| match &step.input {
+            PresenterInput::Event(AgentEvent::SystemPermissionDenied { tool_use_id, .. }) => {
+                Some(tool_use_id.as_str())
+            }
+            _ => None,
+        })
+        .collect();
     for (index, step) in steps.iter().enumerate() {
         if matches!(step.input, PresenterInput::Event(_)) {
             line += 1;
@@ -438,7 +451,10 @@ fn assert_no_call_cut_off(steps: &[Step], scenario: &str, cut: Option<Cut>) {
             .map(|it| it.call_id);
         for nested in nested_calls(&step.tree) {
             let id = str(&nested, "toolCallId");
-            if nested.get("result").is_some() || (exempt.is_some() && id == exempt) {
+            if nested.get("result").is_some()
+                || (exempt.is_some() && id == exempt)
+                || id.is_some_and(|it| refused.contains(it))
+            {
                 continue;
             }
             let said = status(&nested)

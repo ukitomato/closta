@@ -77,6 +77,7 @@ fn address(row: &ThreadRow) -> *const () {
         ThreadRow::SignIn(it) => Arc::as_ptr(it) as *const (),
         ThreadRow::Compaction(it) => Arc::as_ptr(it) as *const (),
         ThreadRow::Divider(it) => Arc::as_ptr(it) as *const (),
+        ThreadRow::Notice(it) => Arc::as_ptr(it) as *const (),
     }
 }
 

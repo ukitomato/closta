@@ -201,6 +201,30 @@ fn fold_event(
         AgentEvent::ConversationReset {
             uuid, timestamp, ..
         } => session_line::fold_reset(transcript, uuid, timestamp.as_deref()),
+        AgentEvent::SystemPermissionDenied {
+            tool_use_id,
+            decision_reason_type,
+            decision_reason,
+            ..
+        } => session_line::fold_denied(
+            transcript,
+            tool_use_id,
+            decision_reason_type.as_deref(),
+            decision_reason.as_deref(),
+        ),
+        AgentEvent::SystemInformational {
+            uuid,
+            level,
+            content,
+            prevent_continuation,
+            ..
+        } => session_line::fold_informational(
+            transcript,
+            uuid,
+            level,
+            content,
+            *prevent_continuation,
+        ),
         AgentEvent::SystemBackgroundTasksChanged { .. }
         | AgentEvent::SystemTaskProgress { .. }
         | AgentEvent::SystemTaskStarted { .. } => fold_background(transcript, event),
@@ -211,8 +235,6 @@ fn fold_event(
         | AgentEvent::SystemTaskNotification { .. }
         | AgentEvent::SystemCommandsChanged { .. }
         | AgentEvent::SystemUiInvalidate { .. }
-        | AgentEvent::SystemPermissionDenied { .. }
-        | AgentEvent::SystemInformational { .. }
         | AgentEvent::SystemApiRetry { .. }
         | AgentEvent::UnknownKind { .. }
         | AgentEvent::BrokenLine { .. } => Arc::clone(transcript),
