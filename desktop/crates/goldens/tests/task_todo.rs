@@ -149,7 +149,7 @@ fn an_update_of_a_task_not_yet_created_adds_nothing() {
 }
 
 #[test]
-fn a_task_updated_to_deleted_leaves_the_list() {
+fn a_run_that_leaves_no_task_draws_no_list_and_no_tool_rows() {
     let transcript = transcript_of(&turn(
         "a",
         &[
@@ -163,8 +163,75 @@ fn a_task_updated_to_deleted_leaves_the_list() {
             ),
         ],
     ));
+    let rows = ThreadRows::default().of(&transcript);
 
-    assert_eq!(vec![Vec::<TodoItem>::new()], lists(&todos(&transcript)));
+    assert!(
+        transcript
+            .messages
+            .values()
+            .flat_map(|message| message.parts.values())
+            .filter(|part| matches!(part.as_ref(), PartRecord::ToolCall(_)))
+            .count()
+            == 2,
+        "both calls are in the transcript"
+    );
+    assert!(todos_in(&rows).is_empty(), "{rows:?}");
+    assert!(
+        !rows.iter().any(|row| matches!(row, ThreadRow::Tool(_))),
+        "no tool row for the run"
+    );
+}
+
+#[test]
+fn a_run_of_creates_without_a_subject_draws_no_list_until_a_subject_arrives() {
+    let bare = (
+        TASK_CREATE,
+        json!({"description": "no subject"}),
+        Some("Task #1 created successfully: x"),
+    );
+    let without = transcript_of(&turn("a", &[bare]));
+    assert!(
+        ThreadRows::default()
+            .of(&without)
+            .iter()
+            .any(|row| matches!(row, ThreadRow::Ask(_))),
+        "the turn's rows are there"
+    );
+    assert!(todos(&without).is_empty());
+
+    let with = transcript_of(&turn(
+        "b",
+        &[create(
+            "write tests",
+            Some("Task #1 created successfully: write tests"),
+        )],
+    ));
+    assert_eq!(
+        vec![vec![item("write tests", "pending")]],
+        lists(&todos(&with))
+    );
+}
+
+#[test]
+fn a_task_run_read_twice_gives_the_same_list_objects() {
+    let transcript = transcript_of(&turn(
+        "a",
+        &[
+            create(
+                "write tests",
+                Some("Task #1 created successfully: write tests"),
+            ),
+            create("run build", Some("Task #2 created successfully: run build")),
+        ],
+    ));
+    let mut rows = ThreadRows::default();
+    let first = todos_in(&rows.of(&transcript));
+    let second = todos_in(&rows.of(&transcript));
+
+    assert_eq!(1, first.len());
+    assert_eq!(2, first[0].items.len());
+    assert_eq!(1, second.len());
+    assert!(Arc::ptr_eq(&first[0], &second[0]));
 }
 
 #[test]
@@ -362,5 +429,36 @@ fn a_clear_empties_the_board_so_a_task_numbered_after_it_is_alone() {
         vec![item("after the clear", "pending")],
         found[1].items,
         "nothing of the first conversation"
+    );
+}
+
+// A task not yet answered before the clear is numbered 1. After the clear an answer naming 1 is
+// the board's only task, and a second answer naming 1 overwrites it. Were the unanswered set kept
+// across the clear, the second answer would find 1 in it and move the first task on to 2.
+#[test]
+fn a_clear_forgets_the_tasks_not_yet_answered_so_numbers_start_again() {
+    let before = turn("before", &[create("before the clear", None)]);
+    let after = turn(
+        "after",
+        &[
+            create(
+                "first after",
+                Some("Task #1 created successfully: first after"),
+            ),
+            create(
+                "second after",
+                Some("Task #1 created successfully: second after"),
+            ),
+        ],
+    );
+    let all = [before, inputs("41-clear-reset", true), after].concat();
+    let found = todos(&transcript_of(&all));
+
+    assert_eq!(
+        vec![
+            vec![item("before the clear", "pending")],
+            vec![item("second after", "pending")],
+        ],
+        lists(&found)
     );
 }

@@ -672,7 +672,8 @@ fn row_of(key: String, part: &PartRecord, opens: bool) -> Option<ThreadRow> {
 
 /// Replaces the task calls' tool rows with the to-do list they build, one list per run of calls
 /// with nothing between them. The list starts empty and again after each `/clear`; a list that
-/// did not change is the same `Arc` as before.
+/// did not change is the same `Arc` as before. A run that leaves no task draws nothing, not even
+/// its tool rows.
 #[derive(Default)]
 struct TaskTodos {
     lists: HashMap<String, Arc<TodoRow>>,
@@ -710,9 +711,13 @@ impl TaskTodos {
             let run_goes_on = rows.get(index + 1).is_some_and(is_task_row);
             first = run_goes_on.then_some(opening);
             if !run_goes_on {
+                let items = board.items();
+                if items.is_empty() {
+                    continue;
+                }
                 let made = TodoRow {
                     key: tool.key.clone(),
-                    items: board.items(),
+                    items,
                     opens: opening,
                 };
                 let list = match self.lists.get(&made.key) {
