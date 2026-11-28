@@ -44,6 +44,9 @@ import javax.swing.ScrollPaneConstants
 interface ThreadSurface : Disposable {
     val component: JComponent
 
+    /** The host's id of the session the surface shows: what a plan's tab finds the session by. */
+    var sessionId: String
+
     /** Draws [rows] (on the EDT). [approval] finds the request a card answers. */
     fun show(
         rows: List<ThreadRow>,
@@ -141,6 +144,7 @@ class SwingThreadSurface(
     /** An editor tab's conversation: wider room at its sides. */
     roomy: Boolean = false,
 ) : ThreadSurface {
+    override var sessionId: String = ""
     override var onAnswer: (CardAnswer) -> Unit = {}
     override var onElicitationAnswer: (ElicitationAnswer) -> Unit = {}
     override var onLetGo: () -> Unit = {}
@@ -209,7 +213,7 @@ class SwingThreadSurface(
                     { onAnswer(it) },
                     { scroll },
                     { openEditDiff(project, it) },
-                    PlanTabs(project),
+                    PlanTabs(project) { sessionId },
                     { path -> openCliPath(project, path) },
                     { column.remeasureHolding(it) },
                     { onLetGo() },

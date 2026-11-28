@@ -1,12 +1,18 @@
 package dev.ukitomato.closta.platforms.intellij.thread
 
 import com.intellij.icons.AllIcons
+import com.intellij.openapi.components.service
+import com.intellij.openapi.editor.event.DocumentEvent
+import com.intellij.openapi.editor.event.DocumentListener
+import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.ex.FileEditorManagerEx
 import com.intellij.openapi.fileTypes.PlainTextFileType
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Key
 import com.intellij.openapi.util.text.StringUtil
+import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.testFramework.LightVirtualFile
+import com.intellij.ui.EditorNotifications
 import com.intellij.ui.components.JBTextField
 import com.intellij.ui.dsl.builder.AlignX
 import com.intellij.ui.dsl.builder.RightGap
@@ -14,26 +20,35 @@ import com.intellij.ui.dsl.builder.Row
 import com.intellij.ui.dsl.builder.TopGap
 import com.intellij.ui.dsl.builder.panel
 import dev.ukitomato.closta.platforms.intellij.ClostaBundle
+import dev.ukitomato.closta.platforms.intellij.chat.ChatSessions
+import dev.ukitomato.closta.platforms.intellij.session.ClaudeSessionService
 import dev.ukitomato.closta.presenter.view.ApprovalOutcome
 import dev.ukitomato.closta.presenter.view.ApprovalRecord
 import dev.ukitomato.closta.presenter.view.PlanCard
 import dev.ukitomato.closta.presenter.view.PlanChoice
 import dev.ukitomato.closta.presenter.view.PlanGo
 import dev.ukitomato.closta.presenter.view.planAnswer
+import kotlinx.coroutines.CoroutineScope
 import java.awt.BorderLayout
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.swing.JComponent
 
 /**
- * Opens a plan in a plain text editor tab (a read-only [LightVirtualFile], no preview) without bringing it to the front
- * or taking the keyboard: the conversation the user reads stays where it is. The same request opens one tab in the
- * project, however many screens show its card (the sidebar and an editor tab can show the same conversation).
+ * Opens a plan in a plain text editor tab (a [LightVirtualFile] the user can edit, no preview) without bringing it to
+ * the front or taking the keyboard: the conversation the user reads stays where it is. The same request opens one tab
+ * in the project, however many screens show its card (the sidebar and an editor tab can show the same conversation).
+ * The edits stay in the tab; the bar over it ([PlanNotifications]) sends them back, and the file goes read-only once
+ * the plan is answered. [sessionId] is the host's id of the session the screen shows.
  */
 class PlanTabs(
     private val project: Project,
+    private val sessionId: () -> String,
 ) {
     // Kept on the project, so every screen of the project shares them (on the EDT).
-    private val opened: Opened get() = project.getUserData(OPENED) ?: Opened().also { project.putUserData(OPENED, it) }
+    private val opened: Opened get() =
+        project.getUserData(OPENED)
+            ?: Opened(project).also { project.putUserData(OPENED, it) }
 
     /** Opens [card]'s plan behind the tabs the first time the card is seen (a card made again does not reopen it). */
     fun openOnce(card: PlanCard) {
@@ -53,8 +68,9 @@ class PlanTabs(
                     // plan names, and this tab opens by itself.
                     PlainTextFileType.INSTANCE,
                     plan,
-                ).apply { isWritable = false }
+                )
             }
+        if (opened.tabs.put(file, PlanTab(card.requestId, sessionId())) == null) watchEdits(file, plan)
         // FileEditorOpenRequest moved in 2026.3 and its replacement is not in 2026.2: the one call both have opens
         // the tab, and a background open puts the tab that was selected back.
         val editors = FileEditorManagerEx.getInstanceEx(project)
@@ -64,15 +80,69 @@ class PlanTabs(
             editors.setSelectedEditor(before.fileEditor.file, before.provider.editorTypeId)
         }
     }
+
+    // The bar changes with whether the plan differs from what Claude wrote: when it first does, and when it no longer
+    // does, not at every key.
+    private fun watchEdits(
+        file: LightVirtualFile,
+        plan: String,
+    ) {
+        val document = FileDocumentManager.getInstance().getDocument(file) ?: return
+        val edited = AtomicBoolean(false)
+        document.addDocumentListener(
+            object : DocumentListener {
+                override fun documentChanged(event: DocumentEvent) {
+                    val changed = document.text != plan
+                    if (edited.getAndSet(changed) != changed) {
+                        EditorNotifications.getInstance(project).updateNotifications(file)
+                    }
+                }
+            },
+            project.service<ChatSessions>(),
+        )
+    }
+
+    /** The plan was answered: its tab can no longer be edited, and its bar goes. */
+    fun answered(card: PlanCard) {
+        val file = opened.files[card.requestId] ?: return
+        if (!file.isWritable) return
+        file.isWritable = false
+        EditorNotifications.getInstance(project).updateNotifications(file)
+    }
 }
 
+/** The request a plan's tab answers, and the host's id of the session that asked. */
+internal data class PlanTab(
+    val requestId: String,
+    val sessionId: String,
+)
+
 /** The plans' files by request, and the requests whose plan was opened once already, in a project. */
-private class Opened {
+private class Opened(
+    project: Project,
+) {
+    /** What sends a tab's edits: ends with the project's chats. */
+    val scope: CoroutineScope by lazy {
+        project.service<ClaudeSessionService>().viewScope(
+            project.service<ChatSessions>(),
+        )
+    }
     val files = ConcurrentHashMap<String, LightVirtualFile>()
+    val tabs = ConcurrentHashMap<VirtualFile, PlanTab>()
     val shown: MutableSet<String> = ConcurrentHashMap.newKeySet()
 }
 
 private val OPENED = Key.create<Opened>("closta.plan.tabs")
+
+/** The scope the project's plan tabs send their edits in. */
+internal fun planScope(project: Project): CoroutineScope =
+    (project.getUserData(OPENED) ?: Opened(project).also { project.putUserData(OPENED, it) }).scope
+
+/** The plan [file] shows in [project], or null when it is not a plan's tab. */
+internal fun planTabOf(
+    project: Project,
+    file: VirtualFile,
+): PlanTab? = project.getUserData(OPENED)?.tabs?.get(file)
 
 /** The plan's title: its first line that says something, without the Markdown heading marks. */
 internal fun planTitle(plan: String?): String? =

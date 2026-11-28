@@ -170,6 +170,7 @@ class ChatPanel(
     private val rootsBanner = RootsBanner()
 
     init {
+        surface.sessionId = source.sessionId
         Disposer.register(parent, surface)
         Disposer.register(parent) { running.stop() }
         Disposer.register(parent, taskOutput)

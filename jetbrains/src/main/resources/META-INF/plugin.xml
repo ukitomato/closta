@@ -31,6 +31,7 @@
         <notificationGroup id="Closta.Export" displayType="BALLOON" key="notification.group.export"/>
         <fileEditorProvider implementation="dev.ukitomato.closta.platforms.intellij.chat.ChatFileEditorProvider"/>
         <editorTabTitleProvider implementation="dev.ukitomato.closta.platforms.intellij.chat.ChatTabTitles"/>
+        <editorNotificationProvider implementation="dev.ukitomato.closta.platforms.intellij.thread.PlanNotifications"/>
         <fileIconProvider implementation="dev.ukitomato.closta.platforms.intellij.chat.ChatTabIcons"/>
     </extensions>
     <actions>

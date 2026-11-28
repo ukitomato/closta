@@ -154,6 +154,7 @@ class CardViews(
         // same row a second time inside this one.
         SwingUtilities.invokeLater { tabs.openOnce(card) }
         val outcome = card.answered
+        if (outcome != null) SwingUtilities.invokeLater { tabs.answered(card) }
         return if (outcome != null) {
             answeredLine(outcome, planOutcomeText(outcome), planTitle(card.plan))
         } else {
