@@ -29,4 +29,14 @@ class PlanBarTest {
 
     @Test
     fun aChangedPlanWaitingForAnAnswerIsReady() = assertEquals(PlanBar.READY, bar())
+
+    @Test
+    fun aRequestIsOpenWhileItWaitsInARunningSession() = assertEquals(true, planStillOpen(false, true, true))
+
+    @Test
+    fun aRequestIsNotOpenOnceAnsweredWithdrawnOrItsSessionGone() {
+        assertEquals(false, planStillOpen(answered = true, pending = true, sessionRunning = true))
+        assertEquals(false, planStillOpen(answered = false, pending = false, sessionRunning = true))
+        assertEquals(false, planStillOpen(answered = false, pending = true, sessionRunning = false))
+    }
 }

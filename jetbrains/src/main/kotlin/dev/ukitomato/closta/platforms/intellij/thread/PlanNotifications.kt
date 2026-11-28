@@ -3,6 +3,7 @@ package dev.ukitomato.closta.platforms.intellij.thread
 import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.components.service
+import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.FileEditor
@@ -19,6 +20,7 @@ import dev.ukitomato.closta.presenter.view.PlanGo
 import dev.ukitomato.closta.presenter.view.planAnswerWithFeedback
 import dev.ukitomato.closta.presenter.view.planCardOf
 import dev.ukitomato.closta.presenter.view.planFeedback
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.launch
 import java.util.function.Function
 import javax.swing.JComponent
@@ -97,7 +99,7 @@ class PlanNotifications :
         if (source != null && approval != null && feedback != null) {
             val made = planAnswerWithFeedback(card, approval, feedback)
             val answer = CardAnswer(card.requestId, made.decision, made.payload, made.passedOn, made.modeAfter)
-            planScope(project).launch { source.respond(answer) }
+            planScope(project).launch(failures) { source.respond(answer) }
         }
     }
 
@@ -111,5 +113,14 @@ class PlanNotifications :
         EditorNotifications.getInstance(project).updateNotifications(file)
     }
 }
+
+/** A send that throws (a session already closed) is logged by its type and goes no further, as the card's is. */
+private val failures =
+    CoroutineExceptionHandler { _, failure ->
+        Logger
+            .getInstance(
+                PlanNotifications::class.java,
+            ).warn("chat: a plan's comments were not sent (${failure.javaClass.name})")
+    }
 
 private fun textOf(document: Document): String = ReadAction.compute<String, RuntimeException> { document.text }

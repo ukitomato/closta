@@ -1,6 +1,7 @@
 package dev.ukitomato.closta.platforms.intellij.thread
 
 import com.intellij.icons.AllIcons
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.event.DocumentEvent
 import com.intellij.openapi.editor.event.DocumentListener
@@ -29,6 +30,8 @@ import dev.ukitomato.closta.presenter.view.PlanChoice
 import dev.ukitomato.closta.presenter.view.PlanGo
 import dev.ukitomato.closta.presenter.view.planAnswer
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import java.awt.BorderLayout
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
@@ -70,7 +73,12 @@ class PlanTabs(
                     plan,
                 )
             }
-        if (opened.tabs.put(file, PlanTab(card.requestId, sessionId())) == null) watchEdits(file, plan)
+        // A screen that shows no session of the host (a subagent's tab) has no bar to put there.
+        val session = sessionId()
+        if (session.isNotEmpty() && opened.tabs.put(file, PlanTab(card.requestId, session)) == null) {
+            watchEdits(file, plan)
+            watchRequest(file, PlanTab(card.requestId, session))
+        }
         // FileEditorOpenRequest moved in 2026.3 and its replacement is not in 2026.2: the one call both have opens
         // the tab, and a background open puts the tab that was selected back.
         val editors = FileEditorManagerEx.getInstanceEx(project)
@@ -102,12 +110,38 @@ class PlanTabs(
         )
     }
 
-    /** The plan was answered: its tab can no longer be edited, and its bar goes. */
-    fun answered(card: PlanCard) {
-        val file = opened.files[card.requestId] ?: return
+    // Wherever the request is answered, withdrawn or lost (a card scrolled out of sight is not made again), the tab
+    // goes read-only and its bar goes.
+    private fun watchRequest(
+        file: LightVirtualFile,
+        tab: PlanTab,
+    ) {
+        val source = project.service<ChatSessions>().source(tab.sessionId)
+        val ended = ApplicationManager.getApplication()
+        val gone = { closed(file) }
+        if (source == null) {
+            ended.invokeLater(gone, project.disposed)
+            return
+        }
+        opened.scope.launch {
+            source.view.first { view ->
+                val approval = view.transcript.approvals[tab.requestId]
+                val pending = view.conversation.pendingApprovals.any { it.requestId == tab.requestId }
+                !planStillOpen(approval?.outcome != null, pending, true)
+            }
+            ended.invokeLater(gone, project.disposed)
+        }
+    }
+
+    private fun closed(file: LightVirtualFile) {
         if (!file.isWritable) return
         file.isWritable = false
         EditorNotifications.getInstance(project).updateNotifications(file)
+    }
+
+    /** The plan was answered: its tab can no longer be edited, and its bar goes. */
+    fun answered(card: PlanCard) {
+        opened.files[card.requestId]?.let(::closed)
     }
 }
 
