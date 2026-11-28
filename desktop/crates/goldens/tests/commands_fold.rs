@@ -97,16 +97,23 @@ fn an_empty_list_is_an_empty_list() {
 
 #[test]
 fn something_that_is_not_a_list_leaves_the_transcript_as_it_was() {
-    let mut session = Session::default();
-    session.events([two()]);
-    let before = Arc::clone(session.transcript());
-    assert_eq!(2, before.commands.items.len(), "the premise");
-    session.events([changed("{}")]);
-    assert!(Arc::ptr_eq(
-        &before.commands.items,
-        &session.transcript().commands.items
-    ));
-    assert_eq!(before.commands, session.transcript().commands);
+    // An object, a string that does not parse, and an empty string (Task 10's review).
+    for commands in ["{}", "not json", ""] {
+        let mut session = Session::default();
+        session.events([two()]);
+        let before = Arc::clone(session.transcript());
+        assert_eq!(2, before.commands.items.len(), "the premise");
+        session.events([changed(commands)]);
+        assert!(
+            Arc::ptr_eq(&before.commands.items, &session.transcript().commands.items),
+            "{commands:?}"
+        );
+        assert_eq!(
+            before.commands,
+            session.transcript().commands,
+            "{commands:?}"
+        );
+    }
 }
 
 #[test]

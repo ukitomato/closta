@@ -427,8 +427,6 @@ pub(super) fn turn_end_row(row: &TurnEndRow, cx: &App) -> AnyElement {
         .into_any_element()
 }
 
-/// The banner after a reply that said the CLI is not signed in. Its button signs in from a
-/// terminal, which 6a does not have yet.
 /// A line of the CLI's own: a notice one faint line, a suggestion in the text's color, a warning
 /// in the warning's. Its words are the CLI's, drawn as plain text.
 pub(super) fn notice_row(row: &NoticeRow, cx: &App) -> AnyElement {
@@ -445,6 +443,8 @@ pub(super) fn notice_row(row: &NoticeRow, cx: &App) -> AnyElement {
         .into_any_element()
 }
 
+/// The banner after a reply that said the CLI is not signed in. Its button signs in from a
+/// terminal, which 6a does not have yet.
 pub(super) fn sign_in_row(cx: &App) -> AnyElement {
     let warning = cx.theme().warning;
     h_flex()

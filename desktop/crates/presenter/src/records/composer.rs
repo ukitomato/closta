@@ -14,8 +14,8 @@ use crate::transcript::Transcript;
 /// One slash command the CLI has. `argument_hint` is absent when the CLI gave none (or an empty
 /// one).
 ///
-/// The name, the sentence and the hint are the CLI's account's own words: `Debug` leaves them out
-/// and shows the sentence's length and whether there is a hint.
+/// The name, description and hint come from the CLI and the user's account, so `Debug` leaves
+/// them out: it shows only the description's length and whether there is a hint.
 #[derive(Clone, PartialEq, Eq)]
 pub struct SlashCommandRecord {
     pub name: String,

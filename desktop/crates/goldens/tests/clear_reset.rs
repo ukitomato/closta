@@ -53,11 +53,14 @@ fn fold(inputs: &[PresenterInput]) -> SessionView {
         .fold(SessionView::default(), SessionView::fold)
 }
 
+/// The `/clear` dividers in `rows`, with their places.
 fn dividers(rows: &[ThreadRow]) -> Vec<(usize, Arc<DividerRow>)> {
     rows.iter()
         .enumerate()
         .filter_map(|(at, row)| match row {
-            ThreadRow::Divider(it) => Some((at, Arc::clone(it))),
+            ThreadRow::Divider(it) if matches!(it.divider, Divider::Cleared { .. }) => {
+                Some((at, Arc::clone(it)))
+            }
             _ => None,
         })
         .collect()
@@ -509,4 +512,39 @@ fn a_reset_with_no_turn_open_divides_in_a_message_of_its_own() {
         Some(PartRecord::Cleared(_))
     ));
     assert_eq!(Some(0), transcript.cleared_at);
+}
+
+/// Pins what the desktop does today, not a rule (6d-R2's final fixes: decided in 6g with the
+/// JetBrains plugin): a request sent after `/clear` and before its reset (41 line 18), which waits
+/// in the queue, is drawn above the divider with the conversation that was cleared.
+#[test]
+fn today_a_request_queued_before_the_reset_is_drawn_above_the_divider() {
+    let mut all = inputs(SCENARIO, true);
+    let clear = all
+        .iter()
+        .position(|input| matches!(input, PresenterInput::UserSent(it) if it.text == "/clear"))
+        .unwrap_or_else(|| panic!("41 sends /clear"));
+    let reset = all
+        .iter()
+        .position(|input| {
+            matches!(
+                input,
+                PresenterInput::Event(AgentEvent::ConversationReset { .. })
+            )
+        })
+        .unwrap_or_else(|| panic!("41 has a reset"));
+    assert!(clear < reset);
+    all.insert(
+        clear + 1,
+        sent("queued", "Queued before the reset", "queued-uuid"),
+    );
+
+    let rows = ThreadRows::default().of(&fold(&all).transcript);
+    let dividers = dividers(&rows);
+    assert_eq!(1, dividers.len(), "{rows:?}");
+    let queued = asks(&rows)
+        .into_iter()
+        .find(|(_, ask)| ask.text == "Queued before the reset")
+        .unwrap_or_else(|| panic!("the queued request has its row"));
+    assert!(queued.0 < dividers[0].0, "{} {}", queued.0, dividers[0].0);
 }

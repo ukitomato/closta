@@ -175,11 +175,19 @@ fn the_new_kinds_leave_none_of_their_text_in_the_log() {
     // Last, and only the two `commands_changed` lines of 01 (6 and 7): they give the transcript
     // the 59 commands with their sentences after the `initialize` responses of the others, and
     // leave the session the one 41's last init names.
-    lines.extend(
-        common::non_blank_lines(&common::text_of("01-baseline-text.ndjson"))[5..7]
-            .iter()
-            .cloned(),
-    );
+    let changed = &common::non_blank_lines(&common::text_of("01-baseline-text.ndjson"))[5..7];
+    for line in changed {
+        let value: serde_json::Value = serde_json::from_str(line).expect("a line of 01");
+        assert_eq!(
+            ("system", "commands_changed"),
+            (
+                value["type"].as_str().unwrap_or_default(),
+                value["subtype"].as_str().unwrap_or_default()
+            ),
+            "01's lines 6 and 7"
+        );
+    }
+    lines.extend(changed.iter().cloned());
 
     let spawner = Arc::new(FakeSpawner::new(move |launch| {
         Ok(if launch.args == ["--version"] {

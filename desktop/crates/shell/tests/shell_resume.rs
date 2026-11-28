@@ -507,6 +507,12 @@ fn after_a_clear_the_old_conversation_is_closed_and_can_be_opened() {
             state_of(&shell, AFTER_CLEAR),
             ResumeRowState::OpenHere(slot)
         );
+        // Task 3's review: picking the new id goes to the slot that runs it.
+        let acted = pick(&mut shell, AFTER_CLEAR);
+        assert!(acted.started.is_none());
+        assert_eq!(acted.focus, Some(FocusTarget::Composer(slot)));
+        assert_eq!(shell.live_runs(), 1);
+        open_cleared_listed(&mut shell);
 
         let acted = pick(&mut shell, BEFORE_CLEAR);
         let opened = acted.started.expect("the old conversation opens");

@@ -1407,10 +1407,9 @@ mod tests {
         assert_eq!(tokens(999_999), "1.0M");
         assert_eq!(tokens(1_000_000), "1.0M");
         assert_eq!(tokens(1_234_567), "1.2M");
-        // TokenTextTest.kt (a22fa03).
+        // TokenTextTest.kt (a22fa03); its 999_950 is above.
         assert_eq!(tokens(21_819), "21.8k");
         assert_eq!(tokens(3_447), "3.4k");
-        assert_eq!(tokens(999_950), "1.0M");
         assert_eq!(tokens(12_345_678), "12.3M");
     }
 
