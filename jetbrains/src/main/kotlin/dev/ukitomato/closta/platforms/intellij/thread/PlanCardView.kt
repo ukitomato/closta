@@ -149,10 +149,12 @@ class PlanTabs(
         file: LightVirtualFile,
         tab: PlanTab,
     ) {
-        closed(file)
         opened.tabs.remove(file)
         opened.files.remove(tab.requestId)
-        EditorNotifications.getInstance(project).updateNotifications(file)
+        // Not now: this can run while the project closes and the editor's services go.
+        if (!project.isDisposed) {
+            ApplicationManager.getApplication().invokeLater({ closed(file) }, project.disposed)
+        }
     }
 
     private fun closed(file: LightVirtualFile) {
