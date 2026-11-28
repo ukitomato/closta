@@ -30,8 +30,6 @@ fn read_golden(scenario: &str) -> Result<Value, String> {
 enum Before {
     /// The JSON text of the value the golden held before the Kotlin side's feature commit.
     Json(&'static str),
-    /// The key was not there before: it is taken out of its parent object.
-    Absent,
 }
 
 /// One difference the presenter still owes: a Kotlin side feature commit changed this exact
@@ -51,29 +49,13 @@ struct Pending {
 /// The golden differences the presenter features of stage R2 will port, row by row. Each R2 task
 /// deletes its own rows (a row it no longer needs fails the test); the last R2 task deletes the
 /// table and the types. Do not merge to main while this table is here.
-const PENDING_6DR2: [Pending; 3] = [
-    Pending {
-        scenario: "01-baseline-text",
-        pointer: "/threads/byId/thread-1/commands",
-        before: Before::Json(COMMANDS_BEFORE_4B24F89),
-        commit: "4b24f89",
-        r2_task: "the command list",
-    },
-    Pending {
-        scenario: "21-compact",
-        pointer: "/threads/byId/thread-1/messages/byId/a3ec4b73-9418-4ab2-ac4f-69dffff51945/parts/order",
-        before: Before::Json("[]"),
-        commit: "9a9d5a7",
-        r2_task: "the compaction",
-    },
-    Pending {
-        scenario: "21-compact",
-        pointer: "/threads/byId/thread-1/messages/byId/a3ec4b73-9418-4ab2-ac4f-69dffff51945/parts/byId/compacted",
-        before: Before::Absent,
-        commit: "9a9d5a7",
-        r2_task: "the compaction",
-    },
-];
+const PENDING_6DR2: [Pending; 1] = [Pending {
+    scenario: "01-baseline-text",
+    pointer: "/threads/byId/thread-1/commands",
+    before: Before::Json(COMMANDS_BEFORE_4B24F89),
+    commit: "4b24f89",
+    r2_task: "the command list",
+}];
 
 // An empty table must not stay behind: R2 deletes the table and its types together.
 const _: () = assert!(!PENDING_6DR2.is_empty());
@@ -123,15 +105,6 @@ fn put_back(golden: &mut Value, row: &Pending) -> Result<(), String> {
                 )
             })?;
             *golden.pointer_mut(row.pointer).ok_or_else(missing)? = value;
-        }
-        Before::Absent => {
-            let (parent, key) = row.pointer.rsplit_once('/').ok_or_else(missing)?;
-            let key = key.replace("~1", "/").replace("~0", "~");
-            golden
-                .pointer_mut(parent)
-                .and_then(Value::as_object_mut)
-                .and_then(|object| object.remove(&key))
-                .ok_or_else(missing)?;
         }
     }
     Ok(())

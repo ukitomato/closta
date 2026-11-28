@@ -39,6 +39,9 @@ pub struct ComposerState {
     pub sandbox: SandboxView,
     /// The newest sandbox switch, when it was refused or failed.
     pub sandbox_failure: Option<SwitchRecord>,
+    /// The CLI is compacting the conversation in this turn; one it never said ended is over with
+    /// the turn.
+    pub compacting: bool,
 }
 
 /// The sandbox button: whether the sandbox is on, and why it cannot be pressed now, if it cannot.
@@ -145,6 +148,7 @@ pub fn composer_state(conversation: &ConversationState, transcript: &Transcript)
             .find(|it| it.kind == SwitchKind::Sandbox)
             .filter(|it| matches!(it.outcome, SwitchOutcome::Rejected | SwitchOutcome::Failed))
             .cloned(),
+        compacting: operations.compacting && running,
     }
 }
 

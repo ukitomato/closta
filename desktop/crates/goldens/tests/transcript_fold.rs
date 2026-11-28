@@ -15,15 +15,15 @@ use closta_model::{AgentEvent, ApprovalDecision, RawJson};
 use closta_presenter::fold::fold_transcript;
 use closta_presenter::fold::paths::call_input;
 use closta_presenter::input::{Decided, PassedOn, PresenterInput, SendId, UserSent};
-use closta_presenter::keyed::Keyed;
+use closta_presenter::keyed::{Keyed, of_cli_id};
 use closta_presenter::records::composer::{
     ComposerFailure, FileSearchRecord, SlashCommandRecord, SlashCommands,
 };
+use closta_presenter::rows::{Divider, ThreadRow, ThreadRows};
 use closta_presenter::session::SessionView;
 use closta_presenter::text::{take_utf16, utf16_len};
 use closta_presenter::transcript::{
-    ApprovalOutcome, CompactionMark, CompactionOutcome, MessageRecord, PartRecord, Role,
-    TextRecord, ToolCallRecord,
+    ApprovalOutcome, CompactedRecord, MessageRecord, PartRecord, Role, TextRecord, ToolCallRecord,
 };
 
 fn with(view: &SessionView, event: AgentEvent) -> SessionView {
@@ -898,60 +898,112 @@ fn asked(view: &SessionView, id: &str, text: &str) -> SessionView {
     }))
 }
 
+/// Every compaction part of the thread, with the key of the message that holds it.
+fn compacted_parts(view: &SessionView) -> Vec<(String, CompactedRecord)> {
+    view.transcript
+        .messages
+        .values()
+        .flat_map(|message| {
+            message
+                .parts
+                .values()
+                .filter_map(|part| match part.as_ref() {
+                    PartRecord::Compacted(it) => Some((message.key.clone(), it.clone())),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect()
+}
+
+fn compacted_record(
+    key: &str,
+    trigger: &str,
+    pre_tokens: i64,
+    post_tokens: Option<i64>,
+    failed: bool,
+) -> CompactedRecord {
+    CompactedRecord {
+        key: key.to_owned(),
+        trigger: trigger.to_owned(),
+        pre_tokens,
+        post_tokens,
+        failed,
+    }
+}
+
+// Was `a_compaction_mark_remembers_the_last_message`: the desktop's own mark gave way to
+// SessionLineFold.kt's `CompactedRecord` (9a9d5a7), placed by `withPart` in the running turn.
 #[test]
-fn a_compaction_mark_remembers_the_last_message() {
+fn a_compaction_divider_sits_in_the_turn_that_compacted() {
     let view = asked(&started(), "u1", "/compact");
     let view = with(&view, lines::compact_boundary(MANUAL_COMPACTION));
     assert_eq!(
-        vec![CompactionMark {
-            after: Some("u1".to_owned()),
-            outcome: CompactionOutcome::Compacted {
-                trigger: "manual".to_owned(),
-                pre_tokens: 20072,
-                post_tokens: 1235,
-            },
-        }],
-        view.transcript
-            .compaction_marks
-            .iter()
-            .cloned()
-            .collect::<Vec<_>>()
+        vec![(
+            of_cli_id("c1"),
+            compacted_record("compacted", "manual", 20072, Some(1235), false)
+        )],
+        compacted_parts(&view)
     );
 }
 
+// Was `a_failed_compaction_is_a_mark_of_its_own`: a failure said by a status is the next
+// boundary's divider, or one of its own at the result when no boundary came (9a9d5a7).
 #[test]
-fn a_failed_compaction_is_a_mark_of_its_own() {
+fn a_failed_compaction_is_the_next_boundarys_divider_or_one_at_the_result() {
     let view = asked(&started(), "u1", "/compact");
     let succeeded = with(&view, lines::compact_result("success"));
-    assert!(succeeded.transcript.compaction_marks.is_empty());
+    assert_eq!(None, succeeded.transcript.compact_failure);
     let failed = with(&succeeded, lines::compact_result("error"));
+    assert_eq!(Some("cr"), failed.transcript.compact_failure.as_deref());
+    assert!(compacted_parts(&failed).is_empty(), "no divider yet");
+
+    let bounded = with(&failed, lines::compact_boundary(MANUAL_COMPACTION));
     assert_eq!(
-        vec![CompactionMark {
-            after: Some("u1".to_owned()),
-            outcome: CompactionOutcome::Failed,
-        }],
-        failed
-            .transcript
-            .compaction_marks
-            .iter()
-            .cloned()
-            .collect::<Vec<_>>()
+        vec![(
+            of_cli_id("c1"),
+            compacted_record("compacted", "manual", 20072, Some(1235), true)
+        )],
+        compacted_parts(&bounded)
     );
+    assert_eq!(None, bounded.transcript.compact_failure);
+
+    let ended = with(&failed, lines::result(Some("c1")));
+    assert_eq!(
+        vec![(
+            of_cli_id("c1"),
+            compacted_record("compacted", "unknown", 0, None, true)
+        )],
+        compacted_parts(&ended)
+    );
+    assert_eq!(None, ended.transcript.compact_failure);
 }
 
+// Was `a_boundary_without_tokens_leaves_no_mark` (SessionLineFold.kt:96, a22fa03).
 #[test]
-fn a_boundary_without_tokens_leaves_no_mark() {
+fn a_boundary_without_tokens_leaves_no_divider() {
     let view = asked(&started(), "u1", "/compact");
+    assert!(view.transcript.messages.contains(&of_cli_id("c1")));
     let view = with(&view, lines::compact_boundary(r#"{"trigger":"auto"}"#));
-    assert!(view.transcript.compaction_marks.is_empty());
+    assert!(compacted_parts(&view).is_empty());
 }
 
+// Was `more_than_twenty_compactions_keep_every_mark`: the dividers are parts of the thread, so
+// none is dropped, while the console keeps its last twenty.
 #[test]
-fn more_than_twenty_compactions_keep_every_mark() {
+fn more_than_twenty_compactions_keep_every_divider() {
     let view = (0..21).fold(asked(&started(), "u1", "/compact"), |view, _| {
         with(&view, lines::compact_boundary(MANUAL_COMPACTION))
     });
-    assert_eq!(21, view.transcript.compaction_marks.len());
+    let dividers = ThreadRows::default()
+        .of(&view.transcript)
+        .into_iter()
+        .filter(|row| {
+            matches!(row, ThreadRow::Divider(it) if matches!(it.divider, Divider::Compacted { .. }))
+        })
+        .count();
+    assert_eq!(21, dividers);
+    assert_eq!(21, compacted_parts(&view).len());
     assert_eq!(20, view.transcript.operations.compactions.len());
 }
 

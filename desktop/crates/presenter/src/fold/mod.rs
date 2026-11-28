@@ -34,8 +34,7 @@ use crate::records::operations::Answer;
 use crate::records::tasks::fold_background;
 use crate::records::turn_end::with_turn_end;
 use crate::transcript::{
-    ApprovalOutcome, ApprovalRecord, CompactionMark, CompactionOutcome, MessageRecord,
-    MessageSource, ResumeEnd, Role, Transcript,
+    ApprovalOutcome, ApprovalRecord, MessageRecord, MessageSource, ResumeEnd, Role, Transcript,
 };
 
 /// Folds one input into the [`Transcript`]. A pure function that never panics: an event it has
@@ -103,7 +102,7 @@ fn fold_event(
             ..
         } => {
             let closed = fold_result(
-                transcript,
+                &session_line::compact_failure_shown(transcript),
                 &ResultFacts {
                     user_message_uuid: user_message_uuid.as_deref(),
                     duration_ms: *duration_ms,
@@ -173,27 +172,8 @@ fn fold_event(
             );
             fold_commands_of_response(&answered, response, subtype.as_deref())
         }
-        AgentEvent::SystemCompactBoundary {
-            compact_metadata, ..
-        } => fold_compacted(transcript, compact_metadata),
-        AgentEvent::SystemStatus {
-            status,
-            permission_mode,
-            compact_result,
-            ..
-        } => {
-            let said = with_operations(
-                transcript,
-                transcript
-                    .operations
-                    .status_said(status.as_deref(), permission_mode.as_deref()),
-            );
-            match compact_result.as_deref() {
-                Some(result) if result != COMPACT_SUCCESS => {
-                    with_mark(&said, CompactionOutcome::Failed)
-                }
-                _ => said,
-            }
+        AgentEvent::SystemCompactBoundary { .. } | AgentEvent::SystemStatus { .. } => {
+            session_line::fold_compaction(transcript, event)
         }
         AgentEvent::SystemInit { slash_commands, .. } => {
             fold_commands_of_init(transcript, slash_commands)
@@ -239,40 +219,6 @@ fn fold_event(
         | AgentEvent::UnknownKind { .. }
         | AgentEvent::BrokenLine { .. } => Arc::clone(transcript),
     }
-}
-
-const COMPACT_SUCCESS: &str = "success";
-
-/// A boundary that reports tokens is a compaction (the record is the operations'); it leaves a
-/// mark in the conversation too.
-fn fold_compacted(transcript: &Arc<Transcript>, compact_metadata: &RawJson) -> Arc<Transcript> {
-    let operations = transcript.operations.compacted(compact_metadata);
-    // `compacted` gives a new sequence number only when it wrote a record.
-    let record = operations
-        .compactions
-        .last()
-        .filter(|_| operations.seq != transcript.operations.seq);
-    let Some(record) = record else {
-        return with_operations(transcript, operations);
-    };
-    let outcome = CompactionOutcome::Compacted {
-        trigger: record.trigger.clone(),
-        pre_tokens: record.pre_tokens,
-        post_tokens: record.post_tokens,
-    };
-    with_mark(&with_operations(transcript, operations), outcome)
-}
-
-fn with_mark(transcript: &Arc<Transcript>, outcome: CompactionOutcome) -> Arc<Transcript> {
-    let mut marks = transcript.compaction_marks.clone();
-    marks.push_back(CompactionMark {
-        after: transcript.messages.order().next_back().map(str::to_owned),
-        outcome,
-    });
-    Arc::new(Transcript {
-        compaction_marks: marks,
-        ..(**transcript).clone()
-    })
 }
 
 const STARTED: &str = "started";

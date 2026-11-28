@@ -22,8 +22,7 @@ use crate::tool_line::{
     AgentSummary, ToolDetail, ToolLine, ToolLineState, agent_summary, tool_detail, tool_line,
 };
 use crate::transcript::{
-    ApprovalRecord, CompactionMark, CompactionOutcome, MessageRecord, PartRecord, Role,
-    ToolCallRecord, Transcript,
+    ApprovalRecord, MessageRecord, PartRecord, Role, ToolCallRecord, Transcript,
 };
 
 /// One row of the conversation. Cloning one is cheap: each variant holds its row in an `Arc`.
@@ -38,7 +37,6 @@ pub enum ThreadRow {
     Card(Arc<CardRow>),
     TurnEnd(Arc<TurnEndRow>),
     SignIn(Arc<SignInRow>),
-    Compaction(Arc<CompactionRow>),
     Divider(Arc<DividerRow>),
     Notice(Arc<NoticeRow>),
 }
@@ -55,7 +53,6 @@ impl ThreadRow {
             Self::Card(row) => &row.key,
             Self::TurnEnd(row) => &row.key,
             Self::SignIn(row) => &row.key,
-            Self::Compaction(row) => &row.key,
             Self::Divider(row) => &row.key,
             Self::Notice(row) => &row.key,
         }
@@ -73,7 +70,6 @@ impl ThreadRow {
             Self::Card(row) => row.opens,
             Self::TurnEnd(row) => row.opens,
             Self::SignIn(_) => false,
-            Self::Compaction(row) => row.opens,
             Self::Divider(row) => row.opens,
             Self::Notice(row) => row.opens,
         }
@@ -91,7 +87,6 @@ impl ThreadRow {
             (Self::Card(a), Self::Card(b)) => Arc::ptr_eq(a, b),
             (Self::TurnEnd(a), Self::TurnEnd(b)) => Arc::ptr_eq(a, b),
             (Self::SignIn(a), Self::SignIn(b)) => Arc::ptr_eq(a, b),
-            (Self::Compaction(a), Self::Compaction(b)) => Arc::ptr_eq(a, b),
             (Self::Divider(a), Self::Divider(b)) => Arc::ptr_eq(a, b),
             (Self::Notice(a), Self::Notice(b)) => Arc::ptr_eq(a, b),
             _ => false,
@@ -231,15 +226,6 @@ pub struct SignInRow {
     pub key: String,
 }
 
-/// A compaction the CLI did (or failed to do), after the message it cut. `key` is `compaction/<n>`
-/// by the mark's place in the conversation, counted from 1.
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub struct CompactionRow {
-    pub key: String,
-    pub outcome: CompactionOutcome,
-    pub opens: bool,
-}
-
 /// A line across the thread where the conversation changed under it; what came before stays
 /// above it.
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -255,6 +241,14 @@ pub enum Divider {
     /// The conversation was cleared; `at` is when, as the CLI wrote it (ISO 8601, UTC), `None`
     /// when it did not say.
     Cleared { at: Option<String> },
+    /// The conversation was compacted (or failed to be): what started it, the tokens before and,
+    /// when the CLI said, after ([`CompactedRecord`](crate::transcript::CompactedRecord)).
+    Compacted {
+        trigger: String,
+        pre_tokens: i64,
+        post_tokens: Option<i64>,
+        failed: bool,
+    },
 }
 
 /// What an [`InformationalRecord`](crate::transcript::InformationalRecord) says of its level, as
@@ -364,7 +358,6 @@ pub struct ThreadRows {
     groups: HashMap<String, Arc<ExploredRow>>,
     cards: HashMap<ByPtr<ApprovalRecord>, Arc<CardRow>>,
     ends: HashMap<String, Arc<TurnEndRow>>,
-    compactions: HashMap<usize, Arc<CompactionRow>>,
 }
 
 impl ThreadRows {
@@ -373,7 +366,6 @@ impl ThreadRows {
         let mut next_parts = HashMap::new();
         let mut next_cards = HashMap::new();
         let mut next_ends = HashMap::new();
-        let mut next_compactions = HashMap::new();
         let mut rows = Vec::new();
         let go = plan_go_of(&transcript.operations);
         let by_anchor = ByAnchor::of(&transcript.approvals);
@@ -383,17 +375,6 @@ impl ThreadRows {
             .take(asks.len().saturating_sub(1))
             .map(String::as_str)
             .collect();
-        let marks = &transcript.compaction_marks;
-        // A mark that follows no message of this conversation goes first.
-        for (index, mark) in marks.iter().enumerate() {
-            if !mark
-                .after
-                .as_deref()
-                .is_some_and(|it| transcript.messages.contains(it))
-            {
-                rows.push(self.compaction_row(index, mark, &mut next_compactions));
-            }
-        }
         for message in transcript.messages.values() {
             let made = match self.messages.get(&by_ptr(message)) {
                 Some(kept) => {
@@ -421,11 +402,6 @@ impl ThreadRows {
                     go,
                 )));
             }
-            for (index, mark) in marks.iter().enumerate() {
-                if mark.after.as_deref() == Some(message.key.as_str()) {
-                    rows.push(self.compaction_row(index, mark, &mut next_compactions));
-                }
-            }
             if let Some(end) = self.turn_end_row(transcript, &message.key, &followed) {
                 next_ends.insert(end.key.clone(), Arc::clone(&end));
                 rows.push(ThreadRow::TurnEnd(end));
@@ -452,28 +428,7 @@ impl ThreadRows {
         self.parts = next_parts;
         self.cards = next_cards;
         self.ends = next_ends;
-        self.compactions = next_compactions;
         self.grouped(rows)
-    }
-
-    /// The row of mark number `index`; the same `Arc` while the mark is the same.
-    fn compaction_row(
-        &self,
-        index: usize,
-        mark: &CompactionMark,
-        into: &mut HashMap<usize, Arc<CompactionRow>>,
-    ) -> ThreadRow {
-        let made = CompactionRow {
-            key: format!("compaction/{}", index + 1),
-            outcome: mark.outcome.clone(),
-            opens: false,
-        };
-        let row = match self.compactions.get(&index) {
-            Some(kept) if **kept == made => Arc::clone(kept),
-            _ => Arc::new(made),
-        };
-        into.insert(index, Arc::clone(&row));
-        ThreadRow::Compaction(row)
     }
 
     fn turn_end_row(
@@ -678,6 +633,16 @@ fn row_of(key: String, part: &PartRecord, opens: bool) -> Option<ThreadRow> {
             key,
             divider: Divider::Cleared {
                 at: cleared.at.clone(),
+            },
+            opens,
+        }))),
+        PartRecord::Compacted(compacted) => Some(ThreadRow::Divider(Arc::new(DividerRow {
+            key,
+            divider: Divider::Compacted {
+                trigger: compacted.trigger.clone(),
+                pre_tokens: compacted.pre_tokens,
+                post_tokens: compacted.post_tokens,
+                failed: compacted.failed,
             },
             opens,
         }))),

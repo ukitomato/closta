@@ -853,7 +853,7 @@ impl ShellState {
             switching: composing.switching.is_some(),
         });
         held.mode_sent = false;
-        held.compacting = view.transcript.operations.compacting;
+        held.compacting = composing.compacting;
 
         let mut change = alerts_between(
             held.last

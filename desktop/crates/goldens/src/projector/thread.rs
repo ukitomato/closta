@@ -283,6 +283,8 @@ impl<'a> ThreadProjection<'a> {
             // A part of its own type, which a client that does not know it shows as unknown
             // (TreeNodes.kt's `clearedNode`).
             PartRecord::Cleared(_) => json!({ "type": "cleared" }),
+            // A compaction, of a type of its own too (ThreadProjection.kt, 9a9d5a7).
+            PartRecord::Compacted(_) => json!({ "type": "compacted" }),
             // The CLI's own line, of a type of its own (ThreadProjection.kt).
             PartRecord::Informational(_) => json!({ "type": "informational" }),
             PartRecord::ToolCall(call) => return self.tool_call(key, call, place),

@@ -4,13 +4,11 @@
 
 use closta_presenter::cards::plan::{PlanCard, PlanGo};
 use closta_presenter::cards::{SuggestionLine, ThreadCard};
-use closta_presenter::rows::{
-    CardRow, CompactionRow, Divider, DividerRow, ExploredRow, NoticeRow, TurnEndRow,
-};
+use closta_presenter::rows::{CardRow, Divider, DividerRow, ExploredRow, NoticeRow, TurnEndRow};
 use closta_presenter::sessions::groups::AlertKind;
 use closta_presenter::text::kt_is_blank;
 use closta_presenter::tool_line::{AgentSummary, ToolLine, ToolLineState};
-use closta_presenter::transcript::{ApprovalOutcome, CompactionOutcome, Denial};
+use closta_presenter::transcript::{ApprovalOutcome, Denial};
 use closta_providers::claude::process::ProcessFailure;
 use closta_session::status::SessionFailure;
 
@@ -185,36 +183,37 @@ pub fn tokens(n: i64) -> String {
     }
 }
 
-/// The line a compaction's divider says: the tokens before and after, and `auto` when the CLI
-/// chose to compact.
-pub fn compaction_line(row: &CompactionRow) -> String {
-    match &row.outcome {
-        CompactionOutcome::Failed => COMPACTION_FAILED.to_owned(),
-        CompactionOutcome::Compacted {
+/// A clear's divider (`thread.divider.clearedNoTime`); the time it was cleared is said in stage 6g.
+pub const CLEARED: &str = "Conversation cleared";
+
+/// The line a divider says. A compaction's says the tokens before and after (or only before, when
+/// the CLI did not say after), and `auto` when the CLI chose to compact.
+pub fn divider_line(row: &DividerRow) -> String {
+    match &row.divider {
+        Divider::Cleared { .. } => CLEARED.to_owned(),
+        Divider::Compacted { failed: true, .. } => COMPACTION_FAILED.to_owned(),
+        Divider::Compacted {
             trigger,
             pre_tokens,
             post_tokens,
+            failed: false,
         } => {
-            let mut line = format!(
-                "Conversation compacted · {} → {} tokens",
-                tokens(*pre_tokens),
-                tokens(*post_tokens)
-            );
+            let mut line = match post_tokens {
+                Some(post_tokens) => format!(
+                    "Conversation compacted · {} → {} tokens",
+                    tokens(*pre_tokens),
+                    tokens(*post_tokens)
+                ),
+                None => format!(
+                    "Conversation compacted · {} tokens before",
+                    tokens(*pre_tokens)
+                ),
+            };
             if trigger == AUTO_TRIGGER {
                 line.push_str(" · auto");
             }
             line
         }
-    }
-}
-
-/// A clear's divider (`thread.divider.clearedNoTime`); the time it was cleared is said in stage 6g.
-pub const CLEARED: &str = "Conversation cleared";
-
-/// The line a divider says.
-pub fn divider_line(row: &DividerRow) -> String {
-    match &row.divider {
-        Divider::Cleared { .. } => CLEARED.to_owned(),
     }
 }
 
@@ -1239,34 +1238,46 @@ mod tests {
         }
     }
 
-    fn compaction(outcome: CompactionOutcome) -> CompactionRow {
-        CompactionRow {
-            key: "compaction/1".to_owned(),
-            outcome,
+    fn compacted(
+        trigger: &str,
+        pre_tokens: i64,
+        post_tokens: Option<i64>,
+        failed: bool,
+    ) -> DividerRow {
+        DividerRow {
+            key: "turn/compacted".to_owned(),
+            divider: Divider::Compacted {
+                trigger: trigger.to_owned(),
+                pre_tokens,
+                post_tokens,
+                failed,
+            },
             opens: false,
         }
     }
 
-    fn compacted(trigger: &str, pre: i64, post: i64) -> CompactionRow {
-        compaction(CompactionOutcome::Compacted {
-            trigger: trigger.to_owned(),
-            pre_tokens: pre,
-            post_tokens: post,
-        })
-    }
-
+    // Was `compaction_lines_say_tokens_and_auto`: the desktop's own compaction row gave way to the
+    // divider (9a9d5a7); its words keep the desktop's form (the plan's writer's decision 11).
     #[test]
-    fn compaction_lines_say_tokens_and_auto() {
+    fn compacted_dividers_say_tokens_auto_and_failure() {
         assert_eq!(
-            compaction_line(&compacted("manual", 20_072, 1_235)),
-            "Conversation compacted · 20.1k → 1.2k tokens"
+            divider_line(&compacted("manual", 21_819, Some(3_447), false)),
+            "Conversation compacted · 21.8k → 3.4k tokens"
         );
         assert_eq!(
-            compaction_line(&compacted("auto", 20_072, 1_235)),
-            "Conversation compacted · 20.1k → 1.2k tokens · auto"
+            divider_line(&compacted("auto", 21_819, Some(3_447), false)),
+            "Conversation compacted · 21.8k → 3.4k tokens · auto"
         );
         assert_eq!(
-            compaction_line(&compaction(CompactionOutcome::Failed)),
+            divider_line(&compacted("manual", 21_819, None, false)),
+            "Conversation compacted · 21.8k tokens before"
+        );
+        assert_eq!(
+            divider_line(&compacted("manual", 21_819, Some(3_447), true)),
+            "Compaction failed"
+        );
+        assert_eq!(
+            divider_line(&compacted("unknown", 0, None, true)),
             "Compaction failed"
         );
     }
@@ -1396,6 +1407,11 @@ mod tests {
         assert_eq!(tokens(999_999), "1.0M");
         assert_eq!(tokens(1_000_000), "1.0M");
         assert_eq!(tokens(1_234_567), "1.2M");
+        // TokenTextTest.kt (a22fa03).
+        assert_eq!(tokens(21_819), "21.8k");
+        assert_eq!(tokens(3_447), "3.4k");
+        assert_eq!(tokens(999_950), "1.0M");
+        assert_eq!(tokens(12_345_678), "12.3M");
     }
 
     #[test]

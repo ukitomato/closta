@@ -1,18 +1,26 @@
-//! The lines about the session itself rather than its content (SessionLineFold.kt): a reset
-//! divides the thread, a refusal marks the call it refused and an informational line adds a note.
-//! A divider or a note goes in the message receiving content, or in one of its own
+//! The lines about the session itself rather than its content (SessionLineFold.kt): a reset or a
+//! compaction divides the thread, a refusal marks the call it refused and an informational line
+//! adds a note. A divider or a note goes in the message receiving content, or in one of its own
 //! ([`with_part`]).
 
 use std::sync::Arc;
 
+use closta_model::AgentEvent;
+use serde_json::Value;
+
+use crate::fold::operations::with_operations;
 use crate::fold::paths::mark_denied;
+use crate::json::{JsonFields, parse};
 use crate::keyed::{Keyed, of_cli_id};
+use crate::records::readings::UNKNOWN_TRIGGER;
 use crate::transcript::{
-    ClearedRecord, Denial, InformationalRecord, MessageRecord, MessageSource, PartRecord, Role,
-    Transcript,
+    ClearedRecord, CompactedRecord, Denial, InformationalRecord, MessageRecord, MessageSource,
+    PartRecord, Role, Transcript,
 };
 
 const CLEARED_PART: &str = "cleared";
+const COMPACTED_PART: &str = "compacted";
+const COMPACT_SUCCESS: &str = "success";
 const NOTICE_PART: &str = "notice";
 const INFO_LEVEL: &str = "info";
 
@@ -73,6 +81,109 @@ pub(crate) fn fold_reset(
     let cleared_at = placed.messages.order().position(|it| it == message_key);
     Arc::new(Transcript {
         cleared_at,
+        compact_failure: None,
+        ..Transcript::clone(&placed)
+    })
+}
+
+/// What a compaction's lines do: the status says whether it runs and how it ended, the boundary
+/// divides the thread. The console keeps its own record of each ([`OperationRecords`]).
+///
+/// [`OperationRecords`]: crate::records::operations::OperationRecords
+pub(crate) fn fold_compaction(transcript: &Arc<Transcript>, event: &AgentEvent) -> Arc<Transcript> {
+    match event {
+        AgentEvent::SystemCompactBoundary {
+            uuid,
+            compact_metadata,
+            ..
+        } => {
+            let divided = fold_compact_boundary(transcript, uuid, &compact_metadata.0);
+            let operations = divided.operations.compacted(compact_metadata);
+            with_operations(&divided, operations)
+        }
+        AgentEvent::SystemStatus {
+            uuid,
+            status,
+            permission_mode,
+            compact_result,
+            ..
+        } => {
+            let said = compact_status_said(transcript, uuid, compact_result.as_deref());
+            let operations = said
+                .operations
+                .status_said(status.as_deref(), permission_mode.as_deref());
+            with_operations(&said, operations)
+        }
+        _ => Arc::clone(transcript),
+    }
+}
+
+/// The divider a `compact_boundary` makes, failed when a status said the compaction did not
+/// succeed. A boundary that does not say how many tokens it began with makes none.
+fn fold_compact_boundary(
+    transcript: &Arc<Transcript>,
+    uuid: &str,
+    metadata: &str,
+) -> Arc<Transcript> {
+    let metadata = parse(metadata);
+    let Some(metadata) = metadata.as_ref().and_then(Value::as_object) else {
+        return Arc::clone(transcript);
+    };
+    let Some(pre_tokens) = metadata.count("pre_tokens") else {
+        return Arc::clone(transcript);
+    };
+    let failed = transcript.compact_failure.is_some();
+    let (placed, _) = with_part(transcript, uuid, COMPACTED_PART, |key| {
+        PartRecord::Compacted(CompactedRecord {
+            key,
+            trigger: metadata
+                .string("trigger")
+                .unwrap_or(UNKNOWN_TRIGGER)
+                .to_owned(),
+            pre_tokens,
+            post_tokens: metadata.count("post_tokens"),
+            failed,
+        })
+    });
+    Arc::new(Transcript {
+        compact_failure: None,
+        ..Transcript::clone(&placed)
+    })
+}
+
+/// A status that says the compaction did not succeed; none says nothing and a success clears
+/// nothing.
+fn compact_status_said(
+    transcript: &Arc<Transcript>,
+    uuid: &str,
+    compact_result: Option<&str>,
+) -> Arc<Transcript> {
+    match compact_result {
+        None | Some(COMPACT_SUCCESS) => Arc::clone(transcript),
+        Some(_) => Arc::new(Transcript {
+            compact_failure: Some(uuid.to_owned()),
+            ..Transcript::clone(transcript)
+        }),
+    }
+}
+
+/// At a `result`, a failure no boundary followed is shown now, in the answer of the turn that ran
+/// it.
+pub(crate) fn compact_failure_shown(transcript: &Arc<Transcript>) -> Arc<Transcript> {
+    let Some(uuid) = transcript.compact_failure.as_deref() else {
+        return Arc::clone(transcript);
+    };
+    let (placed, _) = with_part(transcript, uuid, COMPACTED_PART, |key| {
+        PartRecord::Compacted(CompactedRecord {
+            key,
+            trigger: UNKNOWN_TRIGGER.to_owned(),
+            pre_tokens: 0,
+            post_tokens: None,
+            failed: true,
+        })
+    });
+    Arc::new(Transcript {
+        compact_failure: None,
         ..Transcript::clone(&placed)
     })
 }

@@ -5,8 +5,8 @@
 use std::collections::HashSet;
 
 use closta_presenter::rows::{
-    AskRow, CompactionRow, DividerRow, ExploredRow, NoticeLevel, NoticeRow, ThinkingRow, ThreadRow,
-    TodoRow, ToolRow, TurnEndRow,
+    AskRow, DividerRow, ExploredRow, NoticeLevel, NoticeRow, ThinkingRow, ThreadRow, TodoRow,
+    ToolRow, TurnEndRow,
 };
 use closta_presenter::tool_line::{ToolDetail, ToolLine, ToolLineState};
 use closta_shell::copy;
@@ -99,10 +99,6 @@ pub(super) fn row(
         ),
         ThreadRow::TurnEnd(end) => (turn_end_row(end, cx), copy::turn_end(end, false)),
         ThreadRow::SignIn(_) => (sign_in_row(cx), copy::SIGN_IN_TEXT.to_owned()),
-        ThreadRow::Compaction(compaction) => (
-            compaction_row(compaction, cx),
-            copy::compaction_line(compaction),
-        ),
         ThreadRow::Divider(divider) => (divider_row(divider, cx), copy::divider_line(divider)),
         ThreadRow::Notice(notice) => (notice_row(notice, cx), copy::notice_line(notice)),
     };
@@ -170,12 +166,8 @@ pub(super) fn ask_row(ask: &AskRow, cx: &App) -> AnyElement {
         .into_any_element()
 }
 
-/// A compaction's divider: its line in the middle between two faint rules.
-pub(super) fn compaction_row(row: &CompactionRow, cx: &App) -> AnyElement {
-    ruled_line(copy::compaction_line(row), cx)
-}
-
-/// A divider where the conversation changed under the thread, drawn as a compaction's is.
+/// A divider where the conversation changed under the thread (a clear or a compaction): its line
+/// in the middle between two faint rules.
 pub(super) fn divider_row(row: &DividerRow, cx: &App) -> AnyElement {
     ruled_line(copy::divider_line(row), cx)
 }

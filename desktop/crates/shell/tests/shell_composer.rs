@@ -519,24 +519,46 @@ fn the_failure_band_reads_the_status() {
     });
 }
 
+fn status_line(value: &str) -> String {
+    format!(
+        r#"{{"type":"system","subtype":"status","uuid":"st","session_id":"s","status":{value}}}"#
+    )
+}
+
+// The CLI's status is said only while a turn runs (e8e6cd2's ComposerState.kt), so a turn runs
+// first.
 #[test]
 fn compacting_follows_the_clis_status() {
     drive(|harness| async move {
         let (mut shell, slot, runtime, control) = running_slot(&harness).await;
-        let status = |value: &str| {
-            format!(
-                r#"{{"type":"system","subtype":"status","uuid":"st","session_id":"s","status":{value}}}"#
-            )
-        };
+        type_in(&mut shell, slot, "/compact");
+        shell.act(ShellAction::Send { slot });
+        control.next_stdin_line().await.expect("the send");
+        refresh(&mut shell, slot);
+        assert!(shell.running(slot), "the turn runs");
         assert!(!shell.compacting(slot));
-        control.emit(&status(r#""compacting""#));
+
+        control.emit(&status_line(r#""compacting""#));
         until(|| runtime.view().transcript.operations.compacting).await;
         refresh(&mut shell, slot);
         assert!(shell.compacting(slot));
 
-        control.emit(&status("null"));
+        control.emit(&status_line("null"));
         until(|| !runtime.view().transcript.operations.compacting).await;
         refresh(&mut shell, slot);
+        assert!(!shell.compacting(slot));
+    });
+}
+
+// e8e6cd2: a compaction the CLI says outside a turn is not said.
+#[test]
+fn compacting_is_not_said_outside_a_turn() {
+    drive(|harness| async move {
+        let (mut shell, slot, runtime, control) = running_slot(&harness).await;
+        control.emit(&status_line(r#""compacting""#));
+        until(|| runtime.view().transcript.operations.compacting).await;
+        refresh(&mut shell, slot);
+        assert!(!shell.running(slot), "no turn runs");
         assert!(!shell.compacting(slot));
     });
 }
