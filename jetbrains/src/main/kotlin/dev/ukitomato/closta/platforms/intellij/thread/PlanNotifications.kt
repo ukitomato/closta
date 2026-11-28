@@ -15,6 +15,7 @@ import com.intellij.ui.EditorNotificationProvider
 import com.intellij.ui.EditorNotifications
 import dev.ukitomato.closta.platforms.intellij.ClostaBundle
 import dev.ukitomato.closta.platforms.intellij.chat.ChatSessions
+import dev.ukitomato.closta.presenter.view.ApprovalRecord
 import dev.ukitomato.closta.presenter.view.PlanCard
 import dev.ukitomato.closta.presenter.view.PlanGo
 import dev.ukitomato.closta.presenter.view.planAnswerWithFeedback
@@ -37,8 +38,44 @@ class PlanNotifications :
         project: Project,
         file: VirtualFile,
     ): Function<in FileEditor, out JComponent?>? {
-        val tab = planTabOf(project, file) ?: return null
-        return Function { editor -> panel(project, file, tab, editor) }
+        val tab = planTabOf(project, file)
+        // The edits are worked out here, off the EDT: the function below only builds the bar.
+        val data = tab?.let { barData(project, file, it) }
+        return if (tab == null || data == null) null else Function { editor -> panel(project, file, tab, editor, data) }
+    }
+
+    /** What the bar shows, read from the presenter and the document. */
+    private class BarData(
+        val document: Document,
+        val approval: ApprovalRecord?,
+        val card: PlanCard?,
+        val pending: Boolean,
+        val sessionRunning: Boolean,
+        val changed: Boolean,
+    )
+
+    private fun barData(
+        project: Project,
+        file: VirtualFile,
+        tab: PlanTab,
+    ): BarData? {
+        val source = project.service<ChatSessions>().source(tab.sessionId)
+        val view = source?.view?.value
+        val approval = view?.transcript?.approvals?.get(tab.requestId)
+        val card = approval?.let { planCardOf(it, PlanGo.AUTO) }
+        val document = FileDocumentManager.getInstance().getDocument(file) ?: return null
+        val feedback =
+            card?.plan?.let {
+                planFeedback(it, textOf(document), planNote(project.service<PlanNotes>()[tab.requestId]))
+            }
+        return BarData(
+            document,
+            approval,
+            card,
+            pending = view?.conversation?.pendingApprovals?.any { it.requestId == tab.requestId } == true,
+            sessionRunning = source != null,
+            changed = feedback != null,
+        )
     }
 
     private fun panel(
@@ -46,28 +83,17 @@ class PlanNotifications :
         file: VirtualFile,
         tab: PlanTab,
         editor: FileEditor,
+        data: BarData,
     ): JComponent? {
-        val source = project.service<ChatSessions>().source(tab.sessionId)
-        val view = source?.view?.value
-        val approval = view?.transcript?.approvals?.get(tab.requestId)
-        val card = approval?.let { planCardOf(it, PlanGo.AUTO) }
-        val document = FileDocumentManager.getInstance().getDocument(file) ?: return null
+        val card = data.card
         val plan = card?.plan
-        val feedback =
-            plan?.let {
-                planFeedback(
-                    it,
-                    textOf(document),
-                    planNote(project.service<PlanNotes>()[tab.requestId]),
-                )
-            }
         val bar =
             planBar(
                 planPresent = plan != null,
-                answered = approval?.outcome != null,
-                pending = view?.conversation?.pendingApprovals?.any { it.requestId == tab.requestId } == true,
-                sessionRunning = source != null,
-                changed = feedback != null,
+                answered = data.approval?.outcome != null,
+                pending = data.pending,
+                sessionRunning = data.sessionRunning,
+                changed = data.changed,
             )
         return if (bar == PlanBar.HIDDEN || card == null || plan == null) {
             null
@@ -78,36 +104,40 @@ class PlanNotifications :
                 } else {
                     panel.text = ClostaBundle.message("thread.plan.bar.ready")
                     panel.createActionLabel(ClostaBundle.message("thread.plan.bar.send")) {
-                        send(project, tab, card, document)
+                        send(project, tab, card, data.document)
                     }
                     panel.createActionLabel(ClostaBundle.message("thread.plan.bar.revert")) {
-                        revert(project, file, document, plan)
+                        revert(project, file, data.document, plan)
                     }
                 }
             }
         }
     }
 
+    // The edits are worked out in the send's own coroutine, from the document as it is when the click is handled.
     private fun send(
         project: Project,
         tab: PlanTab,
         card: PlanCard,
         document: Document,
     ) {
-        val source = project.service<ChatSessions>().source(tab.sessionId)
-        val approval =
-            source
-                ?.view
-                ?.value
-                ?.transcript
-                ?.approvals
-                ?.get(tab.requestId)
-        val feedback =
-            card.plan?.let { planFeedback(it, textOf(document), planNote(project.service<PlanNotes>()[tab.requestId])) }
-        if (source != null && approval != null && feedback != null) {
-            val made = planAnswerWithFeedback(card, approval, feedback)
-            val answer = CardAnswer(card.requestId, made.decision, made.payload, made.passedOn, made.modeAfter)
-            planScope(project).launch(failures) { source.respond(answer) }
+        planScope(project).launch(failures) {
+            val source = project.service<ChatSessions>().source(tab.sessionId)
+            val approval =
+                source
+                    ?.view
+                    ?.value
+                    ?.transcript
+                    ?.approvals
+                    ?.get(tab.requestId)
+            val feedback =
+                card.plan?.let {
+                    planFeedback(it, textOf(document), planNote(project.service<PlanNotes>()[tab.requestId]))
+                }
+            if (source != null && approval != null && feedback != null) {
+                val made = planAnswerWithFeedback(card, approval, feedback)
+                source.respond(CardAnswer(card.requestId, made.decision, made.payload, made.passedOn, made.modeAfter))
+            }
         }
     }
 

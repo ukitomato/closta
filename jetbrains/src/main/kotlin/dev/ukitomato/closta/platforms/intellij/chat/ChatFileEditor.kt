@@ -22,6 +22,7 @@ import com.intellij.util.ui.JBUI
 import dev.ukitomato.closta.platforms.intellij.ClostaBundle
 import dev.ukitomato.closta.platforms.intellij.ClostaIcons
 import dev.ukitomato.closta.platforms.intellij.session.SessionOpening
+import dev.ukitomato.closta.presenter.view.TITLE_MAX
 import java.awt.GridBagLayout
 import java.beans.PropertyChangeListener
 import javax.swing.Icon
@@ -71,7 +72,7 @@ class ChatTabTitles :
     override fun getEditorTabTooltipText(
         project: Project,
         virtualFile: VirtualFile,
-    ): String? = (virtualFile as? ChatVirtualFile)?.let { HtmlChunk.text(it.shownTitle).toString() }
+    ): String? = (virtualFile as? ChatVirtualFile)?.let { HtmlChunk.text(it.shownTitle.take(TITLE_MAX)).toString() }
 }
 
 /** Opens a [ChatVirtualFile] as a conversation in an editor tab. The tab leases its session while it is open. */

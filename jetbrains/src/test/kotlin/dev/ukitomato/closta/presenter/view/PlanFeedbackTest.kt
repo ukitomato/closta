@@ -125,4 +125,21 @@ class PlanFeedbackTest {
         println("perf planFeedback median=${"%.3f".format(median)}ms")
         assertTrue(median <= 20.0 + 50.0, "median ${median}ms")
     }
+
+    @Tag("perf")
+    @Test
+    fun twoThousandLinesAllDifferentBuildWithinBudget() {
+        val original = lines(2000).joinToString("\n")
+        val edited = (1..2000).joinToString("\n") { "other $it" }
+        planFeedback(original, edited, "")
+        val runs =
+            (1..5).map {
+                val start = System.nanoTime()
+                planFeedback(original, edited, "")
+                (System.nanoTime() - start) / 1_000_000.0
+            }
+        val median = runs.sorted()[runs.size / 2]
+        println("perf planFeedback 2000x2000 median=${"%.3f".format(median)}ms")
+        assertTrue(median <= 50.0 + 50.0, "median ${median}ms")
+    }
 }

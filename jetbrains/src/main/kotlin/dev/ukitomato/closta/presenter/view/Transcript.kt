@@ -63,6 +63,10 @@ data class Transcript(
     val reports: Map<String, ReportedErrors> = emptyMap(),
     /** The uuid of the status that said a compaction did not succeed, until the boundary or the `result` shows it. */
     val compactFailure: String? = null,
+    /**
+     * The name the user gave the session (`custom-title` of its record, or the last rename the CLI accepted); null
+     * before one. A blank one counts as none.
+     */
     val customTitle: String? = null,
     /** The keys of the user messages sent while a turn ran (the newest [MAX_CANCELS]): only these can be withdrawn. */
     val sentWhileRunning: Set<String> = emptySet(),

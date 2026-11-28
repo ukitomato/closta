@@ -52,7 +52,7 @@ import dev.ukitomato.closta.presenter.view.askActions
 import dev.ukitomato.closta.presenter.view.canBackground
 import dev.ukitomato.closta.presenter.view.composerState
 import dev.ukitomato.closta.presenter.view.runningTasks
-import dev.ukitomato.closta.presenter.view.sessionName
+import dev.ukitomato.closta.presenter.view.sessionTitle
 import dev.ukitomato.closta.presenter.view.threadIsRunning
 import dev.ukitomato.closta.presenter.view.turnEndActions
 import kotlinx.coroutines.CancellationException
@@ -525,11 +525,6 @@ class ChatPanel(
                 val view = source.view.value
                 // A message in the CLI's queue is offered for withdrawal only while the CLI runs.
                 drawn(view)
-                composer.show(
-                    composerState(view.conversation, view.transcript),
-                    sendable,
-                    sendBlockOf(sendable, source.starting),
-                )
             }
         }
         scope.launch(Dispatchers.EDT) {
@@ -686,7 +681,7 @@ class ChatPanel(
 
     /** The title follows the first request; the branch is read again when a turn ends (it may have switched it). */
     private fun followTitleAndHead(view: SessionView) {
-        val named = sessionName(view.transcript) ?: source.title
+        val named = sessionTitle(view.transcript) ?: source.title
         if (named != title) {
             title = named
             showHead()

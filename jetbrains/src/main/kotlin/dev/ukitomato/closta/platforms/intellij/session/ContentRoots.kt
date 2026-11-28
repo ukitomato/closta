@@ -1,6 +1,7 @@
 package dev.ukitomato.closta.platforms.intellij.session
 
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
@@ -35,7 +36,9 @@ class ContentRoots(
         enabled: () -> Boolean,
         log: SessionLog,
     ): SessionLaunchPlanner =
-        ExtraRootsPlanner(inner, enabled, ::roots, project.basePath, ide.cliPaths, { id, cwd, given ->
+        ExtraRootsPlanner(inner, enabled, {
+            runReadAction { roots() }
+        }, project.basePath, ide.cliPaths, { id, cwd, given ->
             watch.launched(id, cwd, given)
             listen()
         }, log)

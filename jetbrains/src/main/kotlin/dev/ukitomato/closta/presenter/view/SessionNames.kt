@@ -8,7 +8,7 @@ const val TITLE_MAX = 60
  * It is not cut: [sessionTitle] is the sessions list's.
  */
 fun sessionName(transcript: Transcript): String? =
-    transcript.customTitle
+    transcript.customTitle?.takeIf { it.isNotBlank() }
         ?: transcript.messages.order
             .firstNotNullOfOrNull { key -> transcript.messages[key]?.takeIf { it.role == Role.USER } }
             ?.parts

@@ -351,9 +351,9 @@ object StdinEncoder {
         }
 
     /**
-     * `list_permission_rules`: the rules the session applies, each with the file it came from, and the directories it
-     * works in. The request has no fields (`SDKControlListPermissionRulesRequest` in sdk.d.ts 0.3.325); no capture
-     * holds it.
+     * `list_permission_rules`: the rules the session applies, each with its source (a settings file, a session grant
+     * or a CLI flag), and the directories it works in. The request has no fields
+     * (`SDKControlListPermissionRulesRequest` in sdk.d.ts 0.3.325); no capture holds it.
      */
     fun listPermissionRules(requestId: String): String =
         controlRequest(requestId) {

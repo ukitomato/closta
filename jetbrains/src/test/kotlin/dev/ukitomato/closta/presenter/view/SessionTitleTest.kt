@@ -123,4 +123,11 @@ class SessionTitleTest {
         assertEquals(RenameFailure("r2", "no"), freshRenameFailure("r1", RenameFailure("r2", "no")))
         assertNull(freshRenameFailure("r1", null))
     }
+
+    @Test
+    fun `a blank custom title is no name and the first request names the session`() {
+        val state = HostState().sent("first request").with(PresenterInput.TitleRestored("   "))
+        assertEquals("first request", sessionName(state.transcript))
+        assertEquals("first request", sessionTitle(state.transcript))
+    }
 }
