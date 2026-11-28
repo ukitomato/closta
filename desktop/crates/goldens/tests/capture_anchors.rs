@@ -37,13 +37,6 @@ fn call<'a>(calls: &'a Object, id: &str) -> &'a Object {
         .unwrap_or_else(|| panic!("no tool call {id}"))
 }
 
-/// A number as the record spells it, read the way the codec reads the record's numbers
-/// (`serde_json`'s default float parse, which can differ from the exact double by one unit of the
-/// last place for a long fraction such as `0.12213600000000001`).
-fn record_number(literal: &str) -> Value {
-    serde_json::from_str(literal).unwrap_or_else(|_| panic!("{literal} is not a number"))
-}
-
 fn objects<'a>(node: &'a Object, key: &str) -> Vec<&'a Object> {
     node.get(key)
         .and_then(Value::as_array)
@@ -865,7 +858,7 @@ fn captures_01_and_16_show_the_session_the_cli_started_the_mode_16s_status_chang
     assert_eq!(Some("default"), str(session, "permissionMode"));
     assert_eq!(Some("2.1.325"), str(session, "version"));
     assert_eq!(
-        Some(&record_number("0.12213600000000001")),
+        Some(&json!(0.12213600000000001)),
         at(&first, &["usage"]).get("costUsd")
     );
     let tree = final_tree("16-permission-suggestion-accept");
@@ -876,7 +869,7 @@ fn captures_01_and_16_show_the_session_the_cli_started_the_mode_16s_status_chang
         "its system/status said so"
     );
     assert_eq!(
-        Some(&record_number("0.1513491")),
+        Some(&json!(0.1513491)),
         at(&accepting, &["usage"]).get("costUsd")
     );
 }
@@ -1053,10 +1046,7 @@ fn capture_07_lists_the_ten_switches_newest_first_with_the_refused_ones_sentence
     );
     let tree = final_tree("10-background-task");
     let usage = at(&tree, &["threads", "byId", THREAD, "usage"]);
-    assert_eq!(
-        Some(&record_number("0.21946859999999999")),
-        usage.get("costUsd")
-    );
+    assert_eq!(Some(&json!(0.21946859999999999)), usage.get("costUsd"));
     assert_eq!(
         Some(&json!(1519)),
         usage.get("outputTokens"),

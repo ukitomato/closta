@@ -127,6 +127,14 @@ fn a_missing_ask_names_the_capture_and_the_tool() {
 }
 
 #[test]
+#[should_panic(expected = "hand-written: can_use_tool #1 for Bash (line 1) has no request_id")]
+fn an_ask_with_no_request_id_names_the_capture() {
+    let text =
+        r#"{"type":"control_request","request":{"subtype":"can_use_tool","tool_name":"Bash"}}"#;
+    support::ask_in_text("hand-written", text, "Bash", 1);
+}
+
+#[test]
 fn the_baseline_lines_are_what_their_names_say() {
     let text = common::text_of(BASELINE);
     let lines = common::non_blank_lines(&text);

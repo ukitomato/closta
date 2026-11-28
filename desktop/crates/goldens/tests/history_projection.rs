@@ -19,9 +19,13 @@ use closta_presenter::records::history::{HISTORY_UNAVAILABLE_TEXT, RESUME_REFUSE
 use closta_presenter::session::SessionView;
 use serde_json::{Map, Value, json};
 
-const SESSION: &str = "f728d9f6-8d2f-4834-b749-4d085a4ef2c0";
 const TIME: &str = "2026-10-17T05:40:20.000Z";
 const CAPTURE: &str = "22-resume.ndjson";
+
+/// The session of capture 22, as its saved record names it (`22-resume.transcript.jsonl`).
+fn session() -> String {
+    read_capture_record(CAPTURE).session_id
+}
 
 fn fold(state: SessionView, inputs: impl IntoIterator<Item = PresenterInput>) -> SessionView {
     inputs
@@ -108,7 +112,7 @@ fn quoted(text: &str) -> String {
 fn user(uuid: &str, content: &str) -> AgentEvent {
     AgentEvent::User {
         uuid: uuid.into(),
-        session_id: SESSION.into(),
+        session_id: session(),
         timestamp: TIME.into(),
         message: RawJson(format!(
             r#"{{"role":"user","content":{}}}"#,
@@ -124,7 +128,7 @@ fn user(uuid: &str, content: &str) -> AgentEvent {
 fn assistant(uuid: &str, message: String) -> AgentEvent {
     AgentEvent::Assistant {
         uuid: uuid.into(),
-        session_id: SESSION.into(),
+        session_id: session(),
         timestamp: TIME.into(),
         request_id: Some("req".into()),
         message: RawJson(message),
@@ -570,7 +574,7 @@ fn a_record_that_could_not_be_read_is_the_threads_first_notice_ahead_of_the_clis
 fn refused_switch(reason: ResumeRefusal) -> Map<String, Value> {
     let refused = thread(&after(PresenterInput::ResumeRefused(ResumeRefused {
         request_id: "r1".into(),
-        session_id: SESSION.into(),
+        session_id: session(),
         reason,
     })));
     let switches = refused
@@ -589,7 +593,7 @@ fn a_resume_turned_down_while_a_turn_runs_is_a_refused_switch_of_the_resume_kind
     let switch = refused_switch(ResumeRefusal::Turn);
 
     assert_eq!(Some(&json!("resume")), switch.get("kind"));
-    assert_eq!(Some(&json!(SESSION)), switch.get("value"));
+    assert_eq!(Some(&json!(session())), switch.get("value"));
     assert_eq!(Some(&json!("rejected")), switch.get("outcome"));
     assert_eq!(Some(&json!("A turn is running")), switch.get("detail"));
 }

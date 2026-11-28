@@ -437,9 +437,8 @@ fn capture_10_the_tokens_are_the_last_results_totals_from_the_one_model_not_a_su
             .map(|it| it.cache_creation)
             .collect::<Vec<_>>()
     );
-    // The record's own spelling, read the way the codec reads it (see `record_number` in
-    // `capture_anchors.rs`).
-    let cost: f64 = serde_json::from_str("0.21946859999999999").expect("a number");
+    // The record's own spelling (10-background-task's total_cost_usd).
+    let cost: f64 = 0.21946859999999999;
     #[allow(clippy::float_cmp)] // the sum core keeps, to the last bit
     {
         assert_eq!(cost, state.0.conversation.usage.session_cost_usd);

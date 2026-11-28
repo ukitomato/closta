@@ -270,8 +270,6 @@ fn the_usage_answer_leaves_its_cost_and_reset_time_out_of_the_log_and_the_debug(
     // Precondition: line 16 is the answer to `id`, and folded after its request it is a usage
     // record. The runtime's own replay asks no usage (that is a later stage's), so the record is
     // made here by the same fold.
-    // The cost's digits as far as every float printing agrees on them.
-    let cost = "0.0495899";
     let resets = field_in_response(&[
         "response",
         "response",
@@ -285,19 +283,37 @@ fn the_usage_answer_leaves_its_cost_and_reset_time_out_of_the_log_and_the_debug(
         value: None,
     }));
     let folded = asked.fold(&PresenterInput::Event(answer));
-    assert!(
-        folded.transcript.operations.usage.is_some(),
-        "the answer is read as a usage record"
-    );
+    let usage = folded
+        .transcript
+        .operations
+        .usage
+        .as_ref()
+        .expect("the answer is read as a usage record");
+    // The cost as the record spells it (the log is raw text, so this is the surest needle), as the
+    // parsed number prints in both ways, and the digits every printing of it shares.
+    let spelled = "0.049589999999999995";
+    let cost = usage.session_cost_usd;
+    let cost_needles = [
+        ("recorded spelling", spelled.to_owned()),
+        ("displayed value", format!("{cost}")),
+        ("debug value", format!("{cost:?}")),
+        ("rounded spelling", "0.04959".to_owned()),
+        ("digits", "4958999".to_owned()),
+    ];
+    let mut needles: Vec<(String, String)> = cost_needles
+        .iter()
+        .map(|(name, text)| (format!("cost ({name})"), text.clone()))
+        .collect();
+    needles.push(("resets_at".to_owned(), resets.clone()));
     let shown = format!("{:?}", folded.transcript.operations);
-    for (name, text) in [("cost", cost), ("resets_at", resets.as_str())] {
+    for (name, text) in &needles {
         assert!(
-            !shown.contains(text),
+            !shown.contains(text.as_str()),
             "the operations' Debug shows the {name}"
         );
     }
     let raw = common::non_blank_lines(&common::text_of("43-usage-and-rules.ndjson"))[15].clone();
-    assert!(raw.contains(cost), "the cost looked for is the answer's");
+    assert!(raw.contains(spelled), "the cost looked for is the answer's");
 
     let lines = common::non_blank_lines(&common::text_of("43-usage-and-rules.ndjson"));
     let spawner = Arc::new(FakeSpawner::new(move |launch| {
@@ -319,21 +335,17 @@ fn the_usage_answer_leaves_its_cost_and_reset_time_out_of_the_log_and_the_debug(
         Arc::clone(&log) as Arc<dyn SessionLog>,
     );
     config.version_timeout = GUARD;
-    let (runtime, run) = SessionRuntime::new(config);
+    let (_runtime, run) = SessionRuntime::new(config);
     drive(|executor| async move { executor.spawn(run).await });
 
     let written = log.lines();
     assert!(!written.is_empty(), "the run wrote nothing to the log");
-    let shown = format!("{:?}", runtime.view().transcript.operations);
-    for (name, text) in [("cost", cost), ("resets_at", resets.as_str())] {
-        assert!(
-            !shown.contains(text),
-            "the operations' Debug shows the {name}"
-        );
+    // The runtime's replay asks no usage, so `runtime.view()` holds no usage record to inspect.
+    for (name, text) in &needles {
         let leaks: Vec<usize> = written
             .iter()
             .enumerate()
-            .filter(|(_, line)| line.contains(text))
+            .filter(|(_, line)| line.contains(text.as_str()))
             .map(|(i, _)| i + 1)
             .collect();
         assert!(leaks.is_empty(), "the {name} is in log lines {leaks:?}");

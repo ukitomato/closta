@@ -8,6 +8,9 @@ use crate::layers;
 
 pub(crate) const LOCK: &str = "/tmp/closta-gradle.lock";
 
+/// How many seconds `perf` waits for the build lock before it gives up.
+pub const LOCK_WAIT_SECS: u64 = 1800;
+
 /// One stage of `cargo xtask check`.
 pub enum Step {
     Command {
@@ -170,16 +173,17 @@ fn lock_args(wait: &str, lock: &str) -> Vec<String> {
 
 /// The lock `perf` waits for, around the whole of `perf-held` run by `exe`.
 pub fn perf_locked(exe: &Path) -> (String, Vec<String>) {
-    let mut args = lock_args("1800", LOCK);
+    let mut args = lock_args(&LOCK_WAIT_SECS.to_string(), LOCK);
     args.push(exe.display().to_string());
     args.push("perf-held".to_owned());
     ("flock".to_owned(), args)
 }
 
 /// The line `perf` prints for the exit code it ends with, when that code needs naming.
-pub fn perf_exit_note(code: u8) -> Option<&'static str> {
-    (code == LOCK_TIMEOUT_EXIT)
-        .then_some("perf: the build lock stayed taken for 1800 s; perf did not run")
+pub fn perf_exit_note(code: u8) -> Option<String> {
+    (code == LOCK_TIMEOUT_EXIT).then(|| {
+        format!("perf: the build lock stayed taken for {LOCK_WAIT_SECS} s; perf did not run")
+    })
 }
 
 /// The exit code a child's status passes on; a child killed by a signal has none.
@@ -384,18 +388,27 @@ mod tests {
         let exe = Path::new("/x/target/debug/xtask");
         let (program, args) = perf_locked(exe);
         assert_eq!(program, "flock");
+        assert_eq!(args[0], "-w");
         assert_eq!(
-            args,
-            strings(&[
-                "-w",
-                "1800",
-                "-E",
-                "3",
-                LOCK,
-                "/x/target/debug/xtask",
-                "perf-held"
-            ])
+            args[2..],
+            strings(&["-E", "3", LOCK, "/x/target/debug/xtask", "perf-held"])
         );
+    }
+
+    #[test]
+    fn the_lock_wait_is_one_number_in_the_args_and_the_message() {
+        let (_, args) = perf_locked(Path::new("/x/target/debug/xtask"));
+        let at = args.iter().position(|it| it == "-w").expect("a -w");
+        let in_args: u64 = args[at + 1].parse().expect("a number of seconds");
+        let note = perf_exit_note(LOCK_TIMEOUT_EXIT).expect("a note for the lock's code");
+        let in_message: u64 = note
+            .split(" for ")
+            .nth(1)
+            .and_then(|rest| rest.split_whitespace().next())
+            .and_then(|word| word.parse().ok())
+            .expect("the seconds the message names");
+        assert_eq!(in_args, in_message);
+        assert_eq!(1800, in_args, "the wait is half an hour");
     }
 
     #[test]
@@ -409,9 +422,11 @@ mod tests {
         drop(held);
         let _ = std::fs::remove_file(&path);
         assert_eq!(code, LOCK_TIMEOUT_EXIT);
-        assert_eq!(
-            perf_exit_note(LOCK_TIMEOUT_EXIT),
-            Some("perf: the build lock stayed taken for 1800 s; perf did not run")
+        let note = perf_exit_note(LOCK_TIMEOUT_EXIT).expect("a note for the lock's code");
+        assert!(
+            note.starts_with("perf: the build lock stayed taken for ")
+                && note.ends_with(" s; perf did not run"),
+            "{note}"
         );
         for code in [0, 1, 2] {
             assert_eq!(perf_exit_note(code), None, "{code}");

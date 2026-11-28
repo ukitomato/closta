@@ -499,8 +499,13 @@ impl Ask {
 
 /// The `nth` (from 1) `can_use_tool` request for `tool` in the capture `fixture`.
 pub fn ask_in(fixture: &str, tool: &str, nth: usize) -> Ask {
-    let text = crate::common::text_of(fixture);
-    crate::common::non_blank_lines(&text)
+    ask_in_text(fixture, &crate::common::text_of(fixture), tool, nth)
+}
+
+/// The `nth` (from 1) `can_use_tool` request for `tool` in `text`, which `name` stands for in the
+/// failure messages. A request with no `request_id` fails.
+pub fn ask_in_text(name: &str, text: &str, tool: &str, nth: usize) -> Ask {
+    crate::common::non_blank_lines(text)
         .iter()
         .enumerate()
         .filter_map(|(at, line)| {
@@ -514,12 +519,17 @@ pub fn ask_in(fixture: &str, tool: &str, nth: usize) -> Ask {
                 request_id: value
                     .get("request_id")
                     .and_then(serde_json::Value::as_str)
-                    .unwrap_or_default()
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "{name}: can_use_tool #{nth} for {tool} (line {}) has no request_id",
+                            at + 1
+                        )
+                    })
                     .to_owned(),
             })
         })
         .nth(nth - 1)
-        .unwrap_or_else(|| panic!("{fixture}: no can_use_tool #{nth} for {tool}"))
+        .unwrap_or_else(|| panic!("{name}: no can_use_tool #{nth} for {tool}"))
 }
 
 /// The baseline capture's first text delta: its turn is open.
