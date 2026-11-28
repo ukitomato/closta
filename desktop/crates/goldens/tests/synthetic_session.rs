@@ -118,13 +118,15 @@ fn the_same_seed_gives_the_same_session() {
     );
 }
 
-/// A turn is mixed in per this many turns of the shape.
-const INTERVAL: usize = 200;
+/// A turn is mixed in per this many turns of the shape: half of [`LARGEST`]'s, so one comes
+/// before its `/clear`.
+const INTERVAL: usize = 100;
 /// The `/clear`: the user's line, queued, started, the reset, the new init, completed.
 const CLEAR_STEPS: usize = 1 + 2 + 1 + 1 + 1;
-/// The compaction: the user's line, queued, started, `compacting`, the boundary, the status that
-/// ends it, the result, completed.
-const COMPACT_STEPS: usize = 1 + 2 + 1 + 1 + 1 + 1 + 1;
+/// The compaction, as capture 21 lines 16 to 22, 24 and 25: the user's line, queued, started,
+/// `compacting`, the status that ends it, the init, the boundary, the summary's user line, the
+/// result, completed.
+const COMPACT_STEPS: usize = 1 + 2 + 1 + 1 + 1 + 1 + 1 + 1 + 1;
 /// The tasks: the user's line, queued, started, three creates and two updates with their answers,
 /// the result, completed.
 const TASKS_STEPS: usize = 1 + 2 + (3 + 2) * 2 + 1 + 1;
@@ -184,7 +186,7 @@ fn a_longer_session_gets_a_compaction_and_a_task_list_per_interval_but_one_clear
         .of(&fold_all(&synthetic::steps_with_session_lines(&synthetic::DOUBLED)).transcript);
     let count = |wanted: fn(&ThreadRow) -> bool| rows.iter().filter(|row| wanted(row)).count();
     let turns = synthetic::DOUBLED.turns / INTERVAL;
-    assert_eq!(2, turns);
+    assert_eq!(4, turns);
     assert_eq!(
         1,
         count(
@@ -211,8 +213,132 @@ fn the_clear_comes_three_quarters_of_the_way_so_most_rows_stay_in_the_measured_c
         .position(|row| matches!(row, ThreadRow::Divider(it) if matches!(it.divider, Divider::Cleared { .. })))
         .unwrap_or_else(|| panic!("no clear"));
     assert!(
-        (rows.len() / 2..rows.len() * 9 / 10).contains(&at),
+        (rows.len() * 2 / 3..rows.len() * 5 / 6).contains(&at),
         "the clear is row {at} of {}",
         rows.len()
+    );
+}
+
+fn is_cleared(row: &closta_presenter::rows::ThreadRow) -> bool {
+    use closta_presenter::rows::{Divider, ThreadRow};
+    matches!(row, ThreadRow::Divider(it) if matches!(it.divider, Divider::Cleared { .. }))
+}
+
+/// Task 8's review: in [`LARGEST`] a compaction and a task list come before the `/clear` too, so
+/// the measured conversation holds them, not only the rows after the divider.
+#[test]
+fn the_largest_session_compacts_and_keeps_tasks_before_its_clear_too() {
+    use closta_presenter::rows::{Divider, ThreadRow, ThreadRows};
+
+    let rows = ThreadRows::default()
+        .of(&fold_all(&synthetic::steps_with_session_lines(&LARGEST)).transcript);
+    let clear = rows
+        .iter()
+        .position(is_cleared)
+        .unwrap_or_else(|| panic!("no clear"));
+    let before = &rows[..clear];
+    let after = &rows[clear..];
+    let compacted = |rows: &[ThreadRow]| {
+        rows.iter()
+            .filter(|row| matches!(row, ThreadRow::Divider(it) if matches!(it.divider, Divider::Compacted { .. })))
+            .count()
+    };
+    let todos = |rows: &[ThreadRow]| {
+        rows.iter()
+            .filter(|row| matches!(row, ThreadRow::Todo(_)))
+            .count()
+    };
+
+    assert_eq!(1, compacted(before));
+    assert_eq!(1, todos(before));
+    assert_eq!(1, compacted(after));
+    assert_eq!(1, todos(after));
+}
+
+/// The kind of `input`, as its `Debug` names it.
+fn kind(input: &PresenterInput) -> String {
+    let debug = format!("{input:?}");
+    let event = debug.strip_prefix("Event(").unwrap_or(&debug);
+    event
+        .split(|it: char| !it.is_alphanumeric())
+        .next()
+        .unwrap_or_default()
+        .to_owned()
+}
+
+/// Task 8's review: a compaction's lines come in capture 21's order (lines 16 to 22, 24 and 25:
+/// queued, started, `compacting`, the status that ends it, the init, the boundary, the summary's
+/// user line, the result, completed).
+#[test]
+fn a_compaction_comes_in_capture_21s_order() {
+    use closta_model::AgentEvent;
+
+    let steps = synthetic::steps_with_session_lines(&LARGEST);
+    let at = steps
+        .iter()
+        .position(|step| matches!(step, PresenterInput::UserSent(it) if it.text == "/compact"))
+        .unwrap_or_else(|| panic!("no compaction"));
+    let turn = &steps[at + 1..at + COMPACT_STEPS];
+
+    assert_eq!(
+        vec![
+            "CommandLifecycle",
+            "CommandLifecycle",
+            "SystemStatus",
+            "SystemStatus",
+            "SystemInit",
+            "SystemCompactBoundary",
+            "User",
+            "Result",
+            "CommandLifecycle",
+        ],
+        turn.iter().map(kind).collect::<Vec<_>>()
+    );
+    let statuses: Vec<Option<&str>> = turn
+        .iter()
+        .filter_map(|step| match step {
+            PresenterInput::Event(AgentEvent::SystemStatus { status, .. }) => {
+                Some(status.as_deref())
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(vec![Some("compacting"), None], statuses);
+}
+
+/// The session id `input`'s line says, as its `Debug` shows it; `None` for one that says none.
+fn session_of(input: &PresenterInput) -> Option<String> {
+    let debug = format!("{input:?}");
+    let (_, rest) = debug.split_once("session_id: \"")?;
+    rest.split_once('"').map(|(id, _)| id.to_owned())
+}
+
+/// Task 8's review: the lines after the `/clear`'s reset say the new session's id, as the CLI's
+/// do in capture 41 (lines 20 on), and the lines before it the first one's.
+#[test]
+fn the_lines_after_the_clear_say_the_new_session() {
+    use closta_model::AgentEvent;
+
+    let steps = synthetic::steps_with_session_lines(&LARGEST);
+    let reset = steps
+        .iter()
+        .position(|step| {
+            matches!(
+                step,
+                PresenterInput::Event(AgentEvent::ConversationReset { .. })
+            )
+        })
+        .unwrap_or_else(|| panic!("no reset"));
+    let said = |steps: &[PresenterInput]| {
+        let mut ids: Vec<String> = steps.iter().filter_map(session_of).collect();
+        ids.sort();
+        ids.dedup();
+        ids
+    };
+
+    assert_eq!(vec!["synthetic".to_owned()], said(&steps[..=reset]));
+    assert_eq!(
+        vec!["synthetic-cleared".to_owned()],
+        said(&steps[reset + 1..])
     );
 }

@@ -673,19 +673,29 @@ fn row_of(key: String, part: &PartRecord, opens: bool) -> Option<ThreadRow> {
 /// Replaces the task calls' tool rows with the to-do list they build, one list per run of calls
 /// with nothing between them. The list starts empty and again after each `/clear`; a list that
 /// did not change is the same `Arc` as before. A run that leaves no task draws nothing, not even
-/// its tool rows.
+/// its tool rows. A message that is the same `Arc` as at the last read keeps the task calls found
+/// in it then (Kotlin's `callsOf`).
 #[derive(Default)]
 struct TaskTodos {
     lists: HashMap<String, Arc<TodoRow>>,
+    calls_of: HashMap<String, MessageTaskCalls>,
+}
+
+/// A message as last read, and the parts of it that are task calls.
+struct MessageTaskCalls {
+    message: Arc<MessageRecord>,
+    calls: Vec<Arc<PartRecord>>,
 }
 
 impl TaskTodos {
     fn folded(&mut self, rows: Vec<ThreadRow>, transcript: &Transcript) -> Vec<ThreadRow> {
         if !rows.iter().any(is_task_row) {
             self.lists = HashMap::new();
+            self.calls_of = HashMap::new();
             return rows;
         }
-        let calls = task_calls(transcript);
+        let calls_of = self.task_calls_of(transcript);
+        let calls = task_calls(transcript, &calls_of);
         let mut out = Vec::with_capacity(rows.len());
         let mut next_lists = HashMap::new();
         let mut board = TaskBoard::default();
@@ -729,22 +739,54 @@ impl TaskTodos {
             }
         }
         self.lists = next_lists;
+        drop(calls);
+        self.calls_of = calls_of;
         out
+    }
+
+    /// Each of the thread's own messages with its task calls, found again only in a message that
+    /// is not the `Arc` it was at the last read.
+    fn task_calls_of(&mut self, transcript: &Transcript) -> HashMap<String, MessageTaskCalls> {
+        transcript
+            .messages
+            .values()
+            .map(|message| {
+                let kept = self
+                    .calls_of
+                    .remove(&message.key)
+                    .filter(|it| Arc::ptr_eq(&it.message, message));
+                let found = kept.unwrap_or_else(|| MessageTaskCalls {
+                    message: Arc::clone(message),
+                    calls: message
+                        .parts
+                        .values()
+                        .filter(|part| {
+                            matches!(part.as_ref(), PartRecord::ToolCall(call) if is_task_tool(&call.tool_name))
+                        })
+                        .cloned()
+                        .collect(),
+                });
+                (message.key.clone(), found)
+            })
+            .collect()
     }
 }
 
 /// The task calls of the thread's own messages by their tool use id: a row kept from before holds
 /// no call.
-fn task_calls(transcript: &Transcript) -> HashMap<&str, &ToolCallRecord> {
+fn task_calls<'a>(
+    transcript: &Transcript,
+    calls_of: &'a HashMap<String, MessageTaskCalls>,
+) -> HashMap<&'a str, &'a ToolCallRecord> {
     transcript
         .messages
         .values()
-        .flat_map(|message| message.parts.values())
+        .filter_map(|message| calls_of.get(&message.key))
+        .flat_map(|it| it.calls.iter())
         .filter_map(|part| match part.as_ref() {
-            PartRecord::ToolCall(call) if is_task_tool(&call.tool_name) => Some(call),
+            PartRecord::ToolCall(call) => Some((call.tool_use_id.as_str(), call)),
             _ => None,
         })
-        .map(|call| (call.tool_use_id.as_str(), call))
         .collect()
 }
 

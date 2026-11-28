@@ -462,3 +462,41 @@ fn a_clear_forgets_the_tasks_not_yet_answered_so_numbers_start_again() {
         lists(&found)
     );
 }
+
+/// Task 7's review (Kotlin's `callsOf`, ThreadRows.kt): the rows read line by line with one builder,
+/// which keeps each message's task calls while the message is the same, end as one read at the
+/// end. The create is answered with #5 after it was first read unanswered (as #1), and the update
+/// names #5: calls kept from before the answer would leave it pending.
+#[test]
+fn a_list_read_as_the_lines_come_ends_as_one_read_at_the_end() {
+    let all = turn(
+        "a",
+        &[
+            create(
+                "write tests",
+                Some("Task #5 created successfully: write tests"),
+            ),
+            update(json!({"taskId": "5", "status": "in_progress"}), None),
+        ],
+    );
+    let mut rows = ThreadRows::default();
+    let mut view = SessionView::default();
+    let mut read = Vec::new();
+    for input in &all {
+        view = view.fold(input);
+        read.push(lists(&todos_in(&rows.of(&view.transcript))));
+    }
+
+    assert!(
+        read.contains(&vec![vec![item("write tests", "pending")]]),
+        "the create was read before the update: {read:?}"
+    );
+    assert_eq!(
+        vec![vec![item("write tests", "in_progress")]],
+        lists(&todos(&view.transcript))
+    );
+    assert_eq!(
+        lists(&todos(&view.transcript)),
+        read.last().cloned().unwrap_or_default()
+    );
+}
