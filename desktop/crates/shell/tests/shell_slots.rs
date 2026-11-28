@@ -21,8 +21,8 @@ use closta_shell::slot::{SlotId, SlotMark};
 use closta_shell::state::{Refresh, ShellAction, ShellState};
 use support::{
     AFTER_CLEAR, Ask, BEFORE_CLEAR, Harness, ask_in, drive, emit_capture, end_slot, open_cleared,
-    play_after_clear, play_cleared, relaunchable, replay_launch, running, until, waiting_slot,
-    waits_on,
+    play_after_clear, play_cleared, play_reset, relaunchable, replay_launch, running, until,
+    waiting_slot, waits_on,
 };
 
 const SANDBOX: &str = "36-sandbox-unavailable.ndjson";
@@ -512,6 +512,19 @@ const CLEARED_FOLDER: &str = r"C:\work\cleared";
 /// 41's third request cut to a session name's length (60 UTF-16 units of ASCII text).
 const AFTER_CLEAR_TITLE: &str = "Which word did I ask you to remember? If you do not know, re";
 
+/// 41's first request cut to a session name's length (60 UTF-16 units of ASCII text).
+const BEFORE_CLEAR_TITLE: &str = "Remember the word kumquat. Respond with exactly one word: po";
+
+/// The saved conversation 41's first session is, as the resume list shows it.
+fn saved_before_clear() -> SavedSessionSummary {
+    SavedSessionSummary {
+        id: BEFORE_CLEAR.to_owned(),
+        title: "Remember the word kumquat".to_owned(),
+        updated_at_ms: 1,
+        bytes: 10,
+    }
+}
+
 /// The 6d-R design's `/clear` section, shell (3): Copy Session ID copies the id the CLI goes on
 /// under after a `/clear`, read once the session ended (only an ended or failed slot copies).
 #[test]
@@ -562,6 +575,73 @@ fn after_a_clear_the_title_is_the_first_request_after_the_divider() {
             assert_eq!(
                 shell.slot_title(slot).as_deref(),
                 Some(AFTER_CLEAR_TITLE),
+                "resumed: {resumed}"
+            );
+            end_slot(&mut shell, slot, &control).await;
+        }
+    });
+}
+
+/// The 6d-R2 Ruling on the title after `/clear`, narrowed by F2 of its final fixes: after a
+/// `/clear`, until a request is sent after its divider (41 through line 22), a slot is named as a
+/// new session, a slot opened under a saved conversation's title too.
+#[test]
+fn after_a_clear_a_slot_is_a_new_session_until_a_request_after_the_divider() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let ports = harness.ports();
+        let launches = [
+            launch_in(CLEARED_FOLDER, &ports),
+            resume_in(CLEARED_FOLDER, &saved_before_clear(), &ports),
+        ];
+        for (n, launch) in launches.into_iter().enumerate() {
+            let resumed = launch.resume.is_some();
+            let (slot, runtime, control) = open_cleared(&harness, &mut shell, launch, n).await;
+            play_cleared(&mut shell, slot, &runtime, &control, 22).await;
+            assert!(runtime.view().transcript.cleared_at.is_some());
+
+            assert_eq!(
+                shell.slot_title(slot).as_deref(),
+                Some(copy::NEW_SESSION_TITLE),
+                "resumed: {resumed}"
+            );
+            end_slot(&mut shell, slot, &control).await;
+        }
+    });
+}
+
+/// F2 of the 6d-R2 final fixes: a reset that is not a `/clear` (41's, saying no trigger) keeps
+/// the title the slot had: the saved conversation's, or the first request before the divider.
+#[test]
+fn a_reset_that_is_not_a_clear_keeps_the_title() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let ports = harness.ports();
+        let saved = saved_before_clear();
+        let launches = [
+            launch_in(CLEARED_FOLDER, &ports),
+            resume_in(CLEARED_FOLDER, &saved, &ports),
+        ];
+        for (n, launch) in launches.into_iter().enumerate() {
+            let resumed = launch.resume.is_some();
+            let kept = if resumed {
+                saved.title.as_str()
+            } else {
+                BEFORE_CLEAR_TITLE
+            };
+            let (slot, runtime, control) = open_cleared(&harness, &mut shell, launch, n).await;
+            play_reset(&mut shell, slot, &runtime, &control, 22, false).await;
+            assert!(runtime.view().transcript.cleared_at.is_some());
+            assert_eq!(
+                shell.slot_title(slot).as_deref(),
+                Some(kept),
+                "resumed: {resumed}"
+            );
+
+            play_after_clear(&mut shell, slot, &runtime, &control).await;
+            assert_eq!(
+                shell.slot_title(slot).as_deref(),
+                Some(kept),
                 "resumed: {resumed}"
             );
             end_slot(&mut shell, slot, &control).await;

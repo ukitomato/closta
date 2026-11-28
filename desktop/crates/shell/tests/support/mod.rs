@@ -641,8 +641,31 @@ pub async fn play_cleared(
     control: &LiveControl,
     through: usize,
 ) {
+    play_reset(shell, slot, runtime, control, through, true).await;
+}
+
+/// [`play_cleared`], with line 18's reset saying no trigger (nor the `/clear` message's uuid,
+/// which comes only with the `clear` trigger) when `as_clear` is false: a reset that is not a
+/// `/clear`.
+pub async fn play_reset(
+    shell: &mut ShellState,
+    slot: SlotId,
+    runtime: &SessionRuntime,
+    control: &LiveControl,
+    through: usize,
+    as_clear: bool,
+) {
     assert!(through >= 18, "the reset is line 18");
-    let lines = crate::common::non_blank_lines(&crate::common::text_of(CLEARED));
+    let mut lines = crate::common::non_blank_lines(&crate::common::text_of(CLEARED));
+    if !as_clear {
+        let mut reset: serde_json::Value = serde_json::from_str(&lines[17]).unwrap();
+        assert_eq!(reset["type"], "conversation_reset");
+        assert_eq!(reset["trigger"], "clear");
+        let fields = reset.as_object_mut().unwrap();
+        fields.remove("trigger");
+        fields.remove("user_message_uuid");
+        lines[17] = reset.to_string();
+    }
     send_text(shell, slot, control, CLEARED_SENT[0]).await;
     for line in &lines[1..14] {
         control.emit(line);

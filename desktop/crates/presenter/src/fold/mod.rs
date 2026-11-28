@@ -184,8 +184,11 @@ fn fold_event(
             fold_commands_of_init(transcript, slash_commands)
         }
         AgentEvent::ConversationReset {
-            uuid, timestamp, ..
-        } => session_line::fold_reset(transcript, uuid, timestamp.as_deref()),
+            uuid,
+            trigger,
+            timestamp,
+            ..
+        } => session_line::fold_reset(transcript, uuid, trigger.as_deref(), timestamp.as_deref()),
         AgentEvent::SystemPermissionDenied {
             tool_use_id,
             decision_reason_type,

@@ -64,12 +64,16 @@ pub(crate) fn fold_informational(
     .0
 }
 
+/// The trigger of a reset made by `/clear` (capture 41 line 18).
+const CLEAR_TRIGGER: &str = "clear";
+
 /// A reset divides the thread in the message receiving content (the `/clear`'s own turn), or in
 /// one of its own when none is, whatever its trigger says: the CLI asks its consumers to reset on
-/// every one. What came before stays.
+/// every one. What came before stays. Only a `/clear` (`trigger`) starts what names the session.
 pub(crate) fn fold_reset(
     transcript: &Arc<Transcript>,
     uuid: &str,
+    trigger: Option<&str>,
     timestamp: Option<&str>,
 ) -> Arc<Transcript> {
     let (placed, message_key) = with_part(transcript, uuid, CLEARED_PART, |key| {
@@ -79,8 +83,14 @@ pub(crate) fn fold_reset(
         })
     });
     let cleared_at = placed.messages.order().position(|it| it == message_key);
+    let cleared_by_clear_at = if trigger == Some(CLEAR_TRIGGER) {
+        cleared_at
+    } else {
+        placed.cleared_by_clear_at
+    };
     Arc::new(Transcript {
         cleared_at,
+        cleared_by_clear_at,
         compact_failure: None,
         ..Transcript::clone(&placed)
     })

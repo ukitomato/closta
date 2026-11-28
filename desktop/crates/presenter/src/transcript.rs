@@ -70,6 +70,10 @@ pub struct Transcript {
     /// last [`ClearedRecord`], `None` while it never was. What comes before it belongs to a
     /// conversation the CLI no longer has.
     pub cleared_at: Option<usize>,
+    /// Where the conversation was last cleared by `/clear` (a reset whose trigger is `clear`):
+    /// the session is named by the first request after it. `None` while none was; a reset of
+    /// another trigger (leaving plan mode with a clear context) leaves it.
+    pub cleared_by_clear_at: Option<usize>,
     /// Refusals whose call has no line yet, by the call's key; each is put on its line when the
     /// line is made.
     pub denials: HashMap<String, Denial>,

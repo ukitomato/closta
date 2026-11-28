@@ -3,10 +3,11 @@
 
 use std::sync::Arc;
 
-use closta_goldens::replay::replay;
-use closta_model::ConversationState;
+use closta_goldens::replay::{inputs, replay};
+use closta_model::{AgentEvent, ConversationState};
 use closta_presenter::fold::fold_transcript;
 use closta_presenter::input::{PresenterInput, SendId, UserSent};
+use closta_presenter::session::SessionView;
 use closta_presenter::sessions::groups::{
     AlertChange, AlertKind, FinishedAlert, OpenOnlyAlert, PermissionAlert, SessionAlert,
     SessionGroup, SessionSummary, TITLE_MAX, WaitReason, alerts_between, session_summary,
@@ -450,6 +451,45 @@ fn the_title_after_a_clear_is_the_first_request_after_the_divider() {
     assert_eq!(
         Some("Which word did I ask you to remember? If you do not know, re".to_owned()),
         session_title(transcript)
+    );
+}
+
+/// F2 of the 6d-R2 final fixes: a reset that is not a `/clear` (41's, saying no trigger) divides
+/// the thread but leaves the session named by its first request.
+#[test]
+fn a_reset_that_is_not_a_clear_keeps_the_first_request_as_the_title() {
+    let mut changed = 0;
+    let inputs: Vec<PresenterInput> = inputs("41-clear-reset", false)
+        .into_iter()
+        .map(|input| match input {
+            PresenterInput::Event(AgentEvent::ConversationReset {
+                uuid,
+                session_id,
+                new_conversation_id,
+                timestamp,
+                ..
+            }) => {
+                changed += 1;
+                PresenterInput::Event(AgentEvent::ConversationReset {
+                    uuid,
+                    session_id,
+                    new_conversation_id,
+                    trigger: None,
+                    user_message_uuid: None,
+                    timestamp,
+                })
+            }
+            other => other,
+        })
+        .collect();
+    assert_eq!(1, changed, "41 has one reset");
+    let view = inputs
+        .iter()
+        .fold(SessionView::default(), SessionView::fold);
+    assert!(view.transcript.cleared_at.is_some(), "the reset divides");
+    assert_eq!(
+        Some("Remember the word kumquat. Respond with exactly one word: po".to_owned()),
+        session_title(&view.transcript)
     );
 }
 

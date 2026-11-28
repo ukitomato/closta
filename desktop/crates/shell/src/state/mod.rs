@@ -384,7 +384,8 @@ pub struct Refresh {
 struct Slot {
     /// The title the slot was started with.
     title: String,
-    /// The first request of the conversation as of the last refresh, once there is one.
+    /// The first request of the conversation as of the last refresh, once there is one; after a
+    /// `/clear`, the first request after its divider, and a new session's title before one.
     asked_title: Option<String>,
     /// Whether the session puts a saved one back.
     resumed: bool,
@@ -909,11 +910,13 @@ impl ShellState {
                 .iter()
                 .any(|(alert, _)| request_of(alert) == Some(id.as_str()))
         });
-        held.asked_title = session_title(&view.transcript);
-        if view.transcript.cleared_at.is_some() {
+        let cleared = view.transcript.cleared_by_clear_at.is_some();
+        if cleared {
             // The conversation the slot was opened from is behind the divider.
             held.saved_title = None;
         }
+        held.asked_title = session_title(&view.transcript)
+            .or_else(|| cleared.then(|| copy::NEW_SESSION_TITLE.to_owned()));
         let group = session_summary(&view.conversation, &view.transcript, held.unread).group;
         held.since = Some(group_since_after(held.since.as_ref(), group, now_ms));
         held.last = Some(view);
