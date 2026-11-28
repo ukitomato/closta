@@ -418,7 +418,8 @@ impl OperationRecords {
 
     /// A CLI was launched: its effort, its own MCP servers, and whether it was asked into the
     /// sandbox. What the last CLI's settings said of the sandbox no longer holds; a pending switch
-    /// into the sandbox is confirmed by this CLI's answer.
+    /// into the sandbox is confirmed by this CLI's answer. The new CLI answers none of the last
+    /// one's requests, so nothing waits for them (Kotlin's `launched`).
     pub(crate) fn launched(&self, input: &Launched) -> Self {
         let switching = if input.sandbox {
             self.switches
@@ -438,6 +439,10 @@ impl OperationRecords {
             sandbox_confirming: switching.or_else(|| self.sandbox_confirming.clone()),
             // The settings asked of the last CLI do not say what this one runs with.
             sandbox_check: None,
+            waiting: Vector::new(),
+            usage_waiting: Vector::new(),
+            settings_waiting: Vector::new(),
+            mcp_waiting: Vector::new(),
             ..self.clone()
         }
     }

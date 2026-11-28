@@ -2,14 +2,14 @@
 //! are no window. The answers without windows, or with a window of no share, no capture holds:
 //! those bodies are made by hand (UsageReadingsTest.kt).
 //!
-//! Not ported: Kotlin's composer state (`usageWaiting`, `usage`) and the launch that forgets the
-//! waiting requests are not in the desktop's records yet; the screen is a later stage's.
+//! Not ported: Kotlin's composer state (`usageWaiting`, `usage`) is not in the desktop's records
+//! yet; the screen is a later stage's.
 
 use std::sync::Arc;
 
 use closta_goldens::lines;
 use closta_goldens::replay::inputs;
-use closta_presenter::input::{ControlRequested, PresenterInput};
+use closta_presenter::input::{ControlRequested, Launched, PresenterInput};
 use closta_presenter::records::operations::{ControlKind, MAX_WAITING, OperationRecords};
 use closta_presenter::records::usage::{UsageRecord, UsageWindow, usage_of};
 use closta_presenter::session::SessionView;
@@ -225,4 +225,41 @@ fn usage_requests_wait_in_their_own_column_the_newest_kept() {
         &state.0.transcript.operations,
         &twice.0.transcript.operations
     ));
+}
+
+/// UsageReadingsTest.kt (a22fa03) "a new CLI answers none of the old requests, so nothing waits for
+/// them after a launch": every waiting column is emptied by a launch, and the new CLI's answers
+/// are read. Kotlin's composer `usageWaiting` and `contextWaiting` are read here as the columns.
+#[test]
+fn a_new_cli_answers_none_of_the_old_requests_so_nothing_waits_for_them_after_a_launch() {
+    let lost = Host::default()
+        .asked("u1")
+        .request("c1", ControlKind::Context)
+        .request("m1", ControlKind::McpStatus)
+        .request("s1", ControlKind::Settings);
+    assert_eq!(vec!["u1".to_owned()], lost.waiting());
+    assert_eq!(1, lost.ops().waiting.len());
+    assert_eq!(1, lost.ops().mcp_waiting.len());
+    assert_eq!(1, lost.ops().settings_waiting.len());
+
+    let relaunched = lost.with(PresenterInput::Launched(Launched {
+        effort: None,
+        built_in_mcp_servers: Vec::new(),
+        sandbox: false,
+    }));
+    let answered = relaunched
+        .asked("u2")
+        .answered("u2", &with_limits("null"))
+        .request("c2", ControlKind::Context)
+        .with(PresenterInput::Event(lines::control_ok(
+            "c2",
+            Some(r#"{"totalTokens":10,"maxTokens":100,"percentage":10}"#),
+        )));
+
+    assert!(relaunched.ops().usage_waiting.is_empty());
+    assert!(relaunched.ops().waiting.is_empty());
+    assert!(relaunched.ops().mcp_waiting.is_empty());
+    assert!(relaunched.ops().settings_waiting.is_empty());
+    assert!(answered.ops().usage_waiting.is_empty());
+    assert!(answered.ops().waiting.is_empty());
 }
