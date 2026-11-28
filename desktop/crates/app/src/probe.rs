@@ -128,6 +128,8 @@ pub fn fail_launch(code: i32, distro: Option<String>) -> SlotLaunch {
         relaunch: Some(Arc::new(move || fail_launch(code, distro.clone()))),
         project: None,
         settles_on_failure: true,
+        session_id: None,
+        resume: None,
     }
 }
 
@@ -309,6 +311,7 @@ mod tests {
             checks: Arc::new(Machine),
             planner_for: Arc::new(FixedFor(inner_spawner())),
             settings: Arc::new(closta_shell::settings::MemorySettings),
+            saved_for: Arc::new(closta_shell::new_session::NoSaved),
         };
         let here = std::env::temp_dir().to_string_lossy().into_owned();
         let launch = open_folder(&here, &ports).unwrap();

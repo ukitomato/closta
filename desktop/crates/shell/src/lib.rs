@@ -15,6 +15,8 @@ pub mod needs_you;
 pub mod new_session;
 pub mod panes;
 pub mod projects;
+pub mod resume;
+pub mod resume_keys;
 pub mod rows;
 pub mod settings;
 pub mod slot;

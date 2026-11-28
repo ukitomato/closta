@@ -112,7 +112,7 @@ fn the_fake_cli_answers_its_version() {
         &[("CLOSTA_FAKE_MODE", "stubborn")],
         Some(dir.to_str().expect("a UTF-8 path").to_owned()),
     );
-    assert_eq!(check(session.version_check()), Ok("2.1.282".to_owned()));
+    assert_eq!(check(session.version_check()), Ok("2.1.325".to_owned()));
     assert_eq!(live_children(), 0);
 }
 

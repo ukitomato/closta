@@ -3,9 +3,12 @@
 //! until the host writes the matching stdin line, and the spawner that answers the version check
 //! and one session.
 
+mod common;
+
 use std::future::Future;
 use std::io::ErrorKind;
 use std::path::PathBuf;
+use std::process::Command;
 use std::time::{Duration, Instant};
 
 use closta_providers::claude::fake::replay::{
@@ -360,4 +363,28 @@ fn a_cue_is_answered_only_by_its_stdin_line() {
     assert!(answer("q", false).answered_by(&encode::deny("q", "no")));
     assert!(!answer("q", false).answered_by(&encode::deny("p", "no")));
     assert!(!answer("q", false).answered_by("not json"));
+}
+
+/// The fake CLI answers `--version` with the version the captures were recorded with, both as the
+/// replay spawner does and as the launched binary does. A new recording that moves
+/// `manifest.json`'s `claude_version` makes this fail where the fake's version has to move too.
+#[test]
+fn the_fake_cli_names_the_version_the_captures_were_recorded_with() {
+    let recorded = common::manifest().claude_version;
+    assert!(!recorded.is_empty(), "the manifest names a version");
+    assert_eq!(
+        Some(recorded.as_str()),
+        VERSION_LINE.split(' ').next(),
+        "the replay spawner's version line"
+    );
+
+    let output = Command::new(env!("CARGO_BIN_EXE_closta-fake-claude"))
+        .arg("--version")
+        .env_remove("CLOSTA_FAKE_VERSION")
+        .env_remove("CLOSTA_FAKE_MODE")
+        .output()
+        .expect("the fake starts");
+    assert!(output.status.success(), "the fake ends with 0");
+    let said = String::from_utf8(output.stdout).expect("the version is text");
+    assert_eq!(Some(VERSION_LINE), said.lines().next(), "the launched fake");
 }

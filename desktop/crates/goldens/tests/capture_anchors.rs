@@ -3,9 +3,11 @@
 //! projection made (CaptureAnchorsTest.kt). Ids and texts are read off the `.ndjson` files and
 //! `recorder/scenarios.mjs`.
 
-use closta_goldens::common::known_unplaced;
+use std::collections::HashSet;
+
+use closta_goldens::common::{known_unplaced, legacy_excerpt};
 use closta_goldens::projector::project_tree;
-use closta_goldens::replay::{Step, THREAD, final_tree, inputs, replay, scenarios};
+use closta_goldens::replay::{Step, THREAD, final_tree, inputs, replay, replay_from, scenarios};
 use closta_goldens::tree_reading::{
     at, entries, keys_of, message, messages, part, parts, status, str, tool_calls,
 };
@@ -78,17 +80,6 @@ struct Cut {
     from_line: usize,
 }
 
-/// The captures where a sub-agent's call shows cut off: the interrupt killed the background agent
-/// and its Bash (task_updated killed at line 71, task_notification stopped), so the call shows
-/// incomplete with no result until the rejection arrives at line 79 as its result (an error) — it
-/// stays incomplete. How the tree should tell an interrupt from a rejection is still open.
-fn cut_off(scenario: &str) -> Option<Cut> {
-    (scenario == "19-interrupt-background").then_some(Cut {
-        call_id: "toolu_01JQzJgds9jxAZS6KpB3yPYh",
-        from_line: 71,
-    })
-}
-
 /// The tool calls nested under the tool calls of `tree` (a sub-agent's calls under its Agent call).
 fn nested_calls(tree: &Value) -> Vec<Object> {
     tool_calls(tree)
@@ -106,7 +97,7 @@ fn nested_calls(tree: &Value) -> Vec<Object> {
 #[test]
 fn no_capture_leaves_the_thread_running_but_for_the_known_gaps() {
     let all = scenarios();
-    assert_eq!(40, all.len());
+    assert_eq!(44, all.len());
     for scenario in &all {
         // A known gap still shows; anywhere else the thread ends at rest.
         let expected = Value::Bool(still_running(scenario));
@@ -123,7 +114,7 @@ fn capture_01_one_user_message_and_one_assistant_message_holding_the_answer() {
     let tree = final_tree("01-baseline-text");
     let thread = thread_of(&tree);
     assert_eq!(
-        vec!["send-1", "2db4d1c4-2832-4e82-b206-29fb6231413f"],
+        vec!["send-1", "2936960e-01f3-4830-8964-67a2a1bc6cf6"],
         keys(thread)
     );
     let user = message(thread, "send-1");
@@ -133,7 +124,7 @@ fn capture_01_one_user_message_and_one_assistant_message_holding_the_answer() {
         vec![Some("Respond with exactly one word: pong".to_owned())],
         texts(&parts(user))
     );
-    let answer = message(thread, "2db4d1c4-2832-4e82-b206-29fb6231413f");
+    let answer = message(thread, "2936960e-01f3-4830-8964-67a2a1bc6cf6");
     assert_eq!(Some("assistant"), str(answer, "role"));
     assert_eq!(Some("complete/stop".to_owned()), status(answer));
     let answer_parts = parts(answer);
@@ -150,8 +141,9 @@ fn capture_01_one_user_message_and_one_assistant_message_holding_the_answer() {
 
 #[test]
 fn capture_01_while_the_answer_streams_its_part_and_message_run_and_so_does_the_thread() {
-    let answer_id = "2db4d1c4-2832-4e82-b206-29fb6231413f";
+    let answer_id = "2936960e-01f3-4830-8964-67a2a1bc6cf6";
     let steps = replay("01-baseline-text");
+    // 2.1.325 streams the answer as one delta; the part still runs until its content_block_stop.
     let streaming = steps
         .iter()
         .find(|step| {
@@ -159,9 +151,9 @@ fn capture_01_while_the_answer_streams_its_part_and_message_run_and_so_does_the_
             keys(thread).len() == 2
                 && parts(message(thread, answer_id))
                     .iter()
-                    .any(|p| str(p, "text") == Some("p"))
+                    .any(|p| str(p, "text") == Some("pong"))
         })
-        .expect("a step where the answer reads \"p\"");
+        .expect("a step where the answer reads \"pong\"");
     let thread = thread_of(&streaming.tree);
     let answer = message(thread, answer_id);
     assert_eq!(Some("running".to_owned()), status(answer));
@@ -174,20 +166,15 @@ fn capture_01_while_the_answer_streams_its_part_and_message_run_and_so_does_the_
 #[test]
 fn capture_02_the_bash_call_carries_its_input_its_result_and_is_complete() {
     let tree = final_tree("02-tool-bash-autorun");
-    let turn = message(thread_of(&tree), "40cc3c71-e383-4bc1-9bef-0c9c972479fb");
+    let turn = message(thread_of(&tree), "1733e09b-a794-4e74-b264-4e8c1feac07a");
     assert_eq!(
-        vec![
-            Some("reasoning"),
-            Some("text"),
-            Some("tool-call"),
-            Some("text")
-        ],
+        vec![Some("tool-call"), Some("text")],
         parts(turn)
             .iter()
             .map(|p| str(p, "type"))
             .collect::<Vec<_>>()
     );
-    let bash = part(turn, "toolu_01M1wzh6sucheWf2EB5A36Mq");
+    let bash = part(turn, "toolu_01X34nTfhCcSEMxmUMvxUR78");
     assert_eq!(Some("Bash"), str(bash, "toolName"));
     assert_eq!(
         Some("echo hello-from-capture"),
@@ -270,7 +257,7 @@ fn capture_23_each_user_message_holds_its_file_ahead_of_its_words_by_name_kind_t
 fn capture_04_the_bash_call_allowed_in_advance_ran_without_an_approval() {
     let tree = final_tree("04-tool-autorun-with-ppt-stdio");
     let found = calls(thread_of(&tree));
-    let bash = call(&found, "toolu_01K4mynWnbCCRWnEAcHHtmUT");
+    let bash = call(&found, "toolu_01LbRow5QYDQFGytVgTwRfuE");
     assert_eq!(Some(&json!("should-be-denied")), bash.get("result"));
     assert_eq!(None, bash.get("approval"));
 }
@@ -279,11 +266,11 @@ fn capture_04_the_bash_call_allowed_in_advance_ran_without_an_approval() {
 fn capture_05_the_write_call_carries_its_approval_approved_and_the_result() {
     let tree = final_tree("05-permission-can-use-tool");
     let found = calls(thread_of(&tree));
-    let write = call(&found, "toolu_01FooZHpFpzmDvsr82dzYb33");
+    let write = call(&found, "toolu_01S2wEQGaruCBtQJHkwEwrxu");
     assert_eq!(Some("Write"), str(write, "toolName"));
     let approval = at(&Value::Object(write.clone()), &["approval"]).clone();
     assert_eq!(
-        Some("fd37592b-7c5a-4653-bb77-f4b22769cdd5"),
+        Some("e42c7fac-e237-4ee9-a6c1-d19579abb0f3"),
         str(&approval, "id")
     );
     assert_eq!(Some("decision"), str(&approval, "display"));
@@ -301,9 +288,9 @@ fn capture_05_the_write_call_carries_its_approval_approved_and_the_result() {
 fn capture_05_while_the_approval_waits_the_call_and_its_message_wait_for_the_user() {
     let waiting = tree_after_request("05-permission-can-use-tool");
     let thread = thread_of(&waiting);
-    let turn = message(thread, "846b6e3f-1ec3-4fb1-ab89-af04c9749651");
+    let turn = message(thread, "c810a2d1-b8af-4673-9506-fd49f92285c4");
     assert_eq!(Some("requires-action/interrupt".to_owned()), status(turn));
-    let write = part(turn, "toolu_01FooZHpFpzmDvsr82dzYb33");
+    let write = part(turn, "toolu_01S2wEQGaruCBtQJHkwEwrxu");
     assert_eq!(Some("requires-action/interrupt".to_owned()), status(write));
     let approval = approval_of(write);
     let mut fields: Vec<&str> = approval.keys().map(String::as_str).collect();
@@ -374,35 +361,35 @@ fn captures_06_and_07_send_nothing_so_the_thread_stays_empty() {
 fn capture_08_the_agent_call_nests_the_sub_agents_prompt_and_its_read_call_with_the_result() {
     let tree = final_tree("08-subagent-task");
     let agent = part(
-        message(thread_of(&tree), "7bc9256d-6b9f-4dad-b58c-620568c6abaf"),
-        "toolu_016keAu5ZSgNCvYmxd6wGT6w",
+        message(thread_of(&tree), "af32f5b7-baa9-4f58-9196-5136eec2573d"),
+        "toolu_01S4aVxTAg6iR87daCuzkwZQ",
     );
     assert_eq!(Some("Agent"), str(agent, "toolName"));
     assert_eq!(Some("complete".to_owned()), status(agent));
     assert_eq!(
         vec![
-            "42e60a14-f53a-4c87-ac6f-67e41762f7b9",
-            "msg_011CScrubbed91eppSUf5SM4"
+            "1121d477-e599-43de-941d-542c6139a2c4",
+            "msg_011CScrubbed7qAAAm1qY1rq"
         ],
         keys_of(agent, "messages")
     );
-    let prompt = message(agent, "42e60a14-f53a-4c87-ac6f-67e41762f7b9");
+    let prompt = message(agent, "1121d477-e599-43de-941d-542c6139a2c4");
     assert_eq!(Some("user"), str(prompt, "role"));
     let prompt_parts = parts(prompt);
     assert_eq!(1, prompt_parts.len());
+    let prompt_text = str(prompt_parts[0], "text").expect("a text");
     assert!(
-        str(prompt_parts[0], "text")
-            .expect("a text")
-            .starts_with("Read the file NOTES.md in the current directory")
+        prompt_text.starts_with("Read the file ") && prompt_text.contains("/cwd/NOTES.md"),
+        "{prompt_text}"
     );
-    let reply = message(agent, "msg_011CScrubbed91eppSUf5SM4");
+    let reply = message(agent, "msg_011CScrubbed7qAAAm1qY1rq");
     assert_eq!(Some("assistant"), str(reply, "role"));
     assert_eq!(
         None,
         reply.get("status"),
         "a sub-agent's message has no status"
     );
-    let read = part(reply, "toolu_017AYaBDFQPgf2trBHtoP1HN");
+    let read = part(reply, "toolu_011Yw3MDkf6a4P4rzGqAqbyP");
     assert_eq!(Some("Read"), str(read, "toolName"));
     assert!(
         str(read, "result")
@@ -426,63 +413,133 @@ fn capture_08_while_the_sub_agent_works_the_agent_call_runs() {
         .find(|step| is_event(step, |e| matches!(e, AgentEvent::SystemTaskStarted { .. })))
         .expect("a system/task_started");
     let found = tool_calls(&working.tree);
-    let agent = call(&found, "toolu_016keAu5ZSgNCvYmxd6wGT6w");
+    let agent = call(&found, "toolu_01S4aVxTAg6iR87daCuzkwZQ");
     assert_eq!(Some("running".to_owned()), status(agent));
+}
+
+/// Asserts that no sub-agent's call of `steps` shows cut off before its result arrives, but for
+/// the one `cut` names from its line on, which must end cut off.
+fn assert_no_call_cut_off(steps: &[Step], scenario: &str, cut: Option<Cut>) {
+    let mut line = 0;
+    // A call the CLI refused on its own is shown refused (incomplete) from the refusal until its
+    // result comes: it is not a call something cut off.
+    let refused: HashSet<&str> = steps
+        .iter()
+        .filter_map(|step| match &step.input {
+            PresenterInput::Event(AgentEvent::SystemPermissionDenied { tool_use_id, .. }) => {
+                Some(tool_use_id.as_str())
+            }
+            _ => None,
+        })
+        .collect();
+    for (index, step) in steps.iter().enumerate() {
+        if matches!(step.input, PresenterInput::Event(_)) {
+            line += 1;
+        }
+        // The known gap is let through only from the capture's line where the interrupt took
+        // effect.
+        let exempt = cut
+            .as_ref()
+            .filter(|it| line >= it.from_line)
+            .map(|it| it.call_id);
+        for nested in nested_calls(&step.tree) {
+            let id = str(&nested, "toolCallId");
+            if nested.get("result").is_some()
+                || (exempt.is_some() && id == exempt)
+                || id.is_some_and(|it| refused.contains(it))
+            {
+                continue;
+            }
+            let said = status(&nested)
+                .unwrap_or_else(|| panic!("{scenario} #{index}: a call has no status"));
+            assert!(
+                !said.starts_with("incomplete"),
+                "{scenario} #{index}: {id:?} is {said}"
+            );
+        }
+    }
+    // The known gap still shows: the call the interrupt killed ends incomplete.
+    if let Some(cut) = cut {
+        let last = steps
+            .last()
+            .unwrap_or_else(|| panic!("{scenario}: a replay has no steps"));
+        let ended: Vec<Object> = nested_calls(&last.tree)
+            .into_iter()
+            .filter(|it| str(it, "toolCallId") == Some(cut.call_id))
+            .collect();
+        assert_eq!(1, ended.len(), "{scenario}: {}", cut.call_id);
+        let said = status(&ended[0]).unwrap_or_else(|| panic!("{scenario}: a call has no status"));
+        assert!(
+            said.starts_with("incomplete"),
+            "{scenario}: {} is {said}",
+            cut.call_id
+        );
+    }
 }
 
 #[test]
 fn no_sub_agents_call_shows_as_cut_off_before_its_result_arrives() {
     for scenario in scenarios() {
-        let cut = cut_off(&scenario);
-        let mut line = 0;
-        for (index, step) in replay(&scenario).iter().enumerate() {
-            if matches!(step.input, PresenterInput::Event(_)) {
-                line += 1;
-            }
-            // The known gap is let through only from the capture's line where the interrupt took
-            // effect.
-            let exempt = cut
-                .as_ref()
-                .filter(|it| line >= it.from_line)
-                .map(|it| it.call_id);
-            for nested in nested_calls(&step.tree) {
-                let id = str(&nested, "toolCallId");
-                if nested.get("result").is_some() || (exempt.is_some() && id == exempt) {
-                    continue;
-                }
-                let said = status(&nested).expect("a call has a status");
-                assert!(
-                    !said.starts_with("incomplete"),
-                    "{scenario} #{index}: {id:?} is {said}"
-                );
-            }
-        }
-        // The known gap still shows: the call the interrupt killed ends incomplete (its result,
-        // the rejection, arrives at the capture's line 79 as an error).
-        if let Some(cut) = cut {
-            let ended: Vec<Object> = nested_calls(&final_tree(&scenario))
-                .into_iter()
-                .filter(|it| str(it, "toolCallId") == Some(cut.call_id))
-                .collect();
-            assert_eq!(1, ended.len(), "{scenario}: {}", cut.call_id);
-            let said = status(&ended[0]).expect("a call has a status");
-            assert!(
-                said.starts_with("incomplete"),
-                "{scenario}: {} is {said}",
-                cut.call_id
-            );
-        }
+        assert_no_call_cut_off(&replay(&scenario), &scenario, None);
     }
 }
 
 #[test]
+fn nineteen_under_an_older_cli_the_call_the_interrupt_killed_shows_cut_off_and_stays_so_after_its_result()
+ {
+    // Lines an older CLI (2.1.282) sent; the current version makes no such call (see the test
+    // after this).
+    let scenario = "19-interrupt-background";
+    let steps = replay_from(scenario, &legacy_excerpt(scenario));
+    // The interrupt killed the background agent and its Bash (task_updated killed at the
+    // excerpt's line 20, task_notification stopped), so the call shows incomplete with no result
+    // until the rejection arrives at line 28 as its result (an error) - it stays incomplete. How
+    // the tree should tell an interrupt from a rejection is still open.
+    assert_no_call_cut_off(
+        &steps,
+        scenario,
+        Some(Cut {
+            call_id: "toolu_01JQzJgds9jxAZS6KpB3yPYh",
+            from_line: 20,
+        }),
+    );
+}
+
+#[test]
+fn capture_19_the_sub_agents_bash_the_cli_blocked_is_complete_with_its_error_and_the_killed_agent_call_is_cut_off()
+ {
+    // 2.1.325 blocks the sub-agent's foreground `sleep 60 && ...` before it runs, so the
+    // interrupt kills only the agent: its call ends incomplete, and the Bash ends with the CLI's
+    // error as its result.
+    let tree = final_tree("19-interrupt-background");
+    let found = calls(thread_of(&tree));
+    let agent = call(&found, "toolu_01BiqomDJ1sVovYfssAzASCx");
+    let said = status(agent).expect("a call has a status");
+    assert!(said.starts_with("incomplete"), "{said}");
+    let under = calls(agent);
+    let bash = call(&under, "toolu_01FAgiPzfH8134p6bKg7pKXJ");
+    assert_eq!(Some("complete".to_owned()), status(bash));
+    assert_eq!(Some(&Value::Bool(true)), bash.get("isError"));
+}
+
+#[test]
 fn captures_10_and_11_the_sub_agents_second_run_shows_its_call_running_until_the_result() {
-    for (scenario, read) in [
-        ("10-background-task", "toolu_01TLAR4CsrnQ4L8vCyxGTJXg"),
-        ("11-background-followup", "toolu_0185uJbXrK9vvVivVJSLTxrA"),
+    // 10: lines an older CLI (2.1.282) sent; the current version makes no second run in 10. 11
+    // still has one.
+    for (scenario, read, steps) in [
+        (
+            "10-background-task",
+            "toolu_01TLAR4CsrnQ4L8vCyxGTJXg",
+            replay_from("10-background-task", &legacy_excerpt("10-background-task")),
+        ),
+        (
+            "11-background-followup",
+            "toolu_015a6ZhgFQhMA7NgEDjGokyi",
+            replay("11-background-followup"),
+        ),
     ] {
         let mut seen: Vec<String> = Vec::new();
-        for step in replay(scenario) {
+        for step in steps {
             let said = tool_calls(&step.tree)
                 .get(read)
                 .and_then(Value::as_object)
@@ -501,8 +558,8 @@ fn captures_10_and_11_the_sub_agents_second_run_shows_its_call_running_until_the
 fn capture_09_two_agent_calls_of_one_message_each_nest_their_own_sub_agent() {
     let tree = final_tree("09-parallel-subagents");
     let found = calls(thread_of(&tree));
-    let first = call(&found, "toolu_01Lb8Pj8ffuCwbUXBNu6tpZe");
-    let second = call(&found, "toolu_01AeVtuqRUaWjxrAn4eN4CtA");
+    let first = call(&found, "toolu_01E79HHrgMyadV8MCS46uqpP");
+    let second = call(&found, "toolu_013HREkWuoSa8wpsKe2fduA1");
     let roles = |agent: &Object| -> Vec<Option<String>> {
         messages(agent)
             .iter()
@@ -516,7 +573,7 @@ fn capture_09_two_agent_calls_of_one_message_each_nest_their_own_sub_agent() {
     let under_second = calls(second);
     assert!(
         str(
-            call(&under_first, "toolu_017DX6f9jtm8Qbd7qWLAL774"),
+            call(&under_first, "toolu_01VKkb2wZN3mNsdhYJMXgaAG"),
             "result"
         )
         .expect("a result")
@@ -524,38 +581,32 @@ fn capture_09_two_agent_calls_of_one_message_each_nest_their_own_sub_agent() {
     );
     assert!(
         str(
-            call(&under_second, "toolu_019tWe9Kgvtduj36KbkSXbFb"),
+            call(&under_second, "toolu_019BKjQdHjgkQak6Coft7SBJ"),
             "result"
         )
         .expect("a result")
         .starts_with("1\t# GUIDE")
     );
     assert!(
-        !under_first.contains_key("toolu_019tWe9Kgvtduj36KbkSXbFb"),
+        !under_first.contains_key("toolu_019BKjQdHjgkQak6Coft7SBJ"),
         "each sub-agent's calls stay under its own call"
     );
 }
 
 #[test]
-fn capture_10_one_turn_message_then_two_messages_the_cli_said_on_its_own() {
+fn capture_10_one_turn_message_then_a_message_the_cli_said_on_its_own() {
     let tree = final_tree("10-background-task");
     let thread = thread_of(&tree);
     assert_eq!(
         vec![
             "send-1",
-            "8ef2e421-4d12-48ac-b065-cacf3bc35e81",
-            "msg_011CScrubbed4Cim73pcgZBm",
-            "msg_011CScrubbedEDaKUXDcpXJk",
+            "d4fed6c0-ab40-495c-9ef9-ef10a67ccae1",
+            "msg_011CScrubbed4itd4JRxk33t",
         ],
         keys(thread)
     );
     assert_eq!(
-        vec![
-            Some("user"),
-            Some("assistant"),
-            Some("assistant"),
-            Some("assistant")
-        ],
+        vec![Some("user"), Some("assistant"), Some("assistant")],
         messages(thread)
             .iter()
             .map(|m| str(m, "role"))
@@ -566,7 +617,6 @@ fn capture_10_one_turn_message_then_two_messages_the_cli_said_on_its_own() {
             None,
             Some("complete/stop".to_owned()),
             Some("complete/stop".to_owned()),
-            Some("complete/stop".to_owned()),
         ],
         messages(thread)
             .iter()
@@ -574,7 +624,7 @@ fn capture_10_one_turn_message_then_two_messages_the_cli_said_on_its_own() {
             .collect::<Vec<_>>()
     );
     assert!(
-        parts(message(thread, "msg_011CScrubbedEDaKUXDcpXJk"))
+        parts(message(thread, "msg_011CScrubbed4itd4JRxk33t"))
             .iter()
             .any(|p| str(p, "text").expect("a text").contains("bg-done"))
     );
@@ -594,14 +644,14 @@ fn capture_10_a_resume_runs_the_thread_while_it_speaks_and_the_thread_rests_betw
     let speaking = steps
         .iter()
         .find(|step| {
-            keys(thread_of(&step.tree)).contains(&"msg_011CScrubbed4Cim73pcgZBm".to_owned())
+            keys(thread_of(&step.tree)).contains(&"msg_011CScrubbed4itd4JRxk33t".to_owned())
         })
         .expect("a step where the resume speaks");
     let thread = thread_of(&speaking.tree);
     assert_eq!(Some(&Value::Bool(true)), thread.get("isRunning"));
     assert_eq!(
         Some("running".to_owned()),
-        status(message(thread, "msg_011CScrubbed4Cim73pcgZBm"))
+        status(message(thread, "msg_011CScrubbed4itd4JRxk33t"))
     );
 }
 
@@ -612,11 +662,11 @@ fn capture_11_two_user_turns_the_second_message_where_it_was_sent_then_the_resum
     assert_eq!(
         vec![
             "send-1",
-            "fd3865b0-030e-4f83-b5c7-f125be3a58e3",
+            "137ae7e8-71d8-4325-b5d7-bf495b3391a3",
             "send-2",
-            "461f6ba9-5e7c-40e6-a4a1-3f13ab7dfc93",
-            "msg_011CScrubbedErtc8MpJCiee",
-            "msg_011CScrubbedCJZpSJgv7AHg",
+            "e489ee2b-236d-4061-bfa3-d0ec69fa8fd2",
+            "msg_011CScrubbedFYeqBLKGzXCB",
+            "msg_011CScrubbedr1ANx1S2QoGc",
         ],
         keys(thread)
     );
@@ -630,11 +680,11 @@ fn capture_11_two_user_turns_the_second_message_where_it_was_sent_then_the_resum
         vec![Some("4".to_owned())],
         texts(&parts(message(
             thread,
-            "461f6ba9-5e7c-40e6-a4a1-3f13ab7dfc93"
+            "e489ee2b-236d-4061-bfa3-d0ec69fa8fd2"
         )))
     );
     let found = calls(thread);
-    let blocked = call(&found, "toolu_01X3CFLpZwNx78yc9GKxjDoA");
+    let blocked = call(&found, "toolu_01X5tmhWyS8HbdJ4eDYH7bQo");
     assert_eq!(Some(&Value::Bool(true)), blocked.get("isError"));
 }
 
@@ -661,16 +711,16 @@ fn capture_11_between_the_second_send_and_the_cli_taking_it_the_thread_runs() {
 fn capture_12_the_sub_agents_write_call_carries_the_approval_nested_under_the_agent_call() {
     let tree = final_tree("12-subagent-permission");
     let agent = part(
-        message(thread_of(&tree), "7d810fd9-023c-4f86-b8a6-a8cb7f6ca80a"),
-        "toolu_01VhnfAHvzvJJcXbuNmFC76z",
+        message(thread_of(&tree), "2214261d-c819-490e-ade3-07249b64d3f0"),
+        "toolu_01Ugvt3iFFuXLnUxzD8HQaim",
     );
     let write = part(
-        message(agent, "msg_011CScrubbedF8tX2sfjPKaL"),
-        "toolu_01PpTFMozAHSLaqmFKc6923D",
+        message(agent, "msg_011CScrubbedFy3MF3W4Zv3W"),
+        "toolu_01EQdLNPPVwHuZQYn15Hjf5G",
     );
     let approval = at(&Value::Object(write.clone()), &["approval"]).clone();
     assert_eq!(
-        Some("c68ae115-1067-4676-be66-41f53bf3a14b"),
+        Some("8ede2c03-477c-4eeb-8df6-49eb8b5e8eda"),
         str(&approval, "id")
     );
     assert_eq!(Some(&Value::Bool(true)), approval.get("approved"));
@@ -684,14 +734,14 @@ fn capture_12_the_sub_agents_write_call_carries_the_approval_nested_under_the_ag
 #[test]
 fn capture_12_while_the_sub_agents_approval_waits_the_turn_waits_for_the_user() {
     let tree = tree_after_request("12-subagent-permission");
-    let turn = message(thread_of(&tree), "7d810fd9-023c-4f86-b8a6-a8cb7f6ca80a");
+    let turn = message(thread_of(&tree), "2214261d-c819-490e-ade3-07249b64d3f0");
     assert_eq!(Some("requires-action/interrupt".to_owned()), status(turn));
-    let agent = part(turn, "toolu_01VhnfAHvzvJJcXbuNmFC76z");
+    let agent = part(turn, "toolu_01Ugvt3iFFuXLnUxzD8HQaim");
     assert_eq!(Some("running".to_owned()), status(agent));
     let found = calls(agent);
     assert_eq!(
         Some("requires-action/interrupt".to_owned()),
-        status(call(&found, "toolu_01PpTFMozAHSLaqmFKc6923D"))
+        status(call(&found, "toolu_01EQdLNPPVwHuZQYn15Hjf5G"))
     );
 }
 
@@ -718,7 +768,7 @@ fn capture_13_the_question_shows_its_prompt_and_options_and_was_cancelled_unansw
     let ask = question("13-ask-timeout");
     let approval = approval_of(&ask);
     assert_eq!(
-        Some("9f0891e5-a636-4c70-8a63-c288c7eaf6aa"),
+        Some("83bc36d7-6561-4c72-b33f-019b65e4903e"),
         str(&approval, "id")
     );
     assert_eq!(Some("select"), str(&approval, "display"));
@@ -766,8 +816,34 @@ fn capture_15_the_question_expired_while_the_user_was_away() {
     let approval = approval_of(&ask);
     assert_eq!(Some("expired"), str(&approval, "resolution"));
     assert_eq!(None, approval.get("approved"));
+    // 2.1.325 answers the away report with this error rather than with the expiry.
+    let result = str(&ask, "result").expect("a result");
     assert!(
-        str(&ask, "result")
+        result.starts_with(
+            "The app reported that nobody answered this question, but Claude Code did not accept the report"
+        ),
+        "{result}"
+    );
+}
+
+#[test]
+fn fifteen_under_an_older_cli_the_away_report_came_back_as_the_expiry() {
+    // Lines an older CLI (2.1.282) sent; the current version does not accept the report.
+    let scenario = "15-ask-afktimeout-updatedinput";
+    let steps = replay_from(scenario, &legacy_excerpt(scenario));
+    let tree = &steps.last().expect("a replay has steps").tree;
+    let asks: Vec<Object> = calls(thread_of(tree))
+        .into_iter()
+        .filter_map(|(_, v)| v.as_object().cloned())
+        .filter(|c| str(c, "toolName") == Some("AskUserQuestion"))
+        .collect();
+    assert_eq!(1, asks.len(), "{scenario}: one question");
+    let ask = &asks[0];
+    let approval = approval_of(ask);
+    assert_eq!(Some("expired"), str(&approval, "resolution"));
+    assert_eq!(None, approval.get("approved"));
+    assert!(
+        str(ask, "result")
             .expect("a result")
             .starts_with("No response after 5s")
     );
@@ -778,11 +854,11 @@ fn captures_01_and_16_show_the_session_the_cli_started_the_mode_16s_status_chang
     let tree = final_tree("01-baseline-text");
     let first = Value::Object(thread_of(&tree).clone());
     let session = at(&first, &["session"]);
-    assert_eq!(Some("claude-sonnet-4-6"), str(session, "model"));
+    assert_eq!(Some("claude-opus-5-5"), str(session, "model"));
     assert_eq!(Some("default"), str(session, "permissionMode"));
-    assert_eq!(Some("2.1.282"), str(session, "version"));
+    assert_eq!(Some("2.1.325"), str(session, "version"));
     assert_eq!(
-        Some(&json!(0.0511167)),
+        Some(&json!(0.12213600000000001)),
         at(&first, &["usage"]).get("costUsd")
     );
     let tree = final_tree("16-permission-suggestion-accept");
@@ -793,37 +869,48 @@ fn captures_01_and_16_show_the_session_the_cli_started_the_mode_16s_status_chang
         "its system/status said so"
     );
     assert_eq!(
-        Some(&json!(0.14087429999999998)),
+        Some(&json!(0.1513491)),
         at(&accepting, &["usage"]).get("costUsd")
     );
 }
 
 #[test]
-fn capture_03_offers_the_commands_of_its_initialize_response_with_their_sentences_and_01_the_names_system_init_gave()
+fn capture_03_offers_its_initialize_commands_with_their_sentences_and_01_those_of_its_commands_changed()
  {
     let tree = final_tree("03-initialize-handshake");
     let detailed = objects(thread_of(&tree), "commands");
     assert_eq!(59, detailed.len());
-    let config: Vec<&&Object> = detailed
-        .iter()
-        .filter(|c| str(c, "name") == Some("config"))
-        .collect();
-    assert_eq!(1, config.len());
-    assert_eq!(Some("Set a setting by key"), str(config[0], "description"));
-    assert_eq!(Some("key=value"), str(config[0], "argumentHint"));
+    let config = command_named(&detailed, "config");
+    assert_eq!(Some("Set a setting by key"), str(config, "description"));
+    assert_eq!(Some("key=value"), str(config, "argumentHint"));
     assert!(detailed.iter().all(|c| {
         !str(c, "description").expect("a description").is_empty()
             || str(c, "name") != Some("config")
     }));
     let tree = final_tree("01-baseline-text");
     let names = objects(thread_of(&tree), "commands");
-    assert!(!names.is_empty(), "system/init alone names the commands");
-    assert!(
-        names
-            .iter()
-            .all(|c| str(c, "description") == Some("") && c.get("argumentHint").is_none()),
-        "and only names"
+    assert_eq!(59, names.len());
+    let design = command_named(&names, "design");
+    assert_eq!(
+        Some("Grant or revoke Claude agent access to your Design projects"),
+        str(design, "description")
     );
+    assert_eq!(Some("consent | revoke"), str(design, "argumentHint"));
+    assert_eq!(
+        Some("design"),
+        str(names[0], "name"),
+        "and it is the first the CLI listed"
+    );
+}
+
+/// The command called `name`, the only one of that name in `commands`.
+fn command_named<'a>(commands: &[&'a Object], name: &str) -> &'a Object {
+    let found: Vec<&&Object> = commands
+        .iter()
+        .filter(|c| str(c, "name") == Some(name))
+        .collect();
+    assert_eq!(1, found.len(), "one command is called {name}");
+    found[0]
 }
 
 #[test]
@@ -834,9 +921,9 @@ fn capture_03_offers_the_models_of_its_initialize_response_with_the_levels_each_
     assert_eq!(
         vec![
             Some("default"),
+            Some("opus"),
             Some("claude-opus-5"),
-            Some("claude-sonnet-5"),
-            Some("haiku")
+            Some("sonnet")
         ],
         models
             .iter()
@@ -844,25 +931,25 @@ fn capture_03_offers_the_models_of_its_initialize_response_with_the_levels_each_
             .map(|m| str(m, "value"))
             .collect::<Vec<_>>()
     );
-    assert_eq!(Some("claude-opus-4-8[1m]"), str(models[0], "resolvedModel"));
+    assert_eq!(Some("claude-opus-5-5"), str(models[0], "resolvedModel"));
     assert_eq!(Some(&Value::Bool(true)), models[0].get("supportsEffort"));
-    assert_eq!(5, objects_len(models[0], "supportedEffortLevels"));
+    assert_eq!(4, objects_len(models[0], "supportedEffortLevels"));
     let haiku: Vec<&&Object> = models
         .iter()
-        .filter(|m| str(m, "value") == Some("haiku"))
+        .filter(|m| str(m, "value") == Some("claude-haiku-4-5-20251001"))
         .collect();
     assert_eq!(1, haiku.len());
     assert_eq!(
         None,
         haiku[0].get("supportsEffort"),
-        "haiku takes no effort"
+        "Haiku 4.5 takes no effort"
     );
     let tree = final_tree("06-context-usage");
     let context = at(&tree, &["threads", "byId", THREAD, "context"]);
-    assert_eq!(Some(&json!(16575)), context.get("totalTokens"));
-    assert_eq!(Some(&json!(200000)), context.get("maxTokens"));
-    assert_eq!(Some(&json!(8)), context.get("percentage"));
-    assert_eq!(Some(&json!(167000)), context.get("autoCompactThreshold"));
+    assert_eq!(Some(&json!(11645)), context.get("totalTokens"));
+    assert_eq!(Some(&json!(1000000)), context.get("maxTokens"));
+    assert_eq!(Some(&json!(1)), context.get("percentage"));
+    assert_eq!(Some(&json!(967000)), context.get("autoCompactThreshold"));
 }
 
 fn objects_len(node: &Object, key: &str) -> usize {
@@ -922,17 +1009,18 @@ fn every_capture_with_an_initialize_response_has_its_mode_on_the_thread() {
         .collect();
     // Counted: were the filter to match none, no case would run and none would fail.
     assert_eq!(
-        34,
+        38,
         with_initialize.len(),
-        "34 captures carry an initialize response"
+        "38 captures carry an initialize response"
     );
     for (scenario, tree) in &with_initialize {
         // Every response carries the mode: 19 was started in acceptEdits, 29 in plan, 37 in auto,
-        // the rest in default.
+        // 44 in dontAsk, the rest in default.
         let expected = match scenario.as_str() {
             "19-interrupt-background" => "acceptEdits",
             "29-exit-plan-mode" => "plan",
             "37-plan-auto" => "auto",
+            "44-permission-denied" => "dontAsk",
             _ => "default",
         };
         assert_eq!(
@@ -969,19 +1057,19 @@ fn capture_07_lists_the_ten_switches_newest_first_with_the_refused_ones_sentence
     );
     let tree = final_tree("10-background-task");
     let usage = at(&tree, &["threads", "byId", THREAD, "usage"]);
-    assert_eq!(Some(&json!(0.15600725000000004)), usage.get("costUsd"));
+    assert_eq!(Some(&json!(0.21946859999999999)), usage.get("costUsd"));
     assert_eq!(
-        Some(&json!(1109)),
+        Some(&json!(1519)),
         usage.get("outputTokens"),
-        "20 + 1089 of the last result, not 531 + 763 + 1109"
+        "the last result's, not 256 + 1519"
     );
     let tree = final_tree("21-compact");
     let compacted = thread_of(&tree);
     let compactions = objects(compacted, "compactions");
     assert_eq!(1, compactions.len());
     assert_eq!(Some("manual"), str(compactions[0], "trigger"));
-    assert_eq!(Some(&json!(20072)), compactions[0].get("preTokens"));
-    assert_eq!(Some(&json!(1235)), compactions[0].get("postTokens"));
+    assert_eq!(Some(&json!(21819)), compactions[0].get("preTokens"));
+    assert_eq!(Some(&json!(3447)), compactions[0].get("postTokens"));
     assert_eq!(
         Some(&Value::Bool(false)),
         compacted.get("compacting"),
@@ -1041,11 +1129,11 @@ fn captures_08_and_10_show_their_tasks_the_sub_agents_with_the_call_that_started
             THREAD,
             "tasks",
             "byId",
-            "a9647d7f101779f28",
+            "a592487ec976885dc",
         ],
     );
     assert_eq!(
-        Some("toolu_016keAu5ZSgNCvYmxd6wGT6w"),
+        Some("toolu_01S4aVxTAg6iR87daCuzkwZQ"),
         str(sub, "toolCallId")
     );
     assert_eq!(Some("Explore"), str(sub, "agentType"));
@@ -1053,12 +1141,18 @@ fn captures_08_and_10_show_their_tasks_the_sub_agents_with_the_call_that_started
     assert_eq!(Some("complete"), str(sub, "status"));
     let tree = final_tree("10-background-task");
     let background = thread_of(&tree);
+    // The sub-agent and its Bash in the background, then the sub-agent's own foreground Bash
+    // (`until grep`).
     assert_eq!(
-        vec!["ad723e6f8ca4b28ad", "bc4b0ae63"],
+        vec!["a40aca0599667cba4", "b9eajvrtk", "bho6ze5ur"],
         keys_of(background, "tasks")
     );
     assert_eq!(
-        vec![Some(&Value::Bool(true)), Some(&Value::Bool(true))],
+        vec![
+            Some(&Value::Bool(true)),
+            Some(&Value::Bool(true)),
+            Some(&Value::Bool(false))
+        ],
         entries(background, "tasks")
             .iter()
             .map(|t| t.get("background"))

@@ -2,6 +2,7 @@
 
 mod capture;
 mod check;
+mod gate;
 mod layers;
 mod perf_log;
 mod real;
@@ -54,13 +55,29 @@ fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
-        "perf" => match check::run_steps(&desktop_root(), &check::perf_steps()) {
-            Ok(()) => ExitCode::SUCCESS,
-            Err(err) => {
-                eprintln!("{err:#}");
-                ExitCode::FAILURE
+        "perf" => {
+            let exe = match std::env::current_exe() {
+                Ok(exe) => exe,
+                Err(err) => {
+                    eprintln!("perf: could not find this program: {err}");
+                    return ExitCode::FAILURE;
+                }
+            };
+            println!("perf: waiting for the build lock");
+            let (program, args) = check::perf_locked(&exe);
+            let code = check::run_child(&program, &args);
+            if let Some(note) = check::perf_exit_note(code) {
+                eprintln!("{note}");
             }
-        },
+            ExitCode::from(code)
+        }
+        "perf-held" => {
+            let result = check::run_steps(&desktop_root(), &check::perf_steps());
+            if let Err(err) = &result {
+                eprintln!("{err:#}");
+            }
+            ExitCode::from(check::held_exit_code(&result))
+        }
         "real-cli" => match check::run_steps(&desktop_root(), &check::real_cli_steps()) {
             Ok(()) => ExitCode::SUCCESS,
             Err(err) => {
@@ -99,7 +116,7 @@ fn main() -> ExitCode {
                     Some(scene) => scenes.push(scene),
                     None => {
                         eprintln!(
-                            "win-perf: unknown scene {name:?} (synth, stream, idle or needs-you)"
+                            "win-perf: unknown scene {name:?} (synth, stream, idle, needs-you or resume)"
                         );
                         return ExitCode::FAILURE;
                     }

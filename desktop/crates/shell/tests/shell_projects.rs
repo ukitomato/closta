@@ -8,6 +8,7 @@ mod support;
 
 use std::io::ErrorKind;
 use std::sync::Arc;
+use std::sync::LazyLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use closta_providers::claude::launch::LaunchError;
@@ -19,12 +20,13 @@ use closta_shell::settings::{
 use closta_shell::slot::{SlotId, SlotLaunch, SlotMark, slot_elapsed};
 use closta_shell::state::{Overlay, Ports, ShellAction, ShellState};
 use support::{
-    Harness, Machine, Planners, RecordingSettings, drive, replay_launch, running, until, waits_on,
+    Ask, BASELINE, BASELINE_ALL, BASELINE_OPEN, Harness, Machine, Planners, RecordingSettings,
+    ask_in, drive, replay_launch, running, until, waits_on,
 };
 
 const CLOSTA: &str = r"C:\work\closta";
 const SANDBOX: &str = "36-sandbox-unavailable.ndjson";
-const SANDBOX_ASK: usize = 31;
+static SANDBOX_ASK: LazyLock<Ask> = LazyLock::new(|| ask_in(SANDBOX, "Bash", 1));
 
 fn saved(folder: &str, collapsed: bool) -> SavedProject {
     SavedProject {
@@ -77,7 +79,7 @@ fn start_from_dialog(shell: &mut ShellState, folder: &str) -> SlotId {
 
 /// A slot in `folder` that waits on one request, refreshed.
 async fn waiting_in(shell: &mut ShellState, harness: &Harness, folder: &str) -> SlotId {
-    let (mut launch, _control, runtime) = replay_launch(harness, SANDBOX, SANDBOX_ASK);
+    let (mut launch, _control, runtime) = replay_launch(harness, SANDBOX, SANDBOX_ASK.line);
     launch.project = Some(folder.to_owned());
     let slot = shell.open(launch);
     let runtime = runtime.recv().await.unwrap();
@@ -195,6 +197,7 @@ fn restoring_projects_writes_nothing() {
             checks: Arc::clone(&machine) as _,
             planner_for: Arc::clone(&planners) as _,
             settings: Arc::clone(&settings) as _,
+            saved_for: Arc::new(closta_shell::new_session::NoSaved),
         });
         let restored = Settings {
             version: SETTINGS_VERSION,
@@ -544,8 +547,25 @@ fn removing_touches_nothing_but_the_settings() {
             checks: Arc::clone(&machine) as _,
             planner_for: Arc::clone(&planners) as _,
             settings: Arc::clone(&settings) as _,
+            saved_for: Arc::clone(&harness.saved_for) as _,
         });
         ended_project(&mut shell, &harness, CLOSTA).await;
+        let ports = harness.ports();
+        let record = closta_model::SavedSessionSummary {
+            id: "0b1f4c52-6a1e-4a43-9a53-7f0d2a4b8c11".to_owned(),
+            title: "t".to_owned(),
+            updated_at_ms: 1,
+            bytes: 1,
+        };
+        let resumed = shell.open(closta_shell::new_session::resume_in(
+            CLOSTA, &record, &ports,
+        ));
+        harness.control(1).await.exit(0);
+        let fakes = harness.saved_for.fakes();
+        assert_eq!(fakes.len(), 1, "the precondition: a fake is there");
+        until(|| fakes[0].reads().contains(&record.id)).await;
+        end(&mut shell, resumed).await;
+        let (asked, reads) = (harness.saved_for.saved_asked(), fakes[0].reads());
         let (looks, planned, runs) = (
             machine.folder_looks(),
             planners.planned(),
@@ -558,9 +578,40 @@ fn removing_touches_nothing_but_the_settings() {
         assert_eq!(machine.folder_looks(), looks);
         assert_eq!(planners.planned(), planned);
         assert_eq!(shell.live_runs(), runs);
+        assert_eq!(harness.saved_for.lists_started(), 0);
+        assert_eq!(harness.saved_for.saved_asked(), asked);
+        assert_eq!(harness.saved_for.fakes().len(), 1);
+        assert_eq!((fakes[0].lists(), fakes[0].reads()), (0, reads));
         assert_eq!(settings.saves().len(), saves + 1, "only the settings");
         let last = settings.saves().pop().expect("a save");
         assert!(last.projects.iter().all(|it| it.folder != CLOSTA));
+    });
+}
+
+#[test]
+fn copy_session_id_copies_the_slot_s_session_id() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let ports = harness.ports();
+        let saved = closta_model::SavedSessionSummary {
+            id: "0b1f4c52-6a1e-4a43-9a53-7f0d2a4b8c11".to_owned(),
+            title: "Fix the parser".to_owned(),
+            updated_at_ms: 1,
+            bytes: 10,
+        };
+        let slot = shell.open(closta_shell::new_session::resume_in(CLOSTA, &saved, &ports));
+        harness.control(0).await.exit(0);
+        end(&mut shell, slot).await;
+        assert!(shell.ended(slot));
+        assert!(summary(&shell, slot).can_copy_id, "the precondition");
+        assert_eq!(shell.session_id(slot).as_deref(), Some(saved.id.as_str()));
+        assert_eq!(
+            shell
+                .act(ShellAction::CopySessionId { slot })
+                .clipboard
+                .as_deref(),
+            Some(saved.id.as_str())
+        );
     });
 }
 
@@ -707,11 +758,6 @@ fn a_long_first_request_is_cut_at_sixty() {
     });
 }
 
-const BASELINE: &str = "01-baseline-text.ndjson";
-/// The baseline's lines up to the first text delta: its turn is open.
-const BASELINE_OPEN: usize = 8;
-const BASELINE_ALL: usize = 15;
-
 /// Waits until the slot's session runs a turn (or has none), then refreshes the slot at `now_ms`.
 async fn refreshed(
     shell: &mut ShellState,
@@ -822,6 +868,8 @@ fn a_restart_counts_the_new_run_afresh() {
                 relaunch: None,
                 project: None,
                 settles_on_failure: false,
+                session_id: None,
+                resume: None,
             }
         }));
         let second = shell.open(other);

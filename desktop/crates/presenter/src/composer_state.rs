@@ -2,6 +2,7 @@
 //! effort in effect, the permission mode, the context used, the switch waiting for an answer. Every
 //! name and level is the CLI's own; nothing is written into the app.
 
+use std::fmt;
 use std::sync::Arc;
 
 use closta_model::ConversationState;
@@ -14,7 +15,8 @@ use crate::records::operations::{
 use crate::thread_running::thread_is_running;
 use crate::transcript::Transcript;
 
-#[derive(Clone, PartialEq, Debug)]
+/// Its `Debug` says whether there is a cost, never the cost.
+#[derive(Clone, PartialEq)]
 pub struct ComposerState {
     pub model: ModelChoice,
     pub models: Vec<ModelChoice>,
@@ -39,6 +41,34 @@ pub struct ComposerState {
     pub sandbox: SandboxView,
     /// The newest sandbox switch, when it was refused or failed.
     pub sandbox_failure: Option<SwitchRecord>,
+    /// The CLI is compacting the conversation in this turn; one it never said ended is over with
+    /// the turn.
+    pub compacting: bool,
+}
+
+impl fmt::Debug for ComposerState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ComposerState")
+            .field("model", &self.model)
+            .field("models", &self.models)
+            .field("unknown_model", &self.unknown_model)
+            .field("effort", &self.effort)
+            .field("effort_levels", &self.effort_levels)
+            .field("effort_enabled", &self.effort_enabled)
+            .field("mode", &self.mode)
+            .field("modes", &self.modes)
+            .field("context", &self.context)
+            .field("tokens", &self.tokens)
+            .field("cost_usd", &self.cost_usd.map(|_| "set"))
+            .field("switching", &self.switching)
+            .field("running", &self.running)
+            .field("stopping", &self.stopping)
+            .field("commands", &self.commands)
+            .field("sandbox", &self.sandbox)
+            .field("sandbox_failure", &self.sandbox_failure)
+            .field("compacting", &self.compacting)
+            .finish()
+    }
 }
 
 /// The sandbox button: whether the sandbox is on, and why it cannot be pressed now, if it cannot.
@@ -145,6 +175,7 @@ pub fn composer_state(conversation: &ConversationState, transcript: &Transcript)
             .find(|it| it.kind == SwitchKind::Sandbox)
             .filter(|it| matches!(it.outcome, SwitchOutcome::Rejected | SwitchOutcome::Failed))
             .cloned(),
+        compacting: operations.compacting && running,
     }
 }
 

@@ -18,6 +18,7 @@ use closta_presenter::sessions::groups::{
 use closta_presenter::sessions::window::{GroupSince, group_since_after};
 use closta_presenter::text::take_utf16;
 use closta_presenter::thread_running::thread_is_running;
+use closta_session::history::{SavedListing, SessionOpening};
 use closta_session::log::SessionLog;
 use closta_session::runtime::{SessionConfig, SessionRuntime};
 use closta_session::status::SessionStatus;
@@ -33,15 +34,17 @@ use crate::needs_you::{
     NeedsYouRow, SlotNeeds, attention, card_accepts, jump_target, list_accepts, needs_you_rows,
 };
 use crate::new_session::{
-    LaunchChecks, NewSessionDialog, PlannerFor, Problem, RecentFolders, Runtime, default_folder,
-    launch_in, quick_problem, runtime_of,
+    LaunchChecks, NewSessionDialog, PlannerFor, Problem, RecentFolders, Runtime, SavedFor,
+    default_folder, launch_in, quick_problem, runtime_of,
 };
 use crate::panes::{Pane, Panes};
 use crate::projects::{Project, ProjectKey};
+use crate::resume::{ResumeListing, ResumePicker};
 use crate::rows::{RowChange, row_changes};
 use crate::settings::{Settings, SettingsSink};
 use crate::slot::{
-    MAX_LIVE_SLOTS, Relaunch, SlotId, SlotLaunch, SlotSummary, Spawn, counts_as_live, mark_of,
+    MAX_LIVE_SLOTS, Relaunch, SlotId, SlotLaunch, SlotResume, SlotSummary, Spawn, counts_as_live,
+    mark_of, restart_offered,
 };
 use crate::watch::SlotWatch;
 
@@ -52,6 +55,7 @@ mod needs_you;
 mod new_in_project;
 mod overlays;
 mod projects;
+mod resume;
 
 pub use new_in_project::ProjectCheck;
 pub use projects::ProjectSummary;
@@ -252,6 +256,30 @@ pub enum ShellAction {
     NavLeft,
     /// A project's row opens it.
     NavRight,
+    /// Opens the resume popup on the project and reads its saved sessions in the background.
+    OpenResume {
+        project: ProjectKey,
+    },
+    /// The resume popup, on the project the New Session dialog would take.
+    OpenResumeHere,
+    /// The answer of the popup's reading `generation`; `None` is a reading that was stopped.
+    SavedListed {
+        generation: u64,
+        listing: Option<SavedListing>,
+    },
+    /// `text` is the user's: this action is never logged.
+    EditResumeQuery {
+        text: String,
+    },
+    /// Moves the popup's pick; it stops at both ends.
+    MoveResume {
+        delta: i32,
+    },
+    CloseResume,
+    /// Opens the popup's saved session `session_id`, or goes to the slot that holds it.
+    PickResume {
+        session_id: String,
+    },
 }
 
 /// The one thing that holds the window's attention; what is behind it takes no answer.
@@ -261,6 +289,7 @@ pub enum Overlay {
     CloseWindow,
     CloseSlot,
     Closing,
+    Resume,
 }
 
 /// Where the keyboard goes once an action is done.
@@ -289,6 +318,7 @@ pub struct Ports {
     pub checks: Arc<dyn LaunchChecks>,
     pub planner_for: Arc<dyn PlannerFor>,
     pub settings: Arc<dyn SettingsSink>,
+    pub saved_for: Arc<dyn SavedFor>,
 }
 
 /// A folder to look for in the background; its answer comes back as `FolderChecked`.
@@ -320,6 +350,8 @@ pub struct Acted {
     pub clipboard: Option<String>,
     /// Where the keyboard is to go.
     pub focus: Option<FocusTarget>,
+    /// The resume popup's reading, to run in the background.
+    pub listing: Option<ResumeListing>,
 }
 
 /// What the composer's second line shows of the session.
@@ -352,8 +384,14 @@ pub struct Refresh {
 struct Slot {
     /// The title the slot was started with.
     title: String,
-    /// The first request of the conversation as of the last refresh, once there is one.
+    /// The first request of the conversation as of the last refresh, once there is one; after a
+    /// `/clear`, the first request after its divider, and a new session's title before one.
     asked_title: Option<String>,
+    /// Whether the session puts a saved one back.
+    resumed: bool,
+    /// The title of the saved conversation a resumed session was opened from, until a `/clear`
+    /// starts another conversation.
+    saved_title: Option<String>,
     /// The project the slot is listed in; `None` is no project.
     project: Option<ProjectKey>,
     runtime: SessionRuntime,
@@ -400,7 +438,11 @@ struct Slot {
 impl Slot {
     /// The title the list shows, cut to the length of a session's name.
     fn shown_title(&self) -> String {
-        let title = self.asked_title.as_deref().unwrap_or(&self.title);
+        let title = self
+            .saved_title
+            .as_deref()
+            .or(self.asked_title.as_deref())
+            .unwrap_or(&self.title);
         take_utf16(title, TITLE_MAX).to_owned()
     }
 
@@ -416,9 +458,28 @@ impl Slot {
     }
 }
 
-/// The runs that have not returned, by session id: with the handle to kill their processes and
-/// the receiver that closes when the run has returned. A replaced session stays here until then.
-type Runs = Arc<Mutex<BTreeMap<String, (SessionRuntime, Receiver<()>)>>>;
+/// The runs that have not returned, by run number. A replaced session stays here until its run
+/// returns, and a run of the same session id never hides another.
+type Runs = Arc<Mutex<BTreeMap<u64, RunEntry>>>;
+
+struct RunEntry {
+    /// The handle to kill the run's process, and to read the id its conversation is saved
+    /// under now.
+    runtime: SessionRuntime,
+    /// Closes when the run has returned.
+    finished: Receiver<()>,
+}
+
+/// A session [`ShellState::start`] handed to the spawn.
+struct Started {
+    runtime: SessionRuntime,
+    /// Closes once the run has returned.
+    finished: Receiver<()>,
+    /// Whether it puts a saved session back.
+    resumed: bool,
+    /// The title of that conversation, if the launch gave one.
+    saved_title: Option<String>,
+}
 
 pub struct ShellState {
     header: AppHeader,
@@ -428,6 +489,8 @@ pub struct ShellState {
     dialog: Option<NewSessionDialog>,
     recent: RecentFolders,
     last_id: u64,
+    /// The number of the run last started.
+    last_run: u64,
     slots: BTreeMap<SlotId, Slot>,
     selected: Option<SlotId>,
     /// The projects in the order they were made in.
@@ -444,6 +507,9 @@ pub struct ShellState {
     closing: CloseStage,
     slot_close: Option<(SlotId, CloseQuestion)>,
     shown_title: Option<String>,
+    resume: Option<ResumePicker>,
+    /// The number of the resume popup's last reading; it only goes up.
+    last_listing: u64,
 }
 
 impl ShellState {
@@ -461,6 +527,7 @@ impl ShellState {
             dialog: None,
             recent: RecentFolders::default(),
             last_id: 0,
+            last_run: 0,
             slots: BTreeMap::new(),
             selected: None,
             projects: Vec::new(),
@@ -472,6 +539,8 @@ impl ShellState {
             closing: CloseStage::Open,
             slot_close: None,
             shown_title: None,
+            resume: None,
+            last_listing: 0,
         }
     }
 
@@ -491,12 +560,19 @@ impl ShellState {
             .project
             .as_deref()
             .and_then(|folder| self.join_project(folder));
-        let (runtime, finished) = self.start(launch);
+        let Started {
+            runtime,
+            finished,
+            resumed,
+            saved_title,
+        } = self.start(launch);
         self.slots.insert(
             id,
             Slot {
                 title,
                 asked_title: None,
+                resumed,
+                saved_title,
                 project,
                 runtime,
                 finished,
@@ -540,18 +616,20 @@ impl ShellState {
         let relaunch = launch.relaunch.clone();
         let settles_on_failure = launch.settles_on_failure;
         let working_directory = launch.working_directory.clone();
-        let (runtime, finished) = self.start(launch);
+        let started = self.start(launch);
         let held = self.slots.get_mut(&slot)?;
         held.title = title;
         held.asked_title = None;
+        held.resumed = started.resumed;
+        held.saved_title = started.saved_title;
         held.relaunch = relaunch;
         held.settles_on_failure = settles_on_failure;
         held.working_directory = working_directory;
         held.line = None;
         held.compacting = false;
         held.composer.clear_reason();
-        held.runtime = runtime;
-        held.finished = finished;
+        held.runtime = started.runtime;
+        held.finished = started.finished;
         held.generation += 1;
         held.builder = ThreadRows::default();
         held.status = SessionStatus::Starting;
@@ -577,34 +655,70 @@ impl ShellState {
         })
     }
 
-    /// A new session, its run and its companion handed to the spawn; with the receiver that
-    /// closes once the run has returned.
-    fn start(&self, launch: SlotLaunch) -> (SessionRuntime, Receiver<()>) {
-        let id = uuid::Uuid::new_v4().to_string();
-        let config = SessionConfig::new(
+    /// A new session, its run and its companion handed to the spawn.
+    fn start(&mut self, launch: SlotLaunch) -> Started {
+        let id = launch
+            .session_id
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        let mut config = SessionConfig::new(
             &id,
             launch.planner,
             launch.working_directory,
             Arc::clone(&self.log),
         );
+        let resumed = launch.resume.is_some();
+        let mut saved_title = None;
+        if let Some(resume) = launch.resume {
+            config.opening = SessionOpening::Resume;
+            config.saved = Some(resume.saved);
+            saved_title = resume.saved_title;
+        }
         let (runtime, run) = SessionRuntime::new(config);
         let (done, finished) = async_channel::bounded::<()>(1);
-        lock(&self.runs).insert(id.clone(), (runtime.clone(), finished.clone()));
+        self.last_run += 1;
+        let number = self.last_run;
+        lock(&self.runs).insert(
+            number,
+            RunEntry {
+                runtime: runtime.clone(),
+                finished: finished.clone(),
+            },
+        );
         let runs = Arc::clone(&self.runs);
         (self.spawn)(Box::pin(async move {
             run.await;
-            lock(&runs).remove(&id);
+            lock(&runs).remove(&number);
             drop(done);
         }));
         if let Some(companion) = launch.companion {
             (self.spawn)(companion(runtime.clone()));
         }
-        (runtime, finished)
+        Started {
+            runtime,
+            finished,
+            resumed,
+            saved_title,
+        }
     }
 
     /// How many runs have not returned, those of replaced sessions included.
     pub fn live_runs(&self) -> usize {
         lock(&self.runs).len()
+    }
+
+    /// Whether a run whose conversation is saved under this session id now has not returned:
+    /// after a `/clear` that is the CLI's id, not the one the run was started with.
+    pub fn run_alive(&self, session_id: &str) -> bool {
+        self.live_ids().contains(session_id)
+    }
+
+    /// The ids the conversations of the runs that have not returned are saved under now.
+    fn live_ids(&self) -> HashSet<String> {
+        // The lock order is `runs`, then each run's store: no path takes them the other way.
+        lock(&self.runs)
+            .values()
+            .map(|run| run.runtime.resume_id())
+            .collect()
     }
 
     /// The slots in the order they were opened.
@@ -632,6 +746,17 @@ impl ShellState {
     /// title it was started with; `None` for a slot that is not there.
     pub fn slot_title(&self, slot: SlotId) -> Option<String> {
         self.slots.get(&slot).map(Slot::shown_title)
+    }
+
+    /// Whether the slot's session puts a saved session back; false for a slot that is not there.
+    pub fn resumed(&self, slot: SlotId) -> bool {
+        self.slots.get(&slot).is_some_and(|it| it.resumed)
+    }
+
+    /// The id the slot's conversation is saved under now: after a `/clear`, the one the CLI goes
+    /// on under once its next init names it. `None` for a slot that is not there.
+    pub fn session_id(&self, slot: SlotId) -> Option<String> {
+        self.slots.get(&slot).map(|it| it.runtime.resume_id())
     }
 
     /// The slot's rows as of its last refresh; none for a slot that is not there.
@@ -729,7 +854,7 @@ impl ShellState {
             switching: composing.switching.is_some(),
         });
         held.mode_sent = false;
-        held.compacting = view.transcript.operations.compacting;
+        held.compacting = composing.compacting;
 
         let mut change = alerts_between(
             held.last
@@ -785,7 +910,13 @@ impl ShellState {
                 .iter()
                 .any(|(alert, _)| request_of(alert) == Some(id.as_str()))
         });
-        held.asked_title = session_title(&view.transcript);
+        let cleared = view.transcript.cleared_by_clear_at.is_some();
+        if cleared {
+            // The conversation the slot was opened from is behind the divider.
+            held.saved_title = None;
+        }
+        held.asked_title = session_title(&view.transcript)
+            .or_else(|| cleared.then(|| copy::NEW_SESSION_TITLE.to_owned()));
         let group = session_summary(&view.conversation, &view.transcript, held.unread).group;
         held.since = Some(group_since_after(held.since.as_ref(), group, now_ms));
         held.last = Some(view);
@@ -899,9 +1030,32 @@ impl ShellState {
 
     fn restartable(&self, slot: SlotId) -> bool {
         self.slots.get(&slot).is_some_and(|it| {
-            it.relaunch.is_some()
-                && !it.closing
-                && matches!(it.status, SessionStatus::Ended | SessionStatus::Failed(_))
+            restart_offered(
+                &it.status,
+                it.relaunch.is_some(),
+                it.closing,
+                it.finished.is_closed(),
+            )
+        })
+    }
+
+    /// Whether a Restart continues the slot's conversation with `--resume`: its session sent
+    /// a request, or it was opened by resuming. Otherwise it starts the same id again, and after
+    /// a `/clear` with nothing sent since it starts the CLI's new id afresh.
+    pub fn restart_resumes(&self, slot: SlotId) -> bool {
+        self.slots
+            .get(&slot)
+            .is_some_and(|it| !it.runtime.restarts_afresh() && (it.runtime.sent() || it.resumed))
+    }
+
+    /// What a Restart does, said under its button; `None` while none is on offer.
+    pub fn restart_note(&self, slot: SlotId) -> Option<&'static str> {
+        self.can_restart(slot).then(|| {
+            if self.restart_resumes(slot) {
+                copy::RESTART_CONTINUES
+            } else {
+                copy::RESTART_AGAIN
+            }
         })
     }
 
@@ -968,6 +1122,10 @@ impl ShellState {
                     | ShellAction::SendNote { .. }
                     | ShellAction::AnswerQuestion { .. }
                     | ShellAction::RemoveProject { .. }
+                    | ShellAction::OpenResume { .. }
+                    | ShellAction::OpenResumeHere
+                    | ShellAction::SavedListed { .. }
+                    | ShellAction::PickResume { .. }
             )
         {
             return Acted::default();
@@ -994,7 +1152,7 @@ impl ShellState {
                 self.project_checked(&project, exists)
             }
             ShellAction::CopySessionId { slot } => {
-                let id = self.slots.get(&slot).map(|it| it.runtime.id().to_owned());
+                let id = self.session_id(slot);
                 Acted {
                     clipboard: if self.copyable(slot) { id } else { None },
                     ..Acted::default()
@@ -1194,6 +1352,16 @@ impl ShellState {
             ShellAction::NavLeave => self.nav_leave(),
             ShellAction::NavLeft => self.nav_left(),
             ShellAction::NavRight => self.nav_right(),
+            ShellAction::OpenResume { project } => self.open_resume(&project),
+            ShellAction::OpenResumeHere => self.open_resume_here(),
+            ShellAction::SavedListed {
+                generation,
+                listing,
+            } => self.saved_listed(generation, listing),
+            ShellAction::EditResumeQuery { text } => self.edit_resume_query(text),
+            ShellAction::MoveResume { delta } => self.move_resume(delta),
+            ShellAction::CloseResume => self.close_resume(),
+            ShellAction::PickResume { session_id } => self.pick_resume(&session_id),
         }
     }
 
@@ -1249,10 +1417,35 @@ impl ShellState {
         if !self.can_restart(slot) {
             return Acted::default();
         }
-        let Some(relaunch) = self.slots.get(&slot).and_then(|it| it.relaunch.clone()) else {
+        let Some(held) = self.slots.get(&slot) else {
             return Acted::default();
         };
-        let Some(changes) = self.replace(slot, relaunch()) else {
+        let Some(relaunch) = held.relaunch.clone() else {
+            return Acted::default();
+        };
+        let mut launch = relaunch();
+        launch.session_id = Some(held.runtime.resume_id());
+        if self.restart_resumes(slot) {
+            let folder = held
+                .project
+                .as_ref()
+                .and_then(|key| self.folder_of(key))
+                .or_else(|| held.working_directory.clone());
+            match folder {
+                Some(folder) => {
+                    launch.resume = Some(SlotResume {
+                        saved: self.ports.saved_for.saved(&folder),
+                        saved_title: held.saved_title.clone(),
+                    });
+                }
+                // With no folder the saved session cannot be found: a new id starts instead,
+                // although the note said the Restart continues. Not reached today: of the slots
+                // with a Restart, only the checks' `fail_launch` ones have no folder, and they
+                // neither resume nor send a request.
+                None => launch.session_id = None,
+            }
+        }
+        let Some(changes) = self.replace(slot, launch) else {
             return Acted::default();
         };
         Acted {
@@ -1299,7 +1492,13 @@ fn behind_overlay(action: &ShellAction, overlay: Overlay) -> bool {
         | ShellAction::NavEnter
         | ShellAction::NavLeave
         | ShellAction::NavLeft
-        | ShellAction::NavRight => true,
+        | ShellAction::NavRight
+        | ShellAction::OpenResume { .. }
+        | ShellAction::OpenResumeHere => true,
+        ShellAction::EditResumeQuery { .. }
+        | ShellAction::MoveResume { .. }
+        | ShellAction::CloseResume
+        | ShellAction::PickResume { .. } => overlay != Overlay::Resume,
         ShellAction::OpenNewSession
         | ShellAction::OpenNewSessionHere
         | ShellAction::StartSession { .. } => overlay != Overlay::NewSession,
@@ -1307,9 +1506,7 @@ fn behind_overlay(action: &ShellAction, overlay: Overlay) -> bool {
     }
 }
 
-fn lock(
-    runs: &Runs,
-) -> std::sync::MutexGuard<'_, BTreeMap<String, (SessionRuntime, Receiver<()>)>> {
+fn lock(runs: &Runs) -> std::sync::MutexGuard<'_, BTreeMap<u64, RunEntry>> {
     runs.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
@@ -1321,3 +1518,6 @@ fn request_of(alert: &SessionAlert) -> Option<&str> {
         SessionAlert::Finished(_) => None,
     }
 }
+
+#[cfg(test)]
+mod tests;

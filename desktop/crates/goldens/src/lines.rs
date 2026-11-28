@@ -344,7 +344,7 @@ impl InitLine<'_> {
         decode(&format!(
             concat!(
                 r#"{{"type":"system","subtype":"init","uuid":"i","session_id":"{session}","cwd":{cwd},"#,
-                r#""model":{model},"permissionMode":{mode},"apiKeySource":"none","claude_code_version":"2.1.282","#,
+                r#""model":{model},"permissionMode":{mode},"apiKeySource":"none","claude_code_version":"2.1.325","#,
                 r#""output_style":"text","view_mode":"normal","scratchpad_path":"/tmp","#,
                 r#""messaging_socket_path":"/tmp/sock","fast_mode_state":"off","tools":[],"mcp_servers":[],"#,
                 r#""slash_commands":{slash},"terminal_slash_commands":[],"agents":[],"skills":[],"plugins":[],"#,

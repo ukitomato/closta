@@ -5,7 +5,7 @@
 pub mod place;
 pub mod restore;
 
-use closta_core::ports::SavedSessions;
+use closta_core::ports::{SavedSessions, SavedSessionsError};
 use closta_model::SavedSessionSummary;
 
 use crate::log::SessionLog;
@@ -28,17 +28,22 @@ pub struct SavedListing {
 }
 
 /// The saved sessions `saved` lists. A list that fails, or no `saved` to list from, is a listing
-/// that could not be read, and only the kind of the failure is logged.
+/// that could not be read, and only the kind of the failure is logged. A list that was stopped
+/// is no listing at all: `None`, and nothing is logged.
 pub fn listing(
     saved: Option<&dyn SavedSessions>,
     stop: &dyn Fn() -> bool,
     log: &dyn SessionLog,
-) -> SavedListing {
+) -> Option<SavedListing> {
     let listed = match saved {
         None => Err("no saved sessions".to_owned()),
-        Some(saved) => saved.list(stop).map_err(|error| format!("{error:?}")),
+        Some(saved) => match saved.list(stop) {
+            Ok(sessions) => Ok(sessions),
+            Err(SavedSessionsError::Stopped) => return None,
+            Err(error) => Err(format!("{error:?}")),
+        },
     };
-    match listed {
+    Some(match listed {
         Ok(sessions) => SavedListing {
             sessions,
             unreadable: false,
@@ -50,7 +55,7 @@ pub fn listing(
                 unreadable: true,
             }
         }
-    }
+    })
 }
 
 #[cfg(test)]
@@ -94,7 +99,6 @@ pub(crate) mod test_log {
 mod tests {
     use std::io::ErrorKind;
 
-    use closta_core::ports::SavedSessionsError;
     use closta_providers::claude::fake::saved::FakeSavedSessions;
 
     use super::test_log::Logged;
@@ -119,10 +123,10 @@ mod tests {
 
         assert_eq!(
             listed,
-            SavedListing {
+            Some(SavedListing {
                 sessions: Vec::new(),
                 unreadable: true
-            }
+            })
         );
         assert_eq!(
             log.lines(),
@@ -134,7 +138,7 @@ mod tests {
     fn no_saved_sessions_is_an_unreadable_listing() {
         let log = Logged::default();
 
-        let listed = listing(None, &|| false, &log);
+        let listed = listing(None, &|| false, &log).expect("a listing");
 
         assert!(listed.unreadable);
         assert!(listed.sessions.is_empty());
@@ -153,12 +157,26 @@ mod tests {
 
         assert_eq!(
             listed,
-            SavedListing {
+            Some(SavedListing {
                 sessions: vec![summary("s1"), summary("s2")],
                 unreadable: false
-            }
+            })
         );
         assert_eq!(saved.lists(), 1);
+        assert!(log.lines().is_empty());
+    }
+
+    #[test]
+    fn a_stopped_listing_is_dropped_without_a_word() {
+        let saved = FakeSavedSessions::default().with_listed(vec![summary("s1")]);
+        saved.fail_lists(SavedSessionsError::Stopped);
+        let log = Logged::default();
+
+        let listed = listing(Some(&saved), &|| false, &log);
+
+        // The list was asked for, so an empty answer is the stop and not a list never read.
+        assert_eq!(saved.lists(), 1);
+        assert_eq!(listed, None);
         assert!(log.lines().is_empty());
     }
 }

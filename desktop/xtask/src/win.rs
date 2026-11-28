@@ -5,7 +5,9 @@ use anyhow::{Context, bail};
 
 use crate::check::LOCK;
 use crate::perf_log::{Outcome, PerfLog, PerfScene, references, verdicts};
-use crate::scenes::{BASH_PROMPT, HUB_REPLAYS, SIZES, Scene, stopped_replay};
+use crate::scenes::{
+    BASH_PROMPT, HUB_REPLAYS, PROJECT_WSL, RESUME_FOLDER, SIZES, Scene, record_name, stopped_replay,
+};
 
 /// The Windows-side copy of `desktop/`, as seen from WSL. The Windows build
 /// needs the Windows SDK shader compiler and Windows paths, so it runs on Windows.
@@ -17,8 +19,18 @@ pub const WIN_COPY: &str = r"C:\dev\tools\closta\desktop";
 pub const REPLAY_WSL: &str = "/mnt/c/dev/tools/closta/replay";
 /// The same folder as Windows sees it.
 pub const REPLAY: &str = r"C:\dev\tools\closta\replay";
+/// The config directory the resume scene reads its saved sessions from, as seen from WSL.
+const CONFIG_WSL: &str = "/mnt/c/dev/tools/closta/replay/config";
+/// The same folder as Windows sees it.
+pub const CONFIG_DIR: &str = r"C:\dev\tools\closta\replay\config";
+/// The captures whose transcripts the resume scene lists.
+const TRANSCRIPTS: [&str; 3] = [
+    "22-resume.transcript.jsonl",
+    "27-resume-session-at.transcript.jsonl",
+    "39-sandbox-resume.transcript.jsonl",
+];
 /// The recorded captures, from `desktop/`.
-const CAPTURES: &str =
+pub(crate) const CAPTURES: &str =
     "../jetbrains/src/main/kotlin/dev/ukitomato/closta/providers/claude/fixtures";
 /// How many jobs a Windows build runs: it shares this machine's memory with WSL.
 const JOBS: &str = "4";
@@ -142,6 +154,21 @@ pub fn replay_copies(files: &[PathBuf]) -> Vec<(PathBuf, PathBuf)> {
         .collect()
 }
 
+/// Where a transcript goes in the config directory: under the project's record name, as the
+/// session id its first line that has one carries.
+pub fn transcript_copy(content: &str) -> Option<PathBuf> {
+    let id = content.lines().find_map(|line| {
+        let value: serde_json::Value = serde_json::from_str(line).ok()?;
+        value.get("sessionId")?.as_str().map(str::to_owned)
+    })?;
+    Some(
+        Path::new(CONFIG_WSL)
+            .join("projects")
+            .join(record_name(RESUME_FOLDER))
+            .join(format!("{id}.jsonl")),
+    )
+}
+
 /// Copies the captures and the written replay files to [`REPLAY_WSL`].
 pub fn copy_replays(root: &Path) -> anyhow::Result<()> {
     let mut files = Vec::new();
@@ -165,6 +192,28 @@ pub fn copy_replays(root: &Path) -> anyhow::Result<()> {
             .with_context(|| format!("could not copy {} to {}", from.display(), to.display()))?;
     }
     println!("==> copied {} replay files to {REPLAY}", copies.len());
+    copy_transcripts(&replay_dirs(root)[0])
+}
+
+/// Copies the transcripts of the resume scene into the config directory it reads.
+fn copy_transcripts(captures: &Path) -> anyhow::Result<()> {
+    for name in TRANSCRIPTS {
+        let from = captures.join(name);
+        let content = std::fs::read_to_string(&from)
+            .with_context(|| format!("could not read {}", from.display()))?;
+        let to = transcript_copy(&content)
+            .with_context(|| format!("{name} has no line with a session id"))?;
+        if let Some(dir) = to.parent() {
+            std::fs::create_dir_all(dir)
+                .with_context(|| format!("could not create {}", dir.display()))?;
+        }
+        std::fs::copy(&from, &to)
+            .with_context(|| format!("could not copy {} to {}", from.display(), to.display()))?;
+    }
+    println!(
+        "==> copied {} transcripts to {CONFIG_DIR}",
+        TRANSCRIPTS.len()
+    );
     Ok(())
 }
 
@@ -310,6 +359,20 @@ pub fn scene_args(scene: PerfScene) -> Vec<String> {
             args.extend(["--pace", "30", "--exit-after-replay", "3000"].map(str::to_owned));
             args
         }
+        // The popup opens at the start over a one-slot replay whose folder is the project; its
+        // saved sessions are read from the config directory the copy fills.
+        PerfScene::Resume => vec![
+            "--replay".into(),
+            replay("01-baseline-text.ndjson"),
+            "--folder".into(),
+            PROJECT_WSL.into(),
+            "--config-dir".into(),
+            CONFIG_DIR.into(),
+            "--open".into(),
+            "resume".into(),
+            "--exit-after-replay".into(),
+            "3000".into(),
+        ],
         PerfScene::Idle => vec![
             "--replay".into(),
             replay("gallery.ndjson"),
@@ -751,6 +814,25 @@ mod tests {
     }
 
     #[test]
+    fn the_transcripts_go_where_the_scene_reads_them() {
+        // The id comes from the first line that has one, not from the file name.
+        let content = concat!(
+            "{\"type\":\"summary\"}\n",
+            "{\"type\":\"user\",\"sessionId\":\"aaaa-1\"}\n",
+            "{\"type\":\"user\",\"sessionId\":\"bbbb-2\"}\n",
+        );
+        assert_eq!(
+            transcript_copy(content),
+            Some(PathBuf::from(
+                "/mnt/c/dev/tools/closta/replay/config/projects/-home-me-closta/aaaa-1.jsonl"
+            ))
+        );
+        assert_eq!(transcript_copy("{\"type\":\"summary\"}\n"), None);
+        assert_eq!(CONFIG_DIR, r"C:\dev\tools\closta\replay\config");
+        assert_eq!(TRANSCRIPTS.len(), 3);
+    }
+
+    #[test]
     fn win_flags_take_release_run_and_a_comma_list_of_features() {
         let flags = parse_flags(
             &strings(&[
@@ -869,6 +951,26 @@ mod tests {
                 "12000".to_owned(),
             ]
         );
+    }
+
+    #[test]
+    fn the_resume_run_opens_the_popup_over_a_replay_of_the_project() {
+        let args = scene_args(PerfScene::Resume);
+        assert_eq!(
+            args[..2],
+            [
+                "--replay",
+                r"C:\dev\tools\closta\replay\01-baseline-text.ndjson"
+            ]
+        );
+        for pair in [
+            ["--folder", PROJECT_WSL],
+            ["--config-dir", CONFIG_DIR],
+            ["--open", "resume"],
+            ["--exit-after-replay", "3000"],
+        ] {
+            assert!(args.windows(2).any(|it| it == pair), "{pair:?} in {args:?}");
+        }
     }
 
     #[test]

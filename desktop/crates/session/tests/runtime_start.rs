@@ -11,20 +11,26 @@ mod support;
 use std::io::ErrorKind;
 use std::sync::{Arc, Mutex, PoisonError};
 
+use closta_presenter::composer_state::composer_state;
 use closta_presenter::input::SendId;
+use closta_providers::claude::fake::initialize::after_initialize;
 use closta_providers::claude::fake::live::{LiveControl, LiveOptions};
 use closta_providers::claude::fake::process::{ProcessScript, ProcessTermination};
 use closta_providers::claude::launch::env::SecretEnv;
 use closta_providers::claude::launch::spec::LaunchSpec;
 use closta_providers::claude::launch::{Launch, LaunchError};
 use closta_providers::claude::process::ProcessFailure;
+use closta_providers::claude::session::INITIALIZE_ID_PREFIX;
 use closta_session::launch::{NativeSessionLaunchPlanner, SessionLaunch, SessionLaunchPlanner};
 use closta_session::runtime::SessionRuntime;
 use closta_session::status::{SessionFailure, SessionStatus};
 use futures_lite::future;
 use serde_json::Value;
 
-use support::{GUARD, ID, Processes, VERSION, WORKING_DIR, drive, reach, runtime, statuses, until};
+use support::{
+    GUARD, ID, Processes, VERSION, WORKING_DIR, drive, handshake_commands, initialize_answer,
+    reach, runtime, statuses, until,
+};
 
 const INIT_MARK: &str = "\"subtype\":\"init\"";
 const GET_SETTINGS: &str = "\"subtype\":\"get_settings\"";
@@ -350,15 +356,17 @@ fn events_are_folded_into_the_conversation_and_commands_reach_the_process() {
                 .conversation
                 .session
                 .map(|session| session.version),
-            Some("2.1.282".to_owned())
+            Some("2.1.325".to_owned())
         );
 
         let commands = runtime.commands().expect("running");
         commands
             .send_message(send_id("send-1"), "hello", &[])
             .expect("sent");
-        // A session with no initialize asks for the settings at its first system/init. That
-        // request is written from the fold, so it may reach stdin before or after the user line.
+        control.skip_initialize().await;
+        // A session whose initialize is not answered asks for the settings at its first
+        // system/init. That request is written from the fold, so it may reach stdin before or
+        // after the user line.
         let lines = [next_line(&control).await, next_line(&control).await];
         assert!(lines.iter().any(|l| l.contains(GET_SETTINGS)), "{lines:?}");
         assert!(
@@ -373,7 +381,7 @@ fn events_are_folded_into_the_conversation_and_commands_reach_the_process() {
 }
 
 #[test]
-fn no_initialize_is_written_and_the_first_line_is_the_users() {
+fn the_first_line_a_session_writes_is_initialize() {
     drive(|executor| async move {
         let processes = Processes::new();
         let control = processes.prepare(LiveOptions::default());
@@ -385,14 +393,86 @@ fn no_initialize_is_written_and_the_first_line_is_the_users() {
             .expect("running")
             .send_message(send_id("send-1"), "hello", &[])
             .expect("sent");
-        let first = next_line(&control).await;
-        assert!(first.contains("\"type\":\"user\""), "{first}");
-        assert!(
-            !control
-                .stdin_lines()
-                .iter()
-                .any(|l| l.contains("\"subtype\":\"initialize\""))
+
+        let id = control.skip_initialize().await;
+        assert!(id.starts_with(INITIALIZE_ID_PREFIX), "{id}");
+        let next = next_line(&control).await;
+        assert!(next.contains("\"type\":\"user\""), "{next}");
+        let version_stdin = processes.version_stdin();
+        assert_eq!(version_stdin.len(), 1, "one version check");
+        assert!(version_stdin[0].is_empty(), "{version_stdin:?}");
+        runtime.close();
+        run.await;
+    });
+}
+
+#[test]
+fn the_answer_to_initialize_lists_the_commands_before_any_request() {
+    drive(|executor| async move {
+        let processes = Processes::new();
+        let control = processes.prepare(LiveOptions::default());
+        let (runtime, run, _log) = runtime(&processes, |_| {});
+        let run = executor.spawn(run);
+        reach(&runtime, running).await;
+        let id = control.skip_initialize().await;
+
+        control.emit(&initialize_answer(&id, true));
+        until(|| runtime.view().transcript.commands.detailed).await;
+        let view = runtime.view();
+        let commands = composer_state(&view.conversation, &view.transcript).commands;
+        assert_eq!(commands.len(), handshake_commands());
+        assert!(!commands.is_empty());
+        assert_eq!(view.transcript.routing.sends, 0, "before any request");
+        runtime.close();
+        run.await;
+    });
+}
+
+#[test]
+fn outside_the_sandbox_an_answer_with_no_models_asks_nothing_and_the_first_init_asks() {
+    drive(|executor| async move {
+        let processes = Processes::new();
+        let control = processes.prepare(LiveOptions::default());
+        let (runtime, run, _log) = runtime(&processes, |_| {});
+        let run = executor.spawn(run);
+        reach(&runtime, running).await;
+        let id = control.skip_initialize().await;
+
+        control.emit(&initialize_answer(&id, false));
+        until(|| runtime.view().transcript.commands.detailed).await;
+        smol::Timer::after(std::time::Duration::from_millis(100)).await;
+        assert_eq!(
+            control.stdin_lines().len(),
+            1,
+            "{:?}",
+            control.stdin_lines()
         );
+
+        control.emit(&init_line());
+        assert!(next_line(&control).await.contains(GET_SETTINGS));
+        runtime.close();
+        run.await;
+    });
+}
+
+#[test]
+fn sent_says_whether_a_request_went() {
+    drive(|executor| async move {
+        let processes = Processes::new();
+        let control = processes.prepare(LiveOptions::default());
+        let (runtime, run, _log) = runtime(&processes, |_| {});
+        let run = executor.spawn(run);
+        reach(&runtime, running).await;
+        control.skip_initialize().await;
+        assert!(!runtime.sent());
+
+        runtime
+            .commands()
+            .expect("running")
+            .send_message(send_id("send-1"), "hello", &[])
+            .expect("sent");
+        until(|| runtime.sent()).await;
+        assert!(next_line(&control).await.contains("\"type\":\"user\""));
         runtime.close();
         run.await;
     });
@@ -406,6 +486,7 @@ fn the_settings_are_asked_after_the_first_init_and_after_a_model_switch_the_cli_
         let (runtime, run, _log) = runtime(&processes, |_| {});
         let run = executor.spawn(run);
         reach(&runtime, running).await;
+        control.skip_initialize().await;
 
         control.emit(&init_line());
         assert!(next_line(&control).await.contains(GET_SETTINGS));
@@ -431,7 +512,7 @@ fn the_settings_are_asked_after_the_first_init_and_after_a_model_switch_the_cli_
             request_id(&switch)
         ));
         assert!(next_line(&control).await.contains(GET_SETTINGS));
-        let written = control.stdin_lines();
+        let written = after_initialize(control.stdin_lines());
         assert_eq!(written.len(), 3, "{written:?}");
         assert_eq!(
             written.iter().filter(|l| l.contains(GET_SETTINGS)).count(),
@@ -452,6 +533,7 @@ fn a_settings_request_that_cannot_be_written_is_logged_and_the_session_goes_on()
         let run = executor.spawn(run);
         reach(&runtime, running).await;
 
+        control.skip_initialize().await;
         // The CLI stops reading: the next write fails and the session's queue closes.
         control.close_stdin();
         runtime

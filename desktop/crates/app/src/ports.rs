@@ -18,6 +18,8 @@ use closta_shell::settings::SettingsSink;
 use closta_shell::state::Ports;
 use futures_lite::future;
 
+use crate::saved::{RealSavedFor, record_homes};
+
 /// The checks of this machine: the registry, `PATH` and the disk.
 pub struct RealChecks;
 
@@ -58,12 +60,14 @@ impl LaunchChecks for RealChecks {
 /// names.
 pub struct RealPlannerFor;
 
+/// The spawner that runs `program` in `location`'s distribution: the one maker of them, for
+/// `claude` and for the question of where the CLI keeps its records.
+pub fn wsl_spawner(location: &WslLocation, program: WslProgram) -> Arc<dyn ProcessSpawner> {
+    Arc::new(WslSpawner::new(location.clone(), program, BTreeSet::new()))
+}
+
 fn spawner_for(location: &WslLocation) -> Arc<dyn ProcessSpawner> {
-    Arc::new(WslSpawner::new(
-        location.clone(),
-        WslProgram::Claude,
-        BTreeSet::new(),
-    ))
+    wsl_spawner(location, WslProgram::Claude)
 }
 
 impl PlannerFor for RealPlannerFor {
@@ -86,6 +90,7 @@ pub fn real_ports(settings: Arc<dyn SettingsSink>) -> Ports {
         checks: Arc::new(RealChecks),
         planner_for: Arc::new(RealPlannerFor),
         settings,
+        saved_for: Arc::new(RealSavedFor::new(record_homes())),
     }
 }
 
@@ -110,5 +115,17 @@ mod tests {
     #[test]
     fn claude_on_path_reads_the_path_it_is_given() {
         assert_eq!(claude_on_path_in(""), ClaudeOnPath::Missing);
+    }
+
+    #[test]
+    fn one_maker_of_wsl_spawners() {
+        let location = WslLocation::parse(Some(r"\\wsl.localhost\Ubuntu-26.04\home\me"), true)
+            .expect("a WSL folder");
+
+        assert_eq!(spawner_for(&location).wsl_distro(), Some("Ubuntu-26.04"));
+        assert_eq!(
+            wsl_spawner(&location, WslProgram::Path("sh".to_owned())).wsl_distro(),
+            Some("Ubuntu-26.04")
+        );
     }
 }

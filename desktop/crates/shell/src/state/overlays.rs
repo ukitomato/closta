@@ -50,8 +50,8 @@ impl ShellState {
         Acted::default()
     }
 
-    /// The overlay that is up; the window's own steps come before a slot's question, and that
-    /// before the dialog.
+    /// The overlay that is up; the window's own steps come before a slot's question, that before
+    /// the dialog, and that before the resume popup.
     pub fn overlay(&self) -> Option<Overlay> {
         if self.closing == CloseStage::Closing {
             Some(Overlay::Closing)
@@ -61,6 +61,8 @@ impl ShellState {
             Some(Overlay::CloseSlot)
         } else if self.dialog.is_some() {
             Some(Overlay::NewSession)
+        } else if self.resume.is_some() {
+            Some(Overlay::Resume)
         } else {
             None
         }
@@ -87,15 +89,9 @@ impl ShellState {
         if self.dialog.is_some() {
             return Acted::default();
         }
-        let selected = self.selected.and_then(|slot| self.project_of(slot));
-        let under_cursor = || match self.nav_cursor()? {
-            NavItem::Project(key) => Some(key),
-            NavItem::Slot(slot) | NavItem::NeedsYou(slot) => self.project_of(*slot),
-        };
-        let folder = selected
-            .or_else(under_cursor)
-            .and_then(|key| self.projects.iter().find(|project| &project.key == key))
-            .map(|project| project.folder.clone())
+        let folder = self
+            .project_at_hand()
+            .and_then(|key| self.folder_of(key))
             .unwrap_or_default();
         let problem = quick_problem(&folder, self.ports.checks.as_ref());
         self.dialog = Some(NewSessionDialog {
@@ -107,6 +103,17 @@ impl ShellState {
             folder: true,
             ..Acted::default()
         }
+    }
+
+    /// The project of the selected slot, or else of the row under the list's cursor (the parent
+    /// of a slot there).
+    pub(super) fn project_at_hand(&self) -> Option<&ProjectKey> {
+        let selected = self.selected.and_then(|slot| self.project_of(slot));
+        let under_cursor = || match self.nav_cursor()? {
+            NavItem::Project(key) => Some(key),
+            NavItem::Slot(slot) | NavItem::NeedsYou(slot) => self.project_of(*slot),
+        };
+        selected.or_else(under_cursor)
     }
 
     pub(super) fn start_session(&mut self, folder: String) -> Acted {

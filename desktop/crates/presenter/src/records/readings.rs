@@ -12,7 +12,7 @@ use crate::records::operations::{
     CompactionRecord, MAX_COMPACTIONS, ModelRecord, OperationRecords, TokenTotals, pushed,
 };
 
-const UNKNOWN_TRIGGER: &str = "unknown";
+pub(crate) const UNKNOWN_TRIGGER: &str = "unknown";
 const COMPACTING: &str = "compacting";
 
 impl OperationRecords {

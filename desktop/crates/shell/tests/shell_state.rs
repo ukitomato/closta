@@ -10,7 +10,7 @@ use std::io::ErrorKind;
 use std::sync::Arc;
 use std::time::Duration;
 
-use closta_model::AppInfo;
+use closta_model::{AppInfo, SavedSessionSummary};
 use closta_presenter::input::PresenterInput;
 use closta_presenter::rows::{ThreadRow, ThreadRows};
 use closta_presenter::session::SessionView;
@@ -18,7 +18,9 @@ use closta_providers::claude::fake::live::LiveControl;
 use closta_providers::claude::launch::LaunchError;
 use closta_session::runtime::SessionRuntime;
 use closta_session::status::{SessionFailure, SessionStatus};
+use closta_shell::copy;
 use closta_shell::header::app_header;
+use closta_shell::new_session::{launch_in, resume_in};
 use closta_shell::panes::{LEFT_WIDTH, Pane, Panes, RIGHT_WIDTH};
 use closta_shell::rows::RowChange;
 use closta_shell::slot::{SlotId, SlotLaunch, SlotMark, Spawn, mark_of};
@@ -511,7 +513,7 @@ fn a_session_that_ends_mid_turn_is_not_running() {
         let mut shell = harness.shell();
         let baseline = lines("01-baseline-text");
         // Up to the first text delta: the turn is open.
-        let open = &baseline[..8];
+        let open = &baseline[..support::BASELINE_OPEN];
         for (n, code, end) in [(0, 0, SlotMark::Ended), (1, 3, SlotMark::Failed)] {
             let (launch, runtime) = harness.launch("mid-turn");
             let slot = shell.open(launch);
@@ -602,6 +604,8 @@ fn a_companion_runs_beside_the_session_with_its_runtime() {
             relaunch: None,
             project: None,
             settles_on_failure: false,
+            session_id: None,
+            resume: None,
         };
         let alone = shell.open(without);
         assert!(shell.watch(alone).is_some());
@@ -688,4 +692,337 @@ fn the_marks_follow_the_status_and_the_turn() {
         mark_of(&SessionStatus::Closed, false, false, false),
         SlotMark::Closed
     );
+}
+
+fn summary_of(id: &str, title: &str) -> SavedSessionSummary {
+    SavedSessionSummary {
+        id: id.to_owned(),
+        title: title.to_owned(),
+        updated_at_ms: 1,
+        bytes: 10,
+    }
+}
+
+const FOLDER: &str = r"C:\work\closta";
+
+#[test]
+fn a_resumed_launch_starts_its_id_with_its_record() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let ports = harness.ports();
+        let saved = summary_of("0b1f4c52-6a1e-4a43-9a53-7f0d2a4b8c11", "Fix the parser");
+        let slot = shell.open(resume_in(FOLDER, &saved, &ports));
+        harness.control(0).await;
+        let args = harness.launch_args(0).await;
+        assert!(args.contains(&format!("--resume={}", saved.id)), "{args:?}");
+        assert!(
+            !args.iter().any(|it| it.starts_with("--session-id")),
+            "{args:?}"
+        );
+        assert_eq!(shell.session_id(slot).as_deref(), Some(saved.id.as_str()));
+        assert_eq!(shell.slot_title(slot).as_deref(), Some("Fix the parser"));
+        assert_eq!(shell.slots()[0].title, "Fix the parser");
+
+        // The record was handed to the session: its background restore reads that id.
+        let fakes = harness.saved_for.fakes();
+        assert_eq!(fakes.len(), 1);
+        until(|| fakes[0].reads().contains(&saved.id)).await;
+    });
+}
+
+#[test]
+fn a_new_launch_starts_a_new_id() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let ports = harness.ports();
+        let first = shell.open(launch_in(FOLDER, &ports));
+        harness.control(0).await;
+        let second = shell.open(launch_in(FOLDER, &ports));
+        harness.control(1).await;
+        let (one, two) = (
+            shell.session_id(first).unwrap(),
+            shell.session_id(second).unwrap(),
+        );
+        assert_ne!(one, two);
+        for (n, id) in [(0, &one), (1, &two)] {
+            let args = harness.launch_args(n).await;
+            assert!(args.contains(&format!("--session-id={id}")), "{args:?}");
+            assert!(
+                !args.iter().any(|it| it.starts_with("--resume")),
+                "{args:?}"
+            );
+        }
+    });
+}
+
+#[test]
+fn the_title_of_a_resumed_slot_stays_after_its_first_request() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let ports = harness.ports();
+        let saved = summary_of("0b1f4c52-6a1e-4a43-9a53-7f0d2a4b8c11", "Fix the parser");
+        let (sender, receiver) = async_channel::bounded(1);
+        let slot = shell.open(SlotLaunch {
+            companion: Some(Box::new(move |runtime| {
+                Box::pin(async move {
+                    _ = sender.send(runtime).await;
+                })
+            })),
+            ..resume_in(FOLDER, &saved, &ports)
+        });
+        let runtime = receiver.recv().await.unwrap();
+        until(|| runtime.commands().is_some()).await;
+        let control = harness.control(0).await;
+        control.skip_initialize().await;
+        shell.act(ShellAction::EditDraft {
+            slot,
+            text: "something else entirely".to_owned(),
+        });
+        shell.act(ShellAction::Send { slot });
+        control.next_stdin_line().await.expect("the request");
+        let generation = shell.watch(slot).unwrap().generation();
+        shell.refresh(slot, generation, 0).unwrap();
+        assert!(
+            shell
+                .rows(slot)
+                .iter()
+                .any(|it| matches!(it, ThreadRow::Ask(_))),
+            "the request is in the conversation"
+        );
+        assert_eq!(shell.slot_title(slot).as_deref(), Some("Fix the parser"));
+    });
+}
+
+#[test]
+fn replacing_a_slot_rewrites_its_session_id() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let ports = harness.ports();
+        let saved = summary_of("0b1f4c52-6a1e-4a43-9a53-7f0d2a4b8c11", "Fix the parser");
+        let slot = shell.open(resume_in(FOLDER, &saved, &ports));
+        harness.control(0).await;
+        assert_eq!(shell.session_id(slot).as_deref(), Some(saved.id.as_str()));
+        shell.replace(slot, launch_in(FOLDER, &ports)).unwrap();
+        harness.control(1).await;
+        let id = shell.session_id(slot).unwrap();
+        assert_ne!(id, saved.id);
+        let args = harness.launch_args(1).await;
+        assert!(args.contains(&format!("--session-id={id}")), "{args:?}");
+        assert_eq!(shell.slot_title(slot).as_deref(), Some("New session"));
+    });
+}
+
+#[test]
+fn a_resume_without_a_title_is_still_a_resume() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let ports = harness.ports();
+        let mut launch = resume_in(
+            FOLDER,
+            &summary_of("0b1f4c52-6a1e-4a43-9a53-7f0d2a4b8c11", "x"),
+            &ports,
+        );
+        launch.resume.as_mut().unwrap().saved_title = None;
+        let slot = shell.open(launch);
+        harness.control(0).await;
+        let args = harness.launch_args(0).await;
+        assert!(
+            args.iter().any(|it| it.starts_with("--resume=")),
+            "{args:?}"
+        );
+        assert!(shell.resumed(slot), "the slot records the opening");
+    });
+}
+
+#[test]
+fn a_replace_with_the_same_id_keeps_both_runs() {
+    drive(|harness| async move {
+        harness.stubborn();
+        let mut shell = harness.shell();
+        let (mut launch, runtime) = harness.launch("stubborn");
+        launch.session_id = Some("same-id".to_owned());
+        let slot = shell.open(launch);
+        let runtime = runtime.recv().await.unwrap();
+        running(&runtime).await;
+        let old = harness.control(0).await;
+
+        let (mut launch, _) = harness.launch("next");
+        launch.session_id = Some("same-id".to_owned());
+        shell.replace(slot, launch).unwrap();
+        assert_eq!(shell.session_id(slot).as_deref(), Some("same-id"));
+        assert_eq!(shell.live_runs(), 2, "the old run has not returned");
+        assert!(shell.run_alive("same-id"));
+
+        old.exit(0);
+        until(|| shell.live_runs() == 1).await;
+        assert!(shell.run_alive("same-id"), "the new run stays");
+        assert!(!shell.run_alive("other-id"));
+    });
+}
+
+/// Opens a restartable slot in `FOLDER` (or the saved session `saved`) and waits until it runs.
+async fn running_slot(
+    harness: &Harness,
+    shell: &mut ShellState,
+    launch: SlotLaunch,
+    n: usize,
+) -> (SlotId, LiveControl) {
+    let slot = shell.open(launch);
+    let control = harness.control(n).await;
+    until_running(shell, slot).await;
+    (slot, control)
+}
+
+/// Refreshes the slot until its session runs.
+async fn until_running(shell: &mut ShellState, slot: SlotId) {
+    for _ in 0..500 {
+        let generation = shell.watch(slot).unwrap().generation();
+        shell.refresh(slot, generation, 0).unwrap();
+        if matches!(shell.status(slot), Some(SessionStatus::Running { .. })) {
+            return;
+        }
+        Timer::after(Duration::from_millis(10)).await;
+    }
+    panic!("the session did not run");
+}
+
+/// Sends `text` from the slot and waits until the process has read it.
+async fn send_from(shell: &mut ShellState, slot: SlotId, control: &LiveControl, text: &str) {
+    shell.act(ShellAction::EditDraft {
+        slot,
+        text: text.to_owned(),
+    });
+    shell.act(ShellAction::Send { slot });
+    control.skip_initialize().await;
+    control.next_stdin_line().await.expect("the request");
+    let generation = shell.watch(slot).unwrap().generation();
+    shell.refresh(slot, generation, 0).unwrap();
+}
+
+/// Ends the slot's process and waits until its run has returned and the slot shows it.
+async fn end_and_return(shell: &mut ShellState, slot: SlotId, control: &LiveControl) {
+    let mut watch = shell.watch(slot).unwrap();
+    control.exit(0);
+    while watch.changed().await {}
+    shell.refresh(slot, watch.generation(), 0).unwrap();
+    assert_eq!(shell.status(slot), Some(SessionStatus::Ended));
+    until(|| shell.live_runs() == 0).await;
+}
+
+#[test]
+fn a_restart_after_a_request_continues_the_conversation() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let ports = harness.ports();
+        let (slot, control) =
+            running_slot(&harness, &mut shell, launch_in(FOLDER, &ports), 0).await;
+        let id = shell.session_id(slot).unwrap();
+        send_from(&mut shell, slot, &control, "hello").await;
+        end_and_return(&mut shell, slot, &control).await;
+        assert!(shell.restart_resumes(slot));
+        assert_eq!(shell.restart_note(slot), Some(copy::RESTART_CONTINUES));
+        let acted = shell.act(ShellAction::Restart { slot });
+        assert_eq!(acted.started, Some(slot));
+        let args = harness.launch_args(1).await;
+        assert!(args.contains(&format!("--resume={id}")), "{args:?}");
+        assert!(
+            !args.iter().any(|it| it.starts_with("--session-id")),
+            "{args:?}"
+        );
+        assert_eq!(shell.session_id(slot).as_deref(), Some(id.as_str()));
+        assert!(shell.resumed(slot));
+    });
+}
+
+#[test]
+fn a_restart_with_nothing_sent_starts_the_same_id_again() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let ports = harness.ports();
+        let (slot, control) =
+            running_slot(&harness, &mut shell, launch_in(FOLDER, &ports), 0).await;
+        let id = shell.session_id(slot).unwrap();
+        end_and_return(&mut shell, slot, &control).await;
+        assert!(!shell.restart_resumes(slot));
+        assert_eq!(shell.restart_note(slot), Some(copy::RESTART_AGAIN));
+        let acted = shell.act(ShellAction::Restart { slot });
+        assert_eq!(acted.started, Some(slot));
+        let args = harness.launch_args(1).await;
+        assert!(args.contains(&format!("--session-id={id}")), "{args:?}");
+        assert!(
+            !args.iter().any(|it| it.starts_with("--resume")),
+            "{args:?}"
+        );
+        assert_eq!(shell.session_id(slot).as_deref(), Some(id.as_str()));
+        assert!(!shell.resumed(slot));
+    });
+}
+
+#[test]
+fn a_restart_of_a_resumed_slot_continues_and_keeps_its_title() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let ports = harness.ports();
+        let saved = summary_of("0b1f4c52-6a1e-4a43-9a53-7f0d2a4b8c11", "Fix the parser");
+        let (slot, control) =
+            running_slot(&harness, &mut shell, resume_in(FOLDER, &saved, &ports), 0).await;
+        end_and_return(&mut shell, slot, &control).await;
+        assert_eq!(shell.restart_note(slot), Some(copy::RESTART_CONTINUES));
+        shell.act(ShellAction::Restart { slot });
+        let args = harness.launch_args(1).await;
+        assert!(args.contains(&format!("--resume={}", saved.id)), "{args:?}");
+        assert!(
+            !args.iter().any(|it| it.starts_with("--session-id")),
+            "{args:?}"
+        );
+        assert_eq!(shell.session_id(slot).as_deref(), Some(saved.id.as_str()));
+        assert_eq!(shell.slot_title(slot).as_deref(), Some("Fix the parser"));
+    });
+}
+
+#[test]
+fn a_send_after_a_restart_has_an_id_not_used_before() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let ports = harness.ports();
+        let (slot, control) =
+            running_slot(&harness, &mut shell, launch_in(FOLDER, &ports), 0).await;
+        send_from(&mut shell, slot, &control, "first").await;
+        let sent_ids = |shell: &ShellState| -> Vec<String> {
+            shell
+                .rows(slot)
+                .iter()
+                .filter_map(|row| match row {
+                    ThreadRow::Ask(ask) => Some(ask.key.clone()),
+                    _ => None,
+                })
+                .collect()
+        };
+        assert_eq!(sent_ids(&shell), vec!["s1".to_owned()]);
+        end_and_return(&mut shell, slot, &control).await;
+        shell.act(ShellAction::Restart { slot });
+        let (second, _) = (harness.control(1).await, ());
+        until_running(&mut shell, slot).await;
+        send_from(&mut shell, slot, &second, "again").await;
+        let ids = sent_ids(&shell);
+        assert_eq!(ids.len(), 1, "{ids:?}");
+        assert_ne!(ids[0], "s1");
+    });
+}
+
+#[test]
+fn a_restart_is_offered_once_the_old_run_returned() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let ports = harness.ports();
+        let (slot, control) =
+            running_slot(&harness, &mut shell, launch_in(FOLDER, &ports), 0).await;
+        let mut watch = shell.watch(slot).unwrap();
+        control.exit(0);
+        while watch.changed().await {}
+        shell.refresh(slot, watch.generation(), 0).unwrap();
+        assert_eq!(shell.status(slot), Some(SessionStatus::Ended));
+        until(|| shell.live_runs() == 0).await;
+        assert!(shell.can_restart(slot));
+    });
 }

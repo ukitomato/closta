@@ -30,6 +30,9 @@ use futures_lite::{StreamExt, future, stream};
 use crate::claude::process::{AgentProcess, ProcessFailure};
 use crate::claude::protocol::{decode, encode};
 
+/// The prefix of the request id of the initialize a session queues first.
+pub const INITIALIZE_ID_PREFIX: &str = "closta-init-";
+
 /// The sending side of a session. Every command queues one line for stdin and never waits; once
 /// the session has ended, or a write has failed, it is refused with [`SendError::Closed`].
 pub struct ClaudeSession {
@@ -110,6 +113,16 @@ impl ClaudeSession {
                 stdin: Box::new(stdin_rx),
             },
         }
+    }
+
+    /// Queues the initialize request and returns its request id. Call it right after
+    /// [`ClaudeSession::start`] so that it is the first line written. It declares no
+    /// `perTaskStopAffordance`: there is no per-task stop control, so an interrupt must stop
+    /// background tasks too.
+    pub fn queue_initialize(&self) -> Result<String, SendError> {
+        let id = format!("{INITIALIZE_ID_PREFIX}{}", Self::new_id());
+        self.send(encode::initialize(&id, &[], false))?;
+        Ok(id)
     }
 
     fn send(&self, line: String) -> Result<(), SendError> {

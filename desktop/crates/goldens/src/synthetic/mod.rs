@@ -38,6 +38,9 @@ pub struct Shape {
     pub longest_text: usize,
 }
 
+/// The session the synthetic lines say.
+const SESSION: &str = "synthetic";
+
 pub const LARGEST: Shape = Shape {
     turns: 200,
     tools: 2_000,
@@ -103,7 +106,7 @@ pub fn session(shape: &Shape, seed: u64) -> Vec<SyntheticTurn> {
     };
     (0..shape.turns)
         .map(|turn| {
-            let mut script = StreamScript::new("synthetic");
+            let mut script = StreamScript::new(SESSION);
             let command = format!("cmd-{turn}");
             script.lifecycle(&command, "queued");
             script.lifecycle(&command, "started");
@@ -169,22 +172,225 @@ pub fn steps(shape: &Shape) -> Vec<PresenterInput> {
     session(shape, 1)
         .into_iter()
         .enumerate()
-        .flat_map(|(index, turn)| {
-            let sent = PresenterInput::UserSent(UserSent {
-                message_id: SendId::new(&format!("u{index}"))
-                    .unwrap_or_else(|| panic!("u{index} is not a key")),
-                text: turn.prompt,
-                attachments: Vec::new(),
-                uuid: None,
-            });
-            std::iter::once(sent).chain(
-                turn.lines
-                    .iter()
-                    .map(|line| PresenterInput::Event(decode(line)))
-                    .collect::<Vec<_>>(),
-            )
+        .flat_map(|(index, turn)| turn_steps(index, turn))
+        .collect()
+}
+
+/// A turn is mixed in per this many turns of the shape: half of [`LARGEST`]'s, so the largest
+/// session compacts and keeps tasks before its `/clear` too.
+const SESSION_LINE_INTERVAL: usize = 100;
+const TASK_CREATES: usize = 3;
+const TASK_UPDATES: usize = 2;
+/// The session the CLI goes on under after the `/clear` (capture 41's init after its reset names
+/// a new one).
+const CLEARED_SESSION: &str = "synthetic-cleared";
+
+/// [`steps`] with the lines of a session that `/clear`s, compacts and keeps tasks: after every
+/// 100th turn a compaction and then a turn of `TaskCreate` x3 and `TaskUpdate` x2, and one
+/// `/clear` in the whole conversation, three quarters of the way through, after which the lines
+/// say the new session. Only the budgets use it; the plain [`steps`] stay what the gallery and the
+/// other budgets read.
+pub fn steps_with_session_lines(shape: &Shape) -> Vec<PresenterInput> {
+    let clear_after = shape.turns * 3 / 4;
+    let mut extra = 0;
+    let mut out = Vec::new();
+    for (index, mut turn) in session(shape, 1).into_iter().enumerate() {
+        if index == clear_after {
+            out.extend(clear_turn());
+        }
+        let session = if index < clear_after {
+            SESSION
+        } else {
+            turn.lines = under(&turn.lines, CLEARED_SESSION);
+            CLEARED_SESSION
+        };
+        out.extend(turn_steps(index, turn));
+        if (index + 1) % SESSION_LINE_INTERVAL == 0 {
+            out.extend(compact_turn(extra, session));
+            out.extend(tasks_turn(extra, session));
+            extra += 1;
+        }
+    }
+    out
+}
+
+/// `lines` saying `session` as their session id.
+fn under(lines: &[String], session: &str) -> Vec<String> {
+    lines
+        .iter()
+        .map(|line| match serde_json::from_str::<Value>(line) {
+            Ok(Value::Object(mut fields)) if fields.contains_key("session_id") => {
+                fields.insert("session_id".into(), session.into());
+                Value::Object(fields).to_string()
+            }
+            _ => line.clone(),
         })
         .collect()
+}
+
+fn turn_steps(index: usize, turn: SyntheticTurn) -> Vec<PresenterInput> {
+    let mut all = vec![user_sent(&format!("u{index}"), turn.prompt, None)];
+    all.extend(decoded(&turn.lines));
+    all
+}
+
+fn user_sent(id: &str, text: String, uuid: Option<String>) -> PresenterInput {
+    PresenterInput::UserSent(UserSent {
+        message_id: SendId::new(id).unwrap_or_else(|| panic!("{id} is not a key")),
+        text,
+        attachments: Vec::new(),
+        uuid,
+    })
+}
+
+fn decoded(lines: &[String]) -> Vec<PresenterInput> {
+    lines
+        .iter()
+        .map(|line| PresenterInput::Event(decode(line)))
+        .collect()
+}
+
+/// A line of `kind` the script has no writer for.
+fn raw_line(kind: &str, session: &str, uuid: &str, fields: Value) -> String {
+    let mut object = json!({ "type": kind });
+    if let (Value::Object(object), Value::Object(fields)) = (&mut object, fields) {
+        object.extend(fields);
+        object.insert("session_id".into(), session.into());
+        object.insert("uuid".into(), uuid.into());
+    }
+    object.to_string()
+}
+
+/// `/clear` (capture 41): the command, the reset, an init under a new session, the command done.
+fn clear_turn() -> Vec<PresenterInput> {
+    let command = "cmd-clear";
+    let mut before = StreamScript::new(SESSION);
+    before.lifecycle(command, "queued");
+    before.lifecycle(command, "started");
+    let mut lines = before.lines();
+    lines.push(raw_line(
+        "conversation_reset",
+        SESSION,
+        "clear-conversation",
+        json!({
+            "new_conversation_id": "clear-conversation",
+            "trigger": "clear",
+            "user_message_uuid": command,
+            "timestamp": "2026-11-03T00:00:00.000Z",
+        }),
+    ));
+    let mut after = StreamScript::new(CLEARED_SESSION);
+    after.init();
+    after.lifecycle(command, "completed");
+    lines.extend(after.lines());
+    let mut all = vec![user_sent(
+        "u-clear",
+        "/clear".to_owned(),
+        Some(command.to_owned()),
+    )];
+    all.extend(decoded(&lines));
+    all
+}
+
+/// `/compact` (capture 21 lines 16 to 22, 24 and 25): the command, `compacting`, the status that
+/// ends it, the init, the boundary, the summary's user line, the result, the command done.
+fn compact_turn(n: usize, session: &str) -> Vec<PresenterInput> {
+    let command = format!("cmd-compact-{n}");
+    let mut script = StreamScript::new(session);
+    script.lifecycle(&command, "queued");
+    script.lifecycle(&command, "started");
+    let mut lines = script.lines();
+    lines.push(raw_line(
+        "system",
+        session,
+        &format!("compacting-{n}"),
+        json!({ "subtype": "status", "status": "compacting" }),
+    ));
+    lines.push(raw_line(
+        "system",
+        session,
+        &format!("compacted-{n}"),
+        json!({ "subtype": "status", "status": null, "compact_result": "success" }),
+    ));
+    let mut init = StreamScript::new(session);
+    init.init();
+    lines.extend(init.lines());
+    lines.push(raw_line(
+        "system",
+        session,
+        &format!("boundary-{n}"),
+        json!({
+            "subtype": "compact_boundary",
+            "compact_metadata": { "trigger": "manual", "pre_tokens": 21819, "post_tokens": 3447 },
+        }),
+    ));
+    lines.push(raw_line(
+        "user",
+        session,
+        &format!("summary-{n}"),
+        json!({
+            "message": { "role": "user", "content": "This session is being continued." },
+            "parent_tool_use_id": null,
+            "timestamp": "2026-11-03T00:00:00.000Z",
+            "isReplay": false,
+            "isSynthetic": true,
+        }),
+    ));
+    let mut done = StreamScript::new(session);
+    done.result("compacted");
+    done.lifecycle(&command, "completed");
+    lines.extend(done.lines());
+    let mut all = vec![user_sent(
+        &format!("u-compact-{n}"),
+        "/compact".to_owned(),
+        Some(command),
+    )];
+    all.extend(decoded(&lines));
+    all
+}
+
+/// A turn that creates three tasks and updates two, each answered.
+fn tasks_turn(n: usize, session: &str) -> Vec<PresenterInput> {
+    let command = format!("cmd-tasks-{n}");
+    let mut script = StreamScript::new(session);
+    script.lifecycle(&command, "queued");
+    script.lifecycle(&command, "started");
+    let first = n * TASK_CREATES + 1;
+    let calls = (0..TASK_CREATES)
+        .map(|it| {
+            let id = first + it;
+            (
+                "TaskCreate",
+                json!({ "subject": format!("task {id}"), "description": format!("task {id}") }),
+                format!("Task #{id} created successfully: task {id}"),
+            )
+        })
+        .chain((0..TASK_UPDATES).map(|it| {
+            let id = first + it;
+            (
+                "TaskUpdate",
+                json!({ "taskId": id.to_string(), "status": "completed" }),
+                format!("Updated task #{id} status"),
+            )
+        }));
+    for (index, (tool, input, answer)) in calls.enumerate() {
+        let id = format!("toolu_tasks_{n}_{index}");
+        script.assistant(
+            &format!("msg_tasks_{n}_{index}"),
+            vec![stream_script::tool_use(&id, tool, input)],
+            None,
+        );
+        script.tool_result(&id, &answer, None, false);
+    }
+    script.result("done");
+    script.lifecycle(&command, "completed");
+    let mut all = vec![user_sent(
+        &format!("u-tasks-{n}"),
+        "Keep the tasks".to_owned(),
+        Some(command),
+    )];
+    all.extend(decoded(&script.lines()));
+    all
 }
 
 /// The session of `shape` drawn from `seed` as a replay file's lines: each turn's prompt as a user

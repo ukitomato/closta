@@ -105,23 +105,23 @@ fn base64_block(kind: &str, media_type: &str, bytes: &[u8]) -> Value {
 }
 
 /// `initialize`. The two mcp-server fields must be arrays of strings: the CLI rejects `{}`.
-/// `sdk_mcp_servers` names the in-process MCP servers the host answers for.
-pub fn initialize(request_id: &str, sdk_mcp_servers: &[String]) -> String {
-    control_request(
-        request_id,
-        object([
-            ("subtype", "initialize".into()),
-            ("hooks", Map::new().into()),
-            ("sdkMcpServers", sdk_mcp_servers.into()),
-            (
-                "webSearchIsolationExemptMcpServers",
-                Value::Array(Vec::new()),
-            ),
-            // The host shows a stop control per task, so an interrupt leaves background tasks
-            // running.
-            ("perTaskStopAffordance", true.into()),
-        ]),
-    )
+/// `sdk_mcp_servers` names the in-process MCP servers the host answers for. `per_task_stop`
+/// declares that the host shows a stop control per task, so an interrupt leaves background
+/// tasks running; when false the key is left out and an interrupt stops them too.
+pub fn initialize(request_id: &str, sdk_mcp_servers: &[String], per_task_stop: bool) -> String {
+    let mut request = object([
+        ("subtype", "initialize".into()),
+        ("hooks", Map::new().into()),
+        ("sdkMcpServers", sdk_mcp_servers.into()),
+        (
+            "webSearchIsolationExemptMcpServers",
+            Value::Array(Vec::new()),
+        ),
+    ]);
+    if per_task_stop {
+        request.insert("perTaskStopAffordance".into(), true.into());
+    }
+    control_request(request_id, request)
 }
 
 /// `interrupt` as a control_request. See also [`cancel_request`] for the top-level form.
@@ -370,8 +370,18 @@ mod tests {
 
     #[test]
     fn initialize_declares_that_each_task_can_be_stopped_on_its_own() {
-        let line = json(&initialize("R", &[]));
+        let line = json(&initialize("R", &[], true));
         assert_eq!(line["request"]["perTaskStopAffordance"], true);
+    }
+
+    #[test]
+    fn an_initialize_without_per_task_stop_leaves_the_key_out() {
+        let off = json(&initialize("R", &[], false));
+        assert!(off["request"].get("perTaskStopAffordance").is_none());
+        assert_eq!(off["request"]["subtype"], "initialize");
+        let on = initialize("R", &[], true);
+        assert_eq!(json(&on)["request"]["perTaskStopAffordance"], true);
+        assert_eq!(on, INITIALIZE_R);
     }
 
     #[test]
@@ -385,7 +395,7 @@ mod tests {
 
     #[test]
     fn initialize_sends_arrays_not_objects_for_the_mcp_server_fields() {
-        let line = initialize("R", &[]);
+        let line = initialize("R", &[], true);
         assert_eq!(json(&line), json(INITIALIZE_R));
         let request = &json(&line)["request"];
         // The CLI rejects `{}` here: "sdkMcpServers ... must be arrays of strings".
@@ -402,7 +412,7 @@ mod tests {
 
     #[test]
     fn initialize_without_server_names_is_byte_identical_to_the_line_written_before_they_existed() {
-        assert_eq!(initialize("R", &[]), INITIALIZE_R);
+        assert_eq!(initialize("R", &[], true), INITIALIZE_R);
     }
 
     #[test]
@@ -413,7 +423,7 @@ mod tests {
             r#""perTaskStopAffordance":true}}"#
         );
         let names = ["ide-context".to_string(), "other".to_string()];
-        assert_eq!(initialize("R", &names), expected);
+        assert_eq!(initialize("R", &names, true), expected);
     }
 
     #[test]
@@ -563,7 +573,7 @@ mod tests {
             user_message("S", "U", "hi", &[]),
             user_message("S", "U", "hi", &[])
         );
-        assert_eq!(initialize("R", &[]), initialize("R", &[]));
+        assert_eq!(initialize("R", &[], true), initialize("R", &[], true));
         assert_eq!(
             allow("R", r#"{"a":1}"#, None),
             allow("R", r#"{"a":1}"#, None)

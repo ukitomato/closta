@@ -1,5 +1,7 @@
 //! How the tree spells what the operations console shows: the models, the switches, the context,
 //! the compactions (OperationNodes.kt) and the last rewind (RewindRecords.kt's `rewindNode`).
+//! The usage answer (`usage`, `usage_waiting`) has no node: the tree does not show it, as
+//! ProjectionMemo.kt leaves it out.
 
 use closta_presenter::records::operations::{
     CompactionRecord, ContextRecord, ModelRecord, SwitchRecord,

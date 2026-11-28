@@ -10,7 +10,7 @@ use std::sync::Arc;
 use serde_json::Value;
 
 use crate::keyed::{Keyed, of_cli_id};
-use crate::transcript::{MessageRecord, PartRecord, Routing, ToolCallRecord, Transcript};
+use crate::transcript::{Denial, MessageRecord, PartRecord, Routing, ToolCallRecord, Transcript};
 
 /// The message at `location`, or `None` when the path does not lead to one.
 pub fn message_at<'a>(
@@ -164,7 +164,7 @@ pub fn update_part(
 }
 
 /// Adds `record` as part `key` of the message at `location`, unless the message already has that
-/// part.
+/// part. A call is routed to by its key, and takes the refusal that was waiting for it.
 pub fn add_part(
     transcript: &Arc<Transcript>,
     location: &[String],
@@ -185,15 +185,54 @@ pub fn add_part(
             with_parts(message, message.parts.put(key.to_owned(), record))
         }),
     );
-    let held = added.routing.tools.get(key);
-    if !is_call || held.is_some_and(|it| **it == *location) {
+    if !is_call {
         return added;
     }
-    let mut routing = added.routing.clone();
-    routing
-        .tools
-        .insert(key.to_owned(), Arc::from(location.to_vec()));
-    replace_routing(&added, routing)
+    let held = added.routing.tools.get(key);
+    let routed = if held.is_some_and(|it| **it == *location) {
+        added
+    } else {
+        let mut routing = added.routing.clone();
+        routing
+            .tools
+            .insert(key.to_owned(), Arc::from(location.to_vec()));
+        replace_routing(&added, routing)
+    };
+    let Some(denial) = routed.denials.get(key).cloned() else {
+        return routed;
+    };
+    let mut denials = routed.denials.clone();
+    denials.remove(key);
+    let spent = Arc::new(Transcript {
+        denials,
+        ..Transcript::clone(&routed)
+    });
+    mark_denied(&spent, key, denial)
+}
+
+/// Marks the call `key` as refused for `denial`, wherever it is (a sub-agent's too); remembers the
+/// refusal when the call has no line yet. The same refusal again gives the same `Arc`.
+pub fn mark_denied(transcript: &Arc<Transcript>, key: &str, denial: Denial) -> Arc<Transcript> {
+    let Some(at) = transcript.routing.tools.get(key).cloned() else {
+        if transcript.denials.get(key) == Some(&denial) {
+            return Arc::clone(transcript);
+        }
+        let mut denials = transcript.denials.clone();
+        denials.insert(key.to_owned(), denial);
+        return Arc::new(Transcript {
+            denials,
+            ..Transcript::clone(transcript)
+        });
+    };
+    update_part(transcript, &at, key, |part| match part.as_ref() {
+        PartRecord::ToolCall(call) if call.denied.as_ref() != Some(&denial) => {
+            Arc::new(PartRecord::ToolCall(ToolCallRecord {
+                denied: Some(denial),
+                ..call.clone()
+            }))
+        }
+        _ => Arc::clone(part),
+    })
 }
 
 #[cfg(test)]

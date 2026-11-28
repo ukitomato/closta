@@ -13,7 +13,7 @@ use async_channel::Receiver;
 use closta_core::ports::{AgentSession, Clock, SendError};
 use closta_model::{ApprovalDecision, Attachment};
 use closta_providers::claude::fake::live::{LiveControl, LiveOptions, LiveProcess};
-use closta_providers::claude::fake::process::{FakeProcess, ProcessScript};
+use closta_providers::claude::fake::process::{FakeProcess, FakeProcessProbe, ProcessScript};
 use closta_providers::claude::fake::spawner::FakeSpawner;
 use closta_providers::claude::launch::env::SecretEnv;
 use closta_providers::claude::launch::{Launch, LaunchError};
@@ -153,7 +153,7 @@ pub fn fixed_clock(ms: u64) -> Arc<dyn Clock> {
 }
 
 /// The version every fake `claude --version` prints.
-pub const VERSION: &str = "2.1.282";
+pub const VERSION: &str = "2.1.325";
 /// How long a test waits for one thing to happen before it fails.
 pub const GUARD: Duration = Duration::from_secs(10);
 /// How long a whole test may take.
@@ -171,6 +171,7 @@ fn locked<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 struct Answers {
     sessions: VecDeque<Result<(LiveProcess, LiveControl), LaunchError>>,
     version: Option<ProcessScript>,
+    version_probes: Vec<FakeProcessProbe>,
     controls: Vec<LiveControl>,
     // The session spawns asked for so far, refused ones included.
     spawns: usize,
@@ -206,7 +207,8 @@ impl Processes {
                 let script = answers.version.clone().unwrap_or_else(|| {
                     ProcessScript::replaying(vec![format!("{VERSION} (Claude Code)")])
                 });
-                let (process, _probe) = FakeProcess::new(script);
+                let (process, probe) = FakeProcess::new(script);
+                answers.version_probes.push(probe);
                 return Ok(Box::new(process) as Box<dyn AgentProcess>);
             }
             let index = answers.spawns;
@@ -282,10 +284,65 @@ impl Processes {
             .collect()
     }
 
+    /// What each `--version` process handed out was written on stdin, in order.
+    pub fn version_stdin(&self) -> Vec<Vec<String>> {
+        locked(&self.answers)
+            .version_probes
+            .iter()
+            .map(FakeProcessProbe::stdin_lines)
+            .collect()
+    }
+
     /// The controls of the session processes handed out, in order.
     pub fn controls(&self) -> Vec<LiveControl> {
         locked(&self.answers).controls.clone()
     }
+}
+
+/// Capture 03, whose first line is the CLI's answer to the recorder's initialize.
+const HANDSHAKE: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../../jetbrains/src/main/kotlin/dev/ukitomato/closta/providers/claude/fixtures/",
+    "03-initialize-handshake.ndjson"
+));
+
+fn handshake_answer() -> serde_json::Value {
+    let first = HANDSHAKE
+        .lines()
+        .next()
+        .expect("capture 03 has a first line");
+    serde_json::from_str(first).expect("capture 03's first line is json")
+}
+
+/// Capture 03's answer to the initialize as the answer to `id`; with no model list when
+/// `models` is false.
+pub fn initialize_answer(id: &str, models: bool) -> String {
+    let mut answer = handshake_answer();
+    answer["response"]["request_id"] = id.into();
+    if !models {
+        answer["response"]["response"]
+            .as_object_mut()
+            .expect("the answer has a body")
+            .remove("models");
+    }
+    answer.to_string()
+}
+
+/// How many commands capture 03's answer to the initialize lists.
+pub fn handshake_commands() -> usize {
+    handshake_answer()["response"]["response"]["commands"]
+        .as_array()
+        .expect("the answer lists the commands")
+        .len()
+}
+
+/// The CLI refusing the initialize `id`.
+pub fn refused_initialize(id: &str) -> String {
+    serde_json::json!({
+        "type": "control_response",
+        "response": { "subtype": "error", "request_id": id, "error": "refused" }
+    })
+    .to_string()
 }
 
 /// A runtime of session [`ID`] in [`WORKING_DIR`], planned natively over `processes` with no

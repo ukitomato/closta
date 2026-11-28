@@ -8,7 +8,7 @@ use closta_session::launch::{SessionLaunch, SessionLaunchPlanner};
 use closta_session::log::TracingLog;
 use closta_session::status::SessionFailure;
 use closta_shell::header::AppHeader;
-use closta_shell::new_session::{ClaudeOnPath, LaunchChecks, PlannerFor};
+use closta_shell::new_session::{ClaudeOnPath, LaunchChecks, NoSaved, PlannerFor, SavedFor};
 use closta_shell::settings::{SavedProject, Settings};
 use closta_shell::slot::{SlotLaunch, Spawn};
 use closta_shell::state::{Ports, ShellAction, ShellState};
@@ -74,7 +74,7 @@ pub(crate) fn open(
     slots: usize,
 ) -> (AnyWindowHandle, Entity<ShellModel>, Asked) {
     let launches = (0..slots).map(|_| launch(None)).collect();
-    open_with(cx, &Settings::default(), launches, false)
+    open_with(cx, &Settings::default(), launches, false, Arc::new(NoSaved))
 }
 
 /// What [`open_tree`] starts with.
@@ -92,6 +92,15 @@ pub(crate) fn open_tree(
     cx: &mut TestAppContext,
     setup: TreeSetup<'_>,
 ) -> (AnyWindowHandle, Entity<ShellModel>) {
+    open_tree_saved(cx, setup, Arc::new(NoSaved))
+}
+
+/// [`open_tree`] on a machine whose projects have the saved sessions `saved_for` lists.
+pub(crate) fn open_tree_saved(
+    cx: &mut TestAppContext,
+    setup: TreeSetup<'_>,
+    saved_for: Arc<dyn SavedFor>,
+) -> (AnyWindowHandle, Entity<ShellModel>) {
     let settings = Settings {
         projects: setup
             .projects
@@ -108,7 +117,7 @@ pub(crate) fn open_tree(
         .iter()
         .map(|folder| launch(folder.map(str::to_owned)))
         .collect();
-    let (handle, model, _) = open_with(cx, &settings, launches, setup.run);
+    let (handle, model, _) = open_with(cx, &settings, launches, setup.run, saved_for);
     (handle, model)
 }
 
@@ -122,6 +131,8 @@ fn launch(project: Option<String>) -> SlotLaunch {
         relaunch: None,
         project,
         settles_on_failure: false,
+        session_id: None,
+        resume: None,
     }
 }
 
@@ -130,6 +141,7 @@ fn open_with(
     settings: &Settings,
     launches: Vec<SlotLaunch>,
     run: bool,
+    saved_for: Arc<dyn SavedFor>,
 ) -> (AnyWindowHandle, Entity<ShellModel>, Asked) {
     cx.update(gpui_kit::init);
     let asked = Asked::default();
@@ -139,6 +151,7 @@ fn open_with(
         }),
         planner_for: Arc::new(Never),
         settings: Arc::new(closta_shell::settings::MemorySettings),
+        saved_for,
     };
     let header = AppHeader {
         title: String::new(),

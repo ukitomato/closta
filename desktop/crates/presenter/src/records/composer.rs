@@ -13,11 +13,25 @@ use crate::transcript::Transcript;
 
 /// One slash command the CLI has. `argument_hint` is absent when the CLI gave none (or an empty
 /// one).
-#[derive(Clone, PartialEq, Eq, Debug)]
+///
+/// The name, description and hint come from the CLI and the user's account, so `Debug` leaves
+/// them out: it shows only the description's length and whether there is a hint.
+#[derive(Clone, PartialEq, Eq)]
 pub struct SlashCommandRecord {
     pub name: String,
     pub description: String,
     pub argument_hint: Option<String>,
+}
+
+impl fmt::Debug for SlashCommandRecord {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "SlashCommandRecord(description {} bytes, hint={})",
+            self.description.len(),
+            self.argument_hint.is_some()
+        )
+    }
 }
 
 /// The slash commands the thread shows. `detailed` says the list came from the `initialize`
@@ -65,23 +79,27 @@ impl ComposerFailure {
 /// has none. An entry without a name is left out; an empty hint is no hint.
 pub(crate) fn commands_of_response(response: Option<&Value>) -> Option<Arc<[SlashCommandRecord]>> {
     let commands = response?.as_object()?.obj("response")?.array("commands")?;
-    Some(
-        commands
-            .iter()
-            .filter_map(|item| {
-                let fields = item.as_object()?;
-                let name = fields.string("name").filter(|it| !it.is_empty())?;
-                Some(SlashCommandRecord {
-                    name: name.to_owned(),
-                    description: fields.string("description").unwrap_or_default().to_owned(),
-                    argument_hint: fields
-                        .string("argumentHint")
-                        .filter(|it| !it.is_empty())
-                        .map(str::to_owned),
-                })
+    Some(commands_of(commands))
+}
+
+/// The slash commands in `items`, each an object with a name, a sentence and a hint; one with no
+/// name is left out.
+pub(crate) fn commands_of(items: &[Value]) -> Arc<[SlashCommandRecord]> {
+    items
+        .iter()
+        .filter_map(|item| {
+            let fields = item.as_object()?;
+            let name = fields.string("name").filter(|it| !it.is_empty())?;
+            Some(SlashCommandRecord {
+                name: name.to_owned(),
+                description: fields.string("description").unwrap_or_default().to_owned(),
+                argument_hint: fields
+                    .string("argumentHint")
+                    .filter(|it| !it.is_empty())
+                    .map(str::to_owned),
             })
-            .collect(),
-    )
+        })
+        .collect()
 }
 
 /// The names of a `system/init`'s `slash_commands`, or `None` when it has none.

@@ -76,7 +76,7 @@ fn a_real_claude_answers_its_version_and_mcp_status_then_ends_when_stdin_closes(
 
     let talk = async {
         process
-            .write_stdin(encode::initialize("i1", &[]))
+            .write_stdin(encode::initialize("i1", &[], true))
             .await
             .expect("initialize is written");
         process

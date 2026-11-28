@@ -4,12 +4,19 @@
 
 use std::sync::Arc;
 
+use std::sync::atomic::AtomicBool;
+
+use closta_core::ports::SavedSessionsError;
+// Named here beside `SavedFor`, whose `saved` gives one, for the crates above the shell.
+pub use closta_core::ports::SavedSessions;
+use closta_model::{SavedSessionSummary, SavedTranscript};
 use closta_providers::claude::launch::wsl::{WslLocation, distro_named};
+use closta_session::history::SavedListing;
 use closta_session::launch::SessionLaunchPlanner;
 use futures_lite::future;
 
 use crate::copy;
-use crate::slot::SlotLaunch;
+use crate::slot::{SlotLaunch, SlotResume};
 use crate::state::Ports;
 
 /// Where a session's `claude` runs, decided by the folder.
@@ -38,6 +45,49 @@ pub trait LaunchChecks: Send + Sync {
 /// The planner that starts a session in `folder`.
 pub trait PlannerFor: Send + Sync {
     fn planner(&self, folder: &str) -> Arc<dyn SessionLaunchPlanner>;
+}
+
+/// The sessions the CLI saved for a project, read in the background and never on the
+/// foreground.
+pub trait SavedFor: Send + Sync {
+    /// The saved sessions of the project in `folder`; the same folder gives the same ones.
+    fn saved(&self, folder: &str) -> Arc<dyn SavedSessions>;
+    /// Reads the list in the background; `None` once `stop` turns true.
+    fn list(&self, folder: &str, stop: Arc<AtomicBool>) -> future::Boxed<Option<SavedListing>>;
+}
+
+/// A [`SavedFor`] that finds nothing saved anywhere: a stand-in for runs that read no records.
+pub struct NoSaved;
+
+struct NothingSaved;
+
+impl SavedSessions for NothingSaved {
+    fn list(
+        &self,
+        _stop: &dyn Fn() -> bool,
+    ) -> Result<Vec<SavedSessionSummary>, SavedSessionsError> {
+        Ok(Vec::new())
+    }
+
+    fn read(
+        &self,
+        _id: &str,
+        _stop: &dyn Fn() -> bool,
+    ) -> Result<SavedTranscript, SavedSessionsError> {
+        Err(SavedSessionsError::NoPlace)
+    }
+}
+
+impl SavedFor for NoSaved {
+    fn saved(&self, _folder: &str) -> Arc<dyn SavedSessions> {
+        Arc::new(NothingSaved)
+    }
+
+    fn list(&self, _folder: &str, stop: Arc<AtomicBool>) -> future::Boxed<Option<SavedListing>> {
+        Box::pin(async move {
+            (!stop.load(std::sync::atomic::Ordering::SeqCst)).then(SavedListing::default)
+        })
+    }
 }
 
 /// What a folder lacks, in the order the dialog names it.
@@ -161,6 +211,23 @@ pub fn launch_in(folder: &str, ports: &Ports) -> SlotLaunch {
         relaunch: Some(again),
         project: Some(folder),
         settles_on_failure: false,
+        session_id: None,
+        resume: None,
+    }
+}
+
+/// The launch that puts the saved session `summary` of the project in `folder` back, under its
+/// own id and title. Its relaunch is the folder's, which starts a new session.
+pub fn resume_in(folder: &str, summary: &SavedSessionSummary, ports: &Ports) -> SlotLaunch {
+    let folder = folder.trim();
+    SlotLaunch {
+        title: summary.title.clone(),
+        session_id: Some(summary.id.clone()),
+        resume: Some(SlotResume {
+            saved: ports.saved_for.saved(folder),
+            saved_title: Some(summary.title.clone()),
+        }),
+        ..launch_in(folder, ports)
     }
 }
 
@@ -373,6 +440,7 @@ mod tests {
             checks: Arc::new(Machine::new(&[], ClaudeOnPath::Found)),
             planner_for: Arc::clone(&planners) as _,
             settings: Arc::new(MemorySettings),
+            saved_for: Arc::new(NoSaved),
         };
         let launch = launch_in(r"  C:\work\closta ", &ports);
         assert_eq!(launch.title, "New session");

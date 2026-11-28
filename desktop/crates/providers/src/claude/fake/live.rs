@@ -139,6 +139,17 @@ impl LiveControl {
         Box::pin(async move { unread.recv().await.ok() })
     }
 
+    /// Reads the next unread stdin line, which must be the initialize a session queues first,
+    /// and returns its request id. Panics on any other line, or when stdin ended first.
+    pub fn skip_initialize(&self) -> future::Boxed<String> {
+        let next = self.next_stdin_line();
+        Box::pin(async move {
+            let line = next.await.expect("stdin ended before the initialize");
+            crate::claude::fake::initialize::initialize_id(&line)
+                .expect("the first stdin line is not the initialize")
+        })
+    }
+
     /// Closes stdin as a CLI that stops reading would: later writes fail with `BrokenPipe`, and
     /// the process keeps running.
     pub fn close_stdin(&self) {

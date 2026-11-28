@@ -5,7 +5,8 @@
 use std::collections::HashSet;
 
 use closta_presenter::rows::{
-    AskRow, CompactionRow, ExploredRow, ThinkingRow, ThreadRow, TodoRow, ToolRow, TurnEndRow,
+    AskRow, DividerRow, ExploredRow, NoticeLevel, NoticeRow, ThinkingRow, ThreadRow, TodoRow,
+    ToolRow, TurnEndRow,
 };
 use closta_presenter::tool_line::{ToolDetail, ToolLine, ToolLineState};
 use closta_shell::copy;
@@ -98,10 +99,8 @@ pub(super) fn row(
         ),
         ThreadRow::TurnEnd(end) => (turn_end_row(end, cx), copy::turn_end(end, false)),
         ThreadRow::SignIn(_) => (sign_in_row(cx), copy::SIGN_IN_TEXT.to_owned()),
-        ThreadRow::Compaction(compaction) => (
-            compaction_row(compaction, cx),
-            copy::compaction_line(compaction),
-        ),
+        ThreadRow::Divider(divider) => (divider_row(divider, cx), copy::divider_line(divider)),
+        ThreadRow::Notice(notice) => (notice_row(notice, cx), copy::notice_line(notice)),
     };
     let id = SharedString::from(format!("row-{}", row.key()));
     div()
@@ -167,8 +166,14 @@ pub(super) fn ask_row(ask: &AskRow, cx: &App) -> AnyElement {
         .into_any_element()
 }
 
-/// A compaction's divider: its line in the middle between two faint rules.
-pub(super) fn compaction_row(row: &CompactionRow, cx: &App) -> AnyElement {
+/// A divider where the conversation changed under the thread (a clear or a compaction): its line
+/// in the middle between two faint rules.
+pub(super) fn divider_row(row: &DividerRow, cx: &App) -> AnyElement {
+    ruled_line(copy::divider_line(row), cx)
+}
+
+/// `line` in the middle between two faint rules.
+fn ruled_line(line: String, cx: &App) -> AnyElement {
     let theme = cx.theme();
     let rule = || div().flex_1().h(px(1.)).bg(theme.border);
     h_flex()
@@ -180,7 +185,7 @@ pub(super) fn compaction_row(row: &CompactionRow, cx: &App) -> AnyElement {
             div()
                 .flex_none()
                 .text_color(theme.muted_foreground)
-                .child(copy::compaction_line(row)),
+                .child(line),
         )
         .child(rule())
         .into_any_element()
@@ -235,7 +240,7 @@ pub(super) fn thinking_row(
 fn tool_name(row: &ToolRow) -> String {
     match &row.agent {
         Some(summary) => copy::agent_line(summary, &row.line.label),
-        None => format!("{} — {}", row.line.label, copy::tool_state(row.line.state)),
+        None => format!("{} — {}", row.line.label, copy::tool_line_state(&row.line)),
     }
 }
 
@@ -342,13 +347,7 @@ pub(super) fn explored_row(
     cx: &App,
 ) -> AnyElement {
     let lines = row.lines();
-    let state = if lines.iter().any(|it| it.state == ToolLineState::Error) {
-        ToolLineState::Error
-    } else if lines.iter().any(|it| it.state == ToolLineState::Running) {
-        ToolLineState::Running
-    } else {
-        ToolLineState::Ok
-    };
+    let state = row.state();
     let line = h_flex()
         .gap_1p5()
         .items_center()
@@ -428,6 +427,22 @@ pub(super) fn turn_end_row(row: &TurnEndRow, cx: &App) -> AnyElement {
         .into_any_element()
 }
 
+/// A line of the CLI's own: a notice one faint line, a suggestion in the text's color, a warning
+/// in the warning's. Its words are the CLI's, drawn as plain text.
+pub(super) fn notice_row(row: &NoticeRow, cx: &App) -> AnyElement {
+    let theme = cx.theme();
+    let color = match row.level {
+        NoticeLevel::Notice => theme.muted_foreground,
+        NoticeLevel::Suggestion => theme.foreground,
+        NoticeLevel::Warning => theme.warning,
+    };
+    div()
+        .w_full()
+        .text_color(color)
+        .child(copy::notice_line(row))
+        .into_any_element()
+}
+
 /// The banner after a reply that said the CLI is not signed in. Its button signs in from a
 /// terminal, which 6a does not have yet.
 pub(super) fn sign_in_row(cx: &App) -> AnyElement {
@@ -481,8 +496,8 @@ fn tool_waits(state: ToolLineState, tool_use_id: &str, waiting: &HashSet<String>
     state == ToolLineState::Running && waiting.contains(tool_use_id)
 }
 
-/// A tool's state as a mark: done green, failed red, running faint, and a call that waits on a
-/// permission a warning, which does not turn.
+/// A tool's state as a mark: done green, failed red, refused a red cross, running faint, and a
+/// call that waits on a permission a warning, which does not turn.
 fn state_mark(state: ToolLineState, waits: bool, cx: &App) -> Icon {
     let theme = cx.theme();
     match state {
@@ -490,6 +505,7 @@ fn state_mark(state: ToolLineState, waits: bool, cx: &App) -> Icon {
         ToolLineState::Running => icon(IconName::LoaderCircle, theme.muted_foreground),
         ToolLineState::Ok => icon(IconName::CircleCheck, theme.success),
         ToolLineState::Error => icon(IconName::CircleX, theme.danger),
+        ToolLineState::Denied => icon(IconName::Close, theme.danger),
     }
 }
 

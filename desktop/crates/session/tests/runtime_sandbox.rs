@@ -18,6 +18,7 @@ use closta_presenter::input::SendId;
 use closta_presenter::records::operations::{SwitchKind, SwitchOutcome, SwitchRecord};
 use closta_presenter::refusal_sentence::plain_sentence_of;
 use closta_presenter::thread_running::thread_is_running;
+use closta_providers::claude::fake::initialize::{after_initialize, is_initialize};
 use closta_providers::claude::fake::live::{LiveControl, LiveOptions, LiveProcess};
 use closta_providers::claude::fake::process::{FakeProcess, ProcessScript};
 use closta_providers::claude::fake::spawner::FakeSpawner;
@@ -30,17 +31,24 @@ use closta_session::commands::SessionCommands;
 use closta_session::history::SessionOpening;
 use closta_session::launch::{NativeSessionLaunchPlanner, SessionLaunchPlanner};
 use closta_session::runtime::SessionRuntime;
-use closta_session::sandbox::{carried_choices, restart_spec};
+use closta_session::sandbox::{RestartFrom, carried_choices, restart_spec};
 use closta_session::status::SessionStatus;
 use futures_lite::{StreamExt, future, stream};
 use smol::Timer;
 
 use support::{
-    GUARD, ID, Processes, VERSION, WORKING_DIR, drive, reach, runtime, runtime_over, until,
+    GUARD, ID, Processes, VERSION, WORKING_DIR, drive, initialize_answer, reach,
+    refused_initialize, runtime, runtime_over, until,
 };
 
 const TURN: &str = "01-baseline-text.ndjson";
+const GET_SETTINGS: &str = r#""subtype":"get_settings""#;
 const UNAVAILABLE: &str = "36-sandbox-unavailable.ndjson";
+const CLEARED: &str = "41-clear-reset.ndjson";
+/// The session id capture 41's first init names (41 line 4): the conversation `/clear` left.
+const BEFORE_CLEAR: &str = "a6635625-53e9-40b5-adfb-977a4e9163b2";
+/// The session id capture 41's init after its reset names (41 line 20).
+const AFTER_CLEAR: &str = "b3c1b6ae-517a-4b6a-8b61-f3693facb4f1";
 /// What a shell reports for a process ended by SIGTERM.
 const SIGTERM_EXIT: i32 = 143;
 
@@ -107,6 +115,43 @@ async fn one_turn(runtime: &SessionRuntime, commands: &SessionCommands, control:
     .await;
 }
 
+/// Capture 41 as the host lives it: the first message sent, its turn (non-blank lines 2 to 14),
+/// `/clear` sent, then the non-blank lines `after_clear` (numbered from 1). The capture has no
+/// line of the user's; the host sends both. Line 1 answers the initialize, which the live process
+/// answered. It returns once both sends are folded, the thread is divided and at rest: a switch
+/// of the sandbox is refused while a turn runs.
+async fn cleared(
+    runtime: &SessionRuntime,
+    commands: &SessionCommands,
+    control: &LiveControl,
+    after_clear: &[usize],
+) {
+    let lines = common::non_blank_lines(&common::text_of(CLEARED));
+    commands
+        .send_message(SendId::new("m1").expect("a key"), "ping", &[])
+        .expect("sent");
+    for line in &lines[1..14] {
+        control.emit(line);
+    }
+    commands
+        .send_message(SendId::new("m2").expect("a key"), "/clear", &[])
+        .expect("sent");
+    for number in after_clear {
+        control.emit(&lines[number - 1]);
+    }
+    until(|| {
+        let view = runtime.view();
+        view.transcript.routing.sends == 2
+            && view.transcript.cleared_at.is_some()
+            && !thread_is_running(&view.conversation, &view.transcript)
+    })
+    .await;
+}
+
+fn session_of(runtime: &SessionRuntime) -> Option<String> {
+    runtime.view().conversation.session.map(|it| it.session_id)
+}
+
 fn success(id: &str) -> String {
     format!(
         r#"{{"type":"control_response","response":{{"subtype":"success","request_id":"{id}"}}}}"#
@@ -129,8 +174,8 @@ fn unavailable_sentence() -> String {
 }
 
 /// A CLI that refused to start as capture 36's first one did: its one error result written and
-/// exited with 1 before the host writes anything, so the settings request the host writes at
-/// once finds its stdin closed.
+/// exited with 1 before the host writes anything, so the initialize the host writes at once
+/// finds its stdin closed.
 fn not_started(processes: &Processes) -> LiveControl {
     let control = processes.prepare(LiveOptions::default());
     control.emit(&unavailable());
@@ -266,7 +311,7 @@ impl MarkAtEnd {
 }
 
 #[test]
-fn the_launch_carries_the_sandbox_and_asks_its_settings_at_once() {
+fn the_launch_carries_the_sandbox_and_asks_its_settings_once_the_initialize_is_answered() {
     drive(|executor| async move {
         let processes = Processes::new();
         let (runtime, run, _log) = runtime(&processes, |config| config.sandbox = true);
@@ -276,13 +321,159 @@ fn the_launch_carries_the_sandbox_and_asks_its_settings_at_once() {
         let args = processes.session_args();
         assert_eq!(flag_value(&args[0], "--settings"), Some(SANDBOX_SETTINGS));
         assert!(runtime.view().transcript.operations.launch_sandbox);
-        let first = within(processes.controls()[0].next_stdin_line()).await;
-        assert!(
-            first
-                .as_deref()
-                .is_some_and(|line| line.contains(r#""subtype":"get_settings""#)),
-            "the settings are asked at once: {first:?}"
+        let control = processes.controls()[0].clone();
+        within(control.skip_initialize()).await;
+        // A negative: nothing is asked before the CLI answers the initialize.
+        Timer::after(Duration::from_millis(100)).await;
+        assert_eq!(
+            control.stdin_lines().len(),
+            1,
+            "{:?}",
+            control.stdin_lines()
         );
+        runtime.close();
+        within(run).await;
+    });
+}
+
+/// A system/init line of capture 01.
+fn init_line() -> String {
+    common::non_blank_lines(&common::text_of(TURN))
+        .into_iter()
+        .find(|line| line.contains(r#""subtype":"init""#))
+        .expect("capture 01 has a system/init")
+}
+
+fn settings_asked(control: &LiveControl) -> usize {
+    after_initialize(control.stdin_lines())
+        .iter()
+        .filter(|line| line.contains(GET_SETTINGS))
+        .count()
+}
+
+/// A sandboxed session whose CLI answers its initialize with `answer` to the id, then says its
+/// system/init: it stays running and is asked its settings once.
+fn asked_once_after(answer: fn(&str) -> String) {
+    drive(|executor| async move {
+        let processes = Processes::new();
+        let control = processes.prepare(LiveOptions::default());
+        let (runtime, run, _log) = runtime(&processes, |config| config.sandbox = true);
+        let run = executor.spawn(run);
+        running_on(&runtime, &processes, 1).await;
+        let id = within(control.skip_initialize()).await;
+
+        control.emit(&answer(&id));
+        let asked = within(control.next_stdin_line()).await;
+        assert!(
+            asked
+                .as_deref()
+                .is_some_and(|line| line.contains(GET_SETTINGS)),
+            "{asked:?}"
+        );
+        assert!(running(&runtime.status()), "{:?}", runtime.status());
+
+        control.emit(&init_line());
+        until(|| runtime.view().conversation.session.is_some()).await;
+        Timer::after(Duration::from_millis(100)).await;
+        assert_eq!(settings_asked(&control), 1, "{:?}", control.stdin_lines());
+        assert!(running(&runtime.status()), "{:?}", runtime.status());
+        runtime.close();
+        within(run).await;
+    });
+}
+
+#[test]
+fn a_sandboxed_cli_is_asked_its_settings_once() {
+    asked_once_after(|id| initialize_answer(id, true));
+    asked_once_after(|id| initialize_answer(id, false));
+}
+
+#[test]
+fn a_refused_initialize_still_asks_the_settings_once() {
+    asked_once_after(refused_initialize);
+}
+
+/// A session outside the sandbox whose CLI answers its initialize with the models and says its
+/// system/init, in either order: it is asked its settings once, at whichever came first.
+fn outside_the_sandbox_asked_once(init_first: bool) {
+    drive(|executor| async move {
+        let processes = Processes::new();
+        let control = processes.prepare(LiveOptions::default());
+        let (runtime, run, _log) = runtime(&processes, |_| {});
+        let run = executor.spawn(run);
+        running_on(&runtime, &processes, 1).await;
+        let id = within(control.skip_initialize()).await;
+
+        let lines = if init_first {
+            [init_line(), initialize_answer(&id, true)]
+        } else {
+            [initialize_answer(&id, true), init_line()]
+        };
+        control.emit(&lines[0]);
+        let asked = within(control.next_stdin_line()).await;
+        assert!(
+            asked
+                .as_deref()
+                .is_some_and(|line| line.contains(GET_SETTINGS)),
+            "{asked:?}"
+        );
+        control.emit(&lines[1]);
+        until(|| {
+            let view = runtime.view();
+            view.conversation.session.is_some() && !view.transcript.operations.models.is_empty()
+        })
+        .await;
+        // A negative: the second line asks nothing more.
+        Timer::after(Duration::from_millis(100)).await;
+        assert_eq!(settings_asked(&control), 1, "{:?}", control.stdin_lines());
+        runtime.close();
+        within(run).await;
+    });
+}
+
+#[test]
+fn outside_the_sandbox_an_answer_with_models_asks_once_and_the_system_init_adds_none() {
+    outside_the_sandbox_asked_once(false);
+}
+
+#[test]
+fn outside_the_sandbox_a_system_init_asks_once_and_the_answer_with_models_adds_none() {
+    outside_the_sandbox_asked_once(true);
+}
+
+#[test]
+fn a_restart_into_the_sandbox_initializes_the_new_cli_once() {
+    drive(|executor| async move {
+        let processes = Processes::new();
+        let (runtime, run, _log) = runtime(&processes, |_| {});
+        let run = executor.spawn(run);
+        let commands = running_on(&runtime, &processes, 1).await;
+        let first = processes.controls()[0].clone();
+        within(first.skip_initialize()).await;
+        one_turn(&runtime, &commands, &first).await;
+
+        assert!(runtime.turn_sandbox_on());
+        running_on(&runtime, &processes, 2).await;
+        let second = processes.controls()[1].clone();
+        let id = within(second.skip_initialize()).await;
+        second.emit(&initialize_answer(&id, true));
+        let asked = within(second.next_stdin_line()).await;
+        assert!(
+            asked
+                .as_deref()
+                .is_some_and(|line| line.contains(GET_SETTINGS)),
+            "{asked:?}"
+        );
+
+        let initializes = |control: &LiveControl| {
+            control
+                .stdin_lines()
+                .iter()
+                .filter(|line| is_initialize(line))
+                .count()
+        };
+        assert_eq!(initializes(&first), 1);
+        assert_eq!(initializes(&second), 1);
         runtime.close();
         within(run).await;
     });
@@ -304,7 +495,7 @@ fn turning_on_restarts_with_resume_and_settings() {
                 .expect("planned");
         let expected = restart_spec(
             &planned.spec,
-            true,
+            RestartFrom::SentUnder(ID),
             SessionOpening::New,
             &carried_choices(&before),
             true,
@@ -328,6 +519,141 @@ fn turning_on_restarts_with_resume_and_settings() {
             before.transcript.messages.len()
         );
         assert!(processes.controls()[0].destroyed());
+        runtime.close();
+        within(run).await;
+    });
+}
+
+/// F1 of the 6d-R2 final fixes (ClearedTabs.kt, 022513f: with nothing sent after the `/clear`
+/// there is no conversation to resume): a restart after `/clear` with nothing sent since starts a
+/// new conversation under the id the init after the reset named, resuming none.
+#[test]
+fn a_sandbox_restart_after_a_clear_with_nothing_sent_since_starts_the_new_id() {
+    drive(|executor| async move {
+        let processes = Processes::new();
+        let (runtime, run, _log) = runtime(&processes, |_| {});
+        let run = executor.spawn(run);
+        let commands = running_on(&runtime, &processes, 1).await;
+        // Through 41 line 22: the init after the reset (line 20), and the `/clear`'s turn over.
+        let after_clear: Vec<usize> = (15..=22).collect();
+        cleared(&runtime, &commands, &processes.controls()[0], &after_clear).await;
+        assert!(runtime.sent());
+        assert!(runtime.view().transcript.cleared_at.is_some());
+        assert_eq!(Some(AFTER_CLEAR.to_owned()), session_of(&runtime));
+        assert_eq!(AFTER_CLEAR, runtime.resume_id());
+        assert_eq!(
+            ID,
+            runtime.id(),
+            "the runtime keeps the id it was started with"
+        );
+
+        assert!(runtime.turn_sandbox_on());
+        running_on(&runtime, &processes, 2).await;
+
+        let args = processes.session_args();
+        assert!(
+            has_arg(&args[1], &format!("--session-id={AFTER_CLEAR}")),
+            "{:?}",
+            args[1]
+        );
+        assert!(
+            !args[1].iter().any(|it| it.starts_with("--resume")),
+            "{:?}",
+            args[1]
+        );
+        runtime.close();
+        within(run).await;
+    });
+}
+
+/// Not ported from Kotlin (the design's `/clear` section, narrowed by F1 of the 6d-R2 final
+/// fixes): once a message was sent after the `/clear`, a restart resumes the conversation the
+/// init after the reset named, not the one the session was launched under.
+#[test]
+fn a_sandbox_restart_after_a_request_past_a_clear_resumes_the_new_id() {
+    drive(|executor| async move {
+        let processes = Processes::new();
+        let (runtime, run, _log) = runtime(&processes, |_| {});
+        let run = executor.spawn(run);
+        let commands = running_on(&runtime, &processes, 1).await;
+        let control = processes.controls()[0].clone();
+        let after_clear: Vec<usize> = (15..=22).collect();
+        cleared(&runtime, &commands, &control, &after_clear).await;
+        // The third message, its turn from its queued lifecycle (41 line 23) to its completed one
+        // (line 97, the capture's last).
+        let lines = common::non_blank_lines(&common::text_of(CLEARED));
+        assert_eq!(97, lines.len());
+        commands
+            .send_message(SendId::new("m3").expect("a key"), "which word", &[])
+            .expect("sent");
+        for line in &lines[22..] {
+            control.emit(line);
+        }
+        until(|| {
+            let view = runtime.view();
+            view.transcript.routing.sends == 3
+                && !thread_is_running(&view.conversation, &view.transcript)
+        })
+        .await;
+        assert_eq!(AFTER_CLEAR, runtime.resume_id());
+
+        assert!(runtime.turn_sandbox_on());
+        running_on(&runtime, &processes, 2).await;
+
+        let args = processes.session_args();
+        assert!(
+            has_arg(&args[1], &format!("--resume={AFTER_CLEAR}")),
+            "{:?}",
+            args[1]
+        );
+        assert!(
+            !args[1].iter().any(|it| it.starts_with("--session-id")),
+            "{:?}",
+            args[1]
+        );
+        runtime.close();
+        within(run).await;
+    });
+}
+
+/// Not ported from Kotlin (the plan's Review Focus 2): from the reset until the next init there
+/// is no session, and a restart resumes the host's id, never the conversation that was cleared.
+#[test]
+fn a_sandbox_restart_between_the_reset_and_the_next_init_resumes_the_host_id() {
+    drive(|executor| async move {
+        let processes = Processes::new();
+        let (runtime, run, _log) = runtime(&processes, |_| {});
+        let run = executor.spawn(run);
+        let commands = running_on(&runtime, &processes, 1).await;
+        // Through 41 line 18, the reset, and the `/clear`'s turn over (lines 21 and 22) with the
+        // init after the reset (line 20) not come: in 41 the turn ends only after that init, and
+        // a switch of the sandbox is refused while it runs.
+        cleared(
+            &runtime,
+            &commands,
+            &processes.controls()[0],
+            &[15, 16, 17, 18, 19, 21, 22],
+        )
+        .await;
+        assert!(runtime.sent());
+        assert!(runtime.view().transcript.cleared_at.is_some());
+        assert_eq!(None, session_of(&runtime));
+        assert_eq!(ID, runtime.resume_id());
+
+        assert!(runtime.turn_sandbox_on());
+        running_on(&runtime, &processes, 2).await;
+
+        let args = processes.session_args();
+        assert!(
+            has_arg(&args[1], &format!("--resume={ID}")),
+            "{:?}",
+            args[1]
+        );
+        assert!(
+            !has_arg(&args[1], &format!("--resume={BEFORE_CLEAR}")),
+            "{:?}",
+            args[1]
+        );
         runtime.close();
         within(run).await;
     });
@@ -704,6 +1030,7 @@ fn turn_sandbox_off_writes_apply_flag_settings() {
         let run = executor.spawn(run);
         let commands = running_on(&runtime, &processes, 1).await;
         let control = processes.controls()[0].clone();
+        within(control.skip_initialize()).await;
 
         commands.turn_sandbox_off().expect("written");
         let switches = sandbox_switches(&runtime);

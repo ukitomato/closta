@@ -24,7 +24,7 @@ const PERCENT: usize = 100;
 /// The largest session, folded. nextest runs each test in a process of its own, so each test
 /// builds it once.
 fn history() -> SessionView {
-    synthetic::steps(&LARGEST)
+    synthetic::steps_with_session_lines(&LARGEST)
         .iter()
         .fold(SessionView::default(), |view, step| view.fold(step))
 }
@@ -75,7 +75,8 @@ fn address(row: &ThreadRow) -> *const () {
         ThreadRow::Card(it) => Arc::as_ptr(it) as *const (),
         ThreadRow::TurnEnd(it) => Arc::as_ptr(it) as *const (),
         ThreadRow::SignIn(it) => Arc::as_ptr(it) as *const (),
-        ThreadRow::Compaction(it) => Arc::as_ptr(it) as *const (),
+        ThreadRow::Divider(it) => Arc::as_ptr(it) as *const (),
+        ThreadRow::Notice(it) => Arc::as_ptr(it) as *const (),
     }
 }
 

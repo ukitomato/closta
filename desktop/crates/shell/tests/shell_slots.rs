@@ -7,24 +7,28 @@ mod common;
 mod support;
 
 use std::io::ErrorKind;
+use std::sync::LazyLock;
 
+use closta_model::SavedSessionSummary;
 use closta_providers::claude::launch::LaunchError;
 use closta_session::runtime::SessionRuntime;
 use closta_session::status::SessionStatus;
 use closta_shell::closing::{CloseQuestion, CloseStage};
+use closta_shell::copy;
 use closta_shell::needs_you::NeedsYouItem;
+use closta_shell::new_session::{launch_in, resume_in};
 use closta_shell::slot::{SlotId, SlotMark};
 use closta_shell::state::{Refresh, ShellAction, ShellState};
 use support::{
-    Harness, drive, emit_capture, relaunchable, replay_launch, running, until, waiting_slot,
-    waits_on,
+    AFTER_CLEAR, Ask, BEFORE_CLEAR, Harness, ask_in, drive, emit_capture, end_slot, open_cleared,
+    play_after_clear, play_cleared, play_reset, relaunchable, replay_launch, running, until,
+    waiting_slot, waits_on,
 };
 
 const SANDBOX: &str = "36-sandbox-unavailable.ndjson";
-const SANDBOX_ASK: usize = 31;
-const SANDBOX_REQUEST: &str = "b4635f8c-7b16-4eac-9934-9ca6b3b1373f";
+static SANDBOX_ASK: LazyLock<Ask> = LazyLock::new(|| ask_in(SANDBOX, "Bash", 1));
 const QUESTION: &str = "18-ask-multi-question.ndjson";
-const QUESTION_ASK: usize = 46;
+static QUESTION_ASK: LazyLock<Ask> = LazyLock::new(|| ask_in(QUESTION, "AskUserQuestion", 1));
 
 fn refresh_at(shell: &mut ShellState, slot: SlotId, now_ms: i64) -> Refresh {
     let generation = shell.watch(slot).unwrap().generation();
@@ -64,11 +68,91 @@ fn type_in(shell: &mut ShellState, slot: SlotId, text: &str) {
 }
 
 #[test]
+fn asks_are_read_off_the_captures() {
+    let expected = [
+        (
+            "36-sandbox-unavailable.ndjson",
+            "Bash",
+            1,
+            31,
+            "9f33c079-3fd4-4cdb-978e-34d5190fba7c",
+        ),
+        (
+            "17-edit-approval.ndjson",
+            "Edit",
+            1,
+            66,
+            "67c05536-5265-4d8c-a6f6-d0348c62c15c",
+        ),
+        (
+            "18-ask-multi-question.ndjson",
+            "AskUserQuestion",
+            1,
+            41,
+            "5c74af9e-83da-40a5-b38e-114d8d0ef360",
+        ),
+        (
+            "29-exit-plan-mode.ndjson",
+            "ExitPlanMode",
+            1,
+            146,
+            "9901ef1a-0b54-4680-a7d2-fea2f190881d",
+        ),
+        (
+            "29-exit-plan-mode.ndjson",
+            "Edit",
+            1,
+            179,
+            "9749f732-ddd2-49b7-b048-a4c859608d1e",
+        ),
+    ];
+    for (fixture, tool, nth, line, request_id) in expected {
+        assert_eq!(
+            ask_in(fixture, tool, nth),
+            Ask {
+                line,
+                request_id: request_id.to_owned()
+            },
+            "{fixture} {tool}"
+        );
+    }
+}
+
+#[test]
+#[should_panic(expected = "36-sandbox-unavailable.ndjson: no can_use_tool #2 for Bash")]
+fn a_missing_ask_names_the_capture_and_the_tool() {
+    ask_in("36-sandbox-unavailable.ndjson", "Bash", 2);
+}
+
+#[test]
+#[should_panic(expected = "hand-written: can_use_tool #1 for Bash (line 1) has no request_id")]
+fn an_ask_with_no_request_id_names_the_capture() {
+    let text =
+        r#"{"type":"control_request","request":{"subtype":"can_use_tool","tool_name":"Bash"}}"#;
+    support::ask_in_text("hand-written", text, "Bash", 1);
+}
+
+#[test]
+fn the_baseline_lines_are_what_their_names_say() {
+    let text = common::text_of(support::BASELINE);
+    let lines = common::non_blank_lines(&text);
+    let open: serde_json::Value = serde_json::from_str(&lines[support::BASELINE_OPEN - 1]).unwrap();
+    assert_eq!(open["type"], "stream_event");
+    assert_eq!(open["event"]["delta"]["type"], "text_delta");
+    assert_eq!(support::BASELINE_ALL, lines.len());
+    let first = lines
+        .iter()
+        .position(|l| l.contains("\"text_delta\""))
+        .unwrap();
+    assert_eq!(first + 1, support::BASELINE_OPEN);
+}
+
+#[test]
 fn a_waiting_slot_shows_waiting_and_is_listed() {
     drive(|harness| async move {
         let mut shell = harness.shell();
         let (slot, _control, _runtime) =
-            waiting_slot(&mut shell, &harness, SANDBOX, SANDBOX_ASK, 1000).await;
+            waiting_slot(&mut shell, &harness, SANDBOX, SANDBOX_ASK.line, 1000).await;
         assert_eq!(shell.slots()[0].mark, SlotMark::Waiting);
         let rows = shell.needs_you();
         assert_eq!(rows.len(), 1);
@@ -84,9 +168,9 @@ fn rows_follow_when_each_wait_was_first_seen() {
     drive(|harness| async move {
         let mut shell = harness.shell();
         let (first, _c1, _r1) =
-            waiting_slot(&mut shell, &harness, SANDBOX, SANDBOX_ASK, 2000).await;
+            waiting_slot(&mut shell, &harness, SANDBOX, SANDBOX_ASK.line, 2000).await;
         let (second, _c2, _r2) =
-            waiting_slot(&mut shell, &harness, QUESTION, QUESTION_ASK, 1000).await;
+            waiting_slot(&mut shell, &harness, QUESTION, QUESTION_ASK.line, 1000).await;
         let order: Vec<SlotId> = shell.needs_you().iter().map(|it| it.slot).collect();
         assert_eq!(order, [second, first]);
 
@@ -108,9 +192,9 @@ fn rows_with_the_same_time_follow_the_slots() {
     drive(|harness| async move {
         let mut shell = harness.shell();
         let (first, _c1, _r1) =
-            waiting_slot(&mut shell, &harness, SANDBOX, SANDBOX_ASK, 1000).await;
+            waiting_slot(&mut shell, &harness, SANDBOX, SANDBOX_ASK.line, 1000).await;
         let (second, _c2, _r2) =
-            waiting_slot(&mut shell, &harness, QUESTION, QUESTION_ASK, 1000).await;
+            waiting_slot(&mut shell, &harness, QUESTION, QUESTION_ASK.line, 1000).await;
         let order: Vec<SlotId> = shell.needs_you().iter().map(|it| it.slot).collect();
         assert_eq!(order, [first, second]);
     });
@@ -138,7 +222,7 @@ fn waits_left_by_an_ended_session_are_not_listed() {
     drive(|harness| async move {
         let mut shell = harness.shell();
         let (slot, _control, runtime) =
-            waiting_slot(&mut shell, &harness, SANDBOX, SANDBOX_ASK, 1000).await;
+            waiting_slot(&mut shell, &harness, SANDBOX, SANDBOX_ASK.line, 1000).await;
         runtime.close();
         settle(&mut shell, slot).await;
         assert!(shell.needs_you().is_empty());
@@ -155,7 +239,7 @@ fn waits_left_by_a_process_that_exited_are_not_listed() {
         let runtime = runtime.recv().await.unwrap();
         running(&runtime).await;
         let control = harness.control(0).await;
-        emit_capture(&control, SANDBOX, SANDBOX_ASK);
+        emit_capture(&control, SANDBOX, SANDBOX_ASK.line);
         waits_on(&runtime, 1).await;
         refresh_at(&mut shell, slot, 1000);
         assert_eq!(shell.needs_you().len(), 1);
@@ -172,8 +256,8 @@ fn waits_left_by_a_process_that_exited_are_not_listed() {
 fn the_title_counts_waiting_requests_and_changes_once() {
     drive(|harness| async move {
         let mut shell = harness.shell();
-        waiting_slot(&mut shell, &harness, SANDBOX, SANDBOX_ASK, 1000).await;
-        waiting_slot(&mut shell, &harness, QUESTION, QUESTION_ASK, 1000).await;
+        waiting_slot(&mut shell, &harness, SANDBOX, SANDBOX_ASK.line, 1000).await;
+        waiting_slot(&mut shell, &harness, QUESTION, QUESTION_ASK.line, 1000).await;
         assert_eq!(shell.title_change(), Some("(2) Closta".to_owned()));
         assert_eq!(shell.title_change(), None);
     });
@@ -188,7 +272,7 @@ fn a_slot_with_two_waits_counts_both_in_the_title_and_the_row() {
         let runtime = runtime.recv().await.unwrap();
         running(&runtime).await;
         let control = harness.control(0).await;
-        emit_capture(&control, SANDBOX, SANDBOX_ASK);
+        emit_capture(&control, SANDBOX, SANDBOX_ASK.line);
         control.emit(&support::can_use_tool("second-request", "echo second"));
         waits_on(&runtime, 2).await;
         refresh_at(&mut shell, slot, 1000);
@@ -196,7 +280,7 @@ fn a_slot_with_two_waits_counts_both_in_the_title_and_the_row() {
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].waiting, 2);
         assert_eq!(shell.waiting_count(), 2);
-        assert_eq!(rows[0].request_id(), Some(SANDBOX_REQUEST));
+        assert_eq!(rows[0].request_id(), Some(SANDBOX_ASK.id()));
     });
 }
 
@@ -204,7 +288,7 @@ fn a_slot_with_two_waits_counts_both_in_the_title_and_the_row() {
 fn a_new_wait_asks_for_attention_once() {
     drive(|harness| async move {
         let mut shell = harness.shell();
-        let (launch, control, runtime) = replay_launch(&harness, SANDBOX, SANDBOX_ASK);
+        let (launch, control, runtime) = replay_launch(&harness, SANDBOX, SANDBOX_ASK.line);
         let slot = shell.open(launch);
         let runtime = runtime.recv().await.unwrap();
         running(&runtime).await;
@@ -212,7 +296,7 @@ fn a_new_wait_asks_for_attention_once() {
         let _keep = control;
         let first = refresh_at(&mut shell, slot, 1000);
         assert!(first.attention);
-        assert_eq!(first.raised, [SANDBOX_REQUEST]);
+        assert_eq!(first.raised, [SANDBOX_ASK.id()]);
         let again = refresh_at(&mut shell, slot, 1100);
         assert!(!again.attention);
         assert!(again.raised.is_empty());
@@ -285,7 +369,7 @@ fn closing_a_waiting_slot_asks_first() {
     drive(|harness| async move {
         let mut shell = harness.shell();
         let (slot, _control, _runtime) =
-            waiting_slot(&mut shell, &harness, SANDBOX, SANDBOX_ASK, 1000).await;
+            waiting_slot(&mut shell, &harness, SANDBOX, SANDBOX_ASK.line, 1000).await;
         shell.act(ShellAction::CloseSlot { slot });
         assert_eq!(
             shell.slot_close(),
@@ -305,7 +389,7 @@ fn closing_a_waiting_slot_asks_first() {
 fn closing_the_window_counts_a_waiting_slot_as_working() {
     drive(|harness| async move {
         let mut shell = harness.shell();
-        waiting_slot(&mut shell, &harness, SANDBOX, SANDBOX_ASK, 1000).await;
+        waiting_slot(&mut shell, &harness, SANDBOX, SANDBOX_ASK.line, 1000).await;
         shell.act(ShellAction::RequestClose);
         assert_eq!(
             shell.close_stage(),
@@ -344,7 +428,7 @@ fn a_window_close_replaces_the_slot_close_question() {
     drive(|harness| async move {
         let mut shell = harness.shell();
         let (slot, _control, _runtime) =
-            waiting_slot(&mut shell, &harness, SANDBOX, SANDBOX_ASK, 1000).await;
+            waiting_slot(&mut shell, &harness, SANDBOX, SANDBOX_ASK.line, 1000).await;
         shell.act(ShellAction::CloseSlot { slot });
         assert!(shell.slot_close().is_some());
         shell.act(ShellAction::RequestClose);
@@ -418,5 +502,246 @@ fn closing_an_ended_slot_removes_it_at_once() {
         assert_eq!(acted.removed, vec![slot]);
         assert!(shell.slots().is_empty());
         until(|| shell.live_runs() == 0).await;
+    });
+}
+
+const CLEARED_FOLDER: &str = r"C:\work\cleared";
+
+/// 41's third request cut to a session name's length (60 UTF-16 units of ASCII text).
+const AFTER_CLEAR_TITLE: &str = "Which word did I ask you to remember? If you do not know, re";
+
+/// 41's first request cut to a session name's length (60 UTF-16 units of ASCII text).
+const BEFORE_CLEAR_TITLE: &str = "Remember the word kumquat. Respond with exactly one word: po";
+
+/// The saved conversation 41's first session is, as the resume list shows it.
+fn saved_before_clear() -> SavedSessionSummary {
+    SavedSessionSummary {
+        id: BEFORE_CLEAR.to_owned(),
+        title: "Remember the word kumquat".to_owned(),
+        updated_at_ms: 1,
+        bytes: 10,
+    }
+}
+
+/// The 6d-R design's `/clear` section, shell (3): Copy Session ID copies the id the CLI goes on
+/// under after a `/clear`, read once the session ended (only an ended or failed slot copies).
+#[test]
+fn copy_session_id_after_a_clear_copies_the_new_id() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let ports = harness.ports();
+        let (slot, runtime, control) =
+            open_cleared(&harness, &mut shell, launch_in(CLEARED_FOLDER, &ports), 0).await;
+        assert_eq!(shell.session_id(slot).as_deref(), Some(BEFORE_CLEAR));
+        play_cleared(&mut shell, slot, &runtime, &control, 22).await;
+        end_slot(&mut shell, slot, &control).await;
+
+        let acted = shell.act(ShellAction::CopySessionId { slot });
+        assert_eq!(acted.clipboard.as_deref(), Some(AFTER_CLEAR));
+        assert_eq!(shell.session_id(slot).as_deref(), Some(AFTER_CLEAR));
+    });
+}
+
+/// The 6d-R design's `/clear` section, shell (4): after a `/clear` the slot is named by the
+/// first request after the divider, a slot opened under a saved conversation's title too.
+#[test]
+fn after_a_clear_the_title_is_the_first_request_after_the_divider() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let ports = harness.ports();
+        let saved = SavedSessionSummary {
+            id: BEFORE_CLEAR.to_owned(),
+            title: "Remember the word kumquat".to_owned(),
+            updated_at_ms: 1,
+            bytes: 10,
+        };
+        let launches = [
+            launch_in(CLEARED_FOLDER, &ports),
+            resume_in(CLEARED_FOLDER, &saved, &ports),
+        ];
+        for (n, launch) in launches.into_iter().enumerate() {
+            let resumed = launch.resume.is_some();
+            let (slot, runtime, control) = open_cleared(&harness, &mut shell, launch, n).await;
+            let opened_as = if resumed {
+                saved.title.as_str()
+            } else {
+                copy::NEW_SESSION_TITLE
+            };
+            assert_eq!(shell.slot_title(slot).as_deref(), Some(opened_as));
+            play_cleared(&mut shell, slot, &runtime, &control, 22).await;
+            play_after_clear(&mut shell, slot, &runtime, &control).await;
+            assert_eq!(
+                shell.slot_title(slot).as_deref(),
+                Some(AFTER_CLEAR_TITLE),
+                "resumed: {resumed}"
+            );
+            end_slot(&mut shell, slot, &control).await;
+        }
+    });
+}
+
+/// The 6d-R2 Ruling on the title after `/clear`, narrowed by F2 of its final fixes: after a
+/// `/clear`, until a request is sent after its divider (41 through line 22), a slot is named as a
+/// new session, a slot opened under a saved conversation's title too.
+#[test]
+fn after_a_clear_a_slot_is_a_new_session_until_a_request_after_the_divider() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let ports = harness.ports();
+        let launches = [
+            launch_in(CLEARED_FOLDER, &ports),
+            resume_in(CLEARED_FOLDER, &saved_before_clear(), &ports),
+        ];
+        for (n, launch) in launches.into_iter().enumerate() {
+            let resumed = launch.resume.is_some();
+            let (slot, runtime, control) = open_cleared(&harness, &mut shell, launch, n).await;
+            play_cleared(&mut shell, slot, &runtime, &control, 22).await;
+            assert!(runtime.view().transcript.cleared_at.is_some());
+
+            assert_eq!(
+                shell.slot_title(slot).as_deref(),
+                Some(copy::NEW_SESSION_TITLE),
+                "resumed: {resumed}"
+            );
+            end_slot(&mut shell, slot, &control).await;
+        }
+    });
+}
+
+/// F2 of the 6d-R2 final fixes: a reset that is not a `/clear` (41's, saying no trigger) keeps
+/// the title the slot had: the saved conversation's, or the first request before the divider.
+#[test]
+fn a_reset_that_is_not_a_clear_keeps_the_title() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let ports = harness.ports();
+        let saved = saved_before_clear();
+        let launches = [
+            launch_in(CLEARED_FOLDER, &ports),
+            resume_in(CLEARED_FOLDER, &saved, &ports),
+        ];
+        for (n, launch) in launches.into_iter().enumerate() {
+            let resumed = launch.resume.is_some();
+            let kept = if resumed {
+                saved.title.as_str()
+            } else {
+                BEFORE_CLEAR_TITLE
+            };
+            let (slot, runtime, control) = open_cleared(&harness, &mut shell, launch, n).await;
+            play_reset(&mut shell, slot, &runtime, &control, 22, false).await;
+            assert!(runtime.view().transcript.cleared_at.is_some());
+            assert_eq!(
+                shell.slot_title(slot).as_deref(),
+                Some(kept),
+                "resumed: {resumed}"
+            );
+
+            play_after_clear(&mut shell, slot, &runtime, &control).await;
+            assert_eq!(
+                shell.slot_title(slot).as_deref(),
+                Some(kept),
+                "resumed: {resumed}"
+            );
+            end_slot(&mut shell, slot, &control).await;
+        }
+    });
+}
+
+/// F1 of the 6d-R2 final fixes (ClearedTabs.kt, 022513f: with nothing sent after the `/clear`
+/// there is no conversation to resume): a Restart after a `/clear` with nothing sent since (41
+/// through line 22, the `/clear`'s turn over) starts a new conversation under the id the CLI goes
+/// on under, resuming neither that id nor the one the slot was opened with.
+#[test]
+fn a_restart_after_a_clear_with_nothing_sent_since_starts_the_new_id() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let ports = harness.ports();
+        let (slot, runtime, control) =
+            open_cleared(&harness, &mut shell, launch_in(CLEARED_FOLDER, &ports), 0).await;
+        play_cleared(&mut shell, slot, &runtime, &control, 22).await;
+        end_slot(&mut shell, slot, &control).await;
+        until(|| shell.live_runs() == 0).await;
+        assert!(runtime.sent());
+        assert_eq!(shell.session_id(slot).as_deref(), Some(AFTER_CLEAR));
+        assert!(!shell.restart_resumes(slot));
+
+        let acted = shell.act(ShellAction::Restart { slot });
+        assert_eq!(acted.started, Some(slot));
+        let args = harness.launch_args(1).await;
+        assert!(
+            args.contains(&format!("--session-id={AFTER_CLEAR}")),
+            "{args:?}"
+        );
+        assert!(
+            !args.iter().any(|it| it.starts_with("--resume")),
+            "{args:?}"
+        );
+        assert_eq!(shell.session_id(slot).as_deref(), Some(AFTER_CLEAR));
+    });
+}
+
+/// The 6d-R design's `/clear` section (session), narrowed by F1 of the 6d-R2 final fixes: once
+/// a request was sent after the `/clear` (41's third, lines 23 on), a Restart resumes the id the
+/// CLI goes on under, not the one the slot was opened with.
+#[test]
+fn a_restart_after_a_request_past_a_clear_resumes_the_new_id() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let ports = harness.ports();
+        let (slot, runtime, control) =
+            open_cleared(&harness, &mut shell, launch_in(CLEARED_FOLDER, &ports), 0).await;
+        play_cleared(&mut shell, slot, &runtime, &control, 22).await;
+        play_after_clear(&mut shell, slot, &runtime, &control).await;
+        end_slot(&mut shell, slot, &control).await;
+        until(|| shell.live_runs() == 0).await;
+        assert!(shell.restart_resumes(slot));
+
+        let acted = shell.act(ShellAction::Restart { slot });
+        assert_eq!(acted.started, Some(slot));
+        let args = harness.launch_args(1).await;
+        assert!(
+            args.contains(&format!("--resume={AFTER_CLEAR}")),
+            "{args:?}"
+        );
+        assert!(
+            !args.contains(&format!("--resume={BEFORE_CLEAR}")),
+            "{args:?}"
+        );
+        assert!(
+            !args.iter().any(|it| it.starts_with("--session-id")),
+            "{args:?}"
+        );
+        assert_eq!(shell.session_id(slot).as_deref(), Some(AFTER_CLEAR));
+    });
+}
+
+/// Not ported from Kotlin (the 6d-R2 plan's Review Focus 2, ClearResetTest's "between the reset
+/// and the next init the old id is gone, and the host's is used"): a process that ends after the
+/// reset and before the next init leaves no id of the CLI's, and a Restart resumes the host's.
+#[test]
+fn a_restart_between_the_reset_and_the_next_init_resumes_the_host_id() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let ports = harness.ports();
+        let (slot, runtime, control) =
+            open_cleared(&harness, &mut shell, launch_in(CLEARED_FOLDER, &ports), 0).await;
+        // Through line 19: the reset (line 18) folded, the init after it (line 20) not come.
+        play_cleared(&mut shell, slot, &runtime, &control, 19).await;
+        assert!(runtime.view().conversation.session.is_none());
+        end_slot(&mut shell, slot, &control).await;
+        until(|| shell.live_runs() == 0).await;
+        assert!(shell.restart_resumes(slot));
+        assert_eq!(shell.session_id(slot).as_deref(), Some(BEFORE_CLEAR));
+
+        shell.act(ShellAction::Restart { slot });
+        let args = harness.launch_args(1).await;
+        assert!(
+            args.contains(&format!("--resume={BEFORE_CLEAR}")),
+            "{args:?}"
+        );
+        assert!(
+            !args.contains(&format!("--resume={AFTER_CLEAR}")),
+            "{args:?}"
+        );
     });
 }

@@ -46,7 +46,7 @@ fn an_input_that_shows_nothing_new_leaves_the_transcript_the_same_arc() {
         "40-sandbox-same-id",
     ];
     let scenarios = scenarios();
-    assert_eq!(40, scenarios.len());
+    assert_eq!(44, scenarios.len());
     for scenario in scenarios {
         let steps = replay(&scenario);
         let mut quiet = 0;
@@ -186,7 +186,7 @@ fn a_streamed_text_delta_rebuilds_only_the_path_down_to_its_part() {
     }
 }
 
-/// Kotlin holds the tree to this: the answer rebuilds the message `846b6e3f-…` that shows the
+/// Kotlin holds the tree to this: the answer rebuilds the message `c810a2d1-…` that shows the
 /// approval. The transcript keeps approvals in `approvals`, not inside a message, so here the
 /// messages stay the very same collection and only the answered approval is rebuilt; that the row
 /// showing it is rebuilt is the rows' business.
@@ -213,12 +213,12 @@ fn an_answer_to_an_approval_rebuilds_the_record_it_answers_and_nothing_else() {
             },
         )
         .collect();
-    assert_eq!(vec!["fd37592b-7c5a-4653-bb77-f4b22769cdd5"], touched);
+    assert_eq!(vec!["e42c7fac-e237-4ee9-a6c1-d19579abb0f3"], touched);
     let PresenterInput::Decided(decided) = &steps[answer].input else {
         unreachable!()
     };
     assert_eq!(
-        "fd37592b-7c5a-4653-bb77-f4b22769cdd5",
+        "e42c7fac-e237-4ee9-a6c1-d19579abb0f3",
         decided.decision.request_id()
     );
 }

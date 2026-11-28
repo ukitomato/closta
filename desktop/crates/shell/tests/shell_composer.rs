@@ -32,6 +32,7 @@ async fn running_slot(harness: &Harness) -> (ShellState, SlotId, SessionRuntime,
     let runtime = runtime.recv().await.unwrap();
     until(|| runtime.commands().is_some()).await;
     let control = harness.control(0).await;
+    control.skip_initialize().await;
     (shell, slot, runtime, control)
 }
 
@@ -220,6 +221,7 @@ fn a_restart_keeps_the_draft_and_history_and_starts_a_new_generation() {
 
         type_in(&mut shell, slot, "hello");
         shell.act(ShellAction::Send { slot });
+        control.skip_initialize().await;
         control.next_stdin_line().await.expect("sent");
         refresh(&mut shell, slot);
         type_in(&mut shell, slot, "keep me");
@@ -269,6 +271,7 @@ fn a_restart_keeps_the_draft_and_history_and_starts_a_new_generation() {
             shell.refresh(slot, generation, 0).unwrap();
         }
         shell.act(ShellAction::Send { slot });
+        second.skip_initialize().await;
         second.next_stdin_line().await.expect("sent again");
         refresh(&mut shell, slot);
         assert_eq!(
@@ -353,6 +356,7 @@ fn the_folder_is_looked_for_without_the_spaces_around_it() {
             }),
             planner_for: Arc::new(Planners::new(Arc::clone(&harness.planner) as _)),
             settings: Arc::new(MemorySettings),
+            saved_for: Arc::new(closta_shell::new_session::NoSaved),
         };
         let mut shell = harness.shell_with(ports);
         let padded = format!(" {FOLDER} ");
@@ -372,6 +376,7 @@ fn a_missing_folder_keeps_the_dialog_and_says_so() {
             }),
             planner_for: Arc::new(Planners::new(Arc::clone(&harness.planner) as _)),
             settings: Arc::new(MemorySettings),
+            saved_for: Arc::new(closta_shell::new_session::NoSaved),
         };
         let mut shell = harness.shell_with(ports);
         let check = start_in(&mut shell, FOLDER).check.expect("a check");
@@ -447,6 +452,7 @@ fn a_quick_problem_blocks_start_without_a_check() {
             }),
             planner_for: Arc::new(Planners::new(Arc::clone(&harness.planner) as _)),
             settings: Arc::new(MemorySettings),
+            saved_for: Arc::new(closta_shell::new_session::NoSaved),
         };
         let mut shell = harness.shell_with(ports);
         let acted = start_in(&mut shell, FOLDER);
@@ -484,6 +490,8 @@ fn the_failure_band_reads_the_status() {
             relaunch: None,
             project: None,
             settles_on_failure: false,
+            session_id: None,
+            resume: None,
         };
         let slot = shell.open(launch);
         let mut watch = shell.watch(slot).unwrap();
@@ -511,24 +519,46 @@ fn the_failure_band_reads_the_status() {
     });
 }
 
+fn status_line(value: &str) -> String {
+    format!(
+        r#"{{"type":"system","subtype":"status","uuid":"st","session_id":"s","status":{value}}}"#
+    )
+}
+
+// The CLI's status is said only while a turn runs (e8e6cd2's ComposerState.kt), so a turn runs
+// first.
 #[test]
 fn compacting_follows_the_clis_status() {
     drive(|harness| async move {
         let (mut shell, slot, runtime, control) = running_slot(&harness).await;
-        let status = |value: &str| {
-            format!(
-                r#"{{"type":"system","subtype":"status","uuid":"st","session_id":"s","status":{value}}}"#
-            )
-        };
+        type_in(&mut shell, slot, "/compact");
+        shell.act(ShellAction::Send { slot });
+        control.next_stdin_line().await.expect("the send");
+        refresh(&mut shell, slot);
+        assert!(shell.running(slot), "the turn runs");
         assert!(!shell.compacting(slot));
-        control.emit(&status(r#""compacting""#));
+
+        control.emit(&status_line(r#""compacting""#));
         until(|| runtime.view().transcript.operations.compacting).await;
         refresh(&mut shell, slot);
         assert!(shell.compacting(slot));
 
-        control.emit(&status("null"));
+        control.emit(&status_line("null"));
         until(|| !runtime.view().transcript.operations.compacting).await;
         refresh(&mut shell, slot);
+        assert!(!shell.compacting(slot));
+    });
+}
+
+// e8e6cd2: a compaction the CLI says outside a turn is not said.
+#[test]
+fn compacting_is_not_said_outside_a_turn() {
+    drive(|harness| async move {
+        let (mut shell, slot, runtime, control) = running_slot(&harness).await;
+        control.emit(&status_line(r#""compacting""#));
+        until(|| runtime.view().transcript.operations.compacting).await;
+        refresh(&mut shell, slot);
+        assert!(!shell.running(slot), "no turn runs");
         assert!(!shell.compacting(slot));
     });
 }
@@ -551,6 +581,8 @@ fn ready_lines_wait_for_every_slot_to_run_or_fail() {
             relaunch: None,
             project: None,
             settles_on_failure: false,
+            session_id: None,
+            resume: None,
         });
         assert_eq!(shell.ready_lines(), None);
 
@@ -566,7 +598,7 @@ fn ready_lines_wait_for_every_slot_to_run_or_fail() {
             shell.refresh(broken, watch.generation(), 0).unwrap();
         }
         let lines = shell.ready_lines().unwrap();
-        assert_eq!(lines, ["Running 2.1.282", "Failed WslCommandNotFound"]);
+        assert_eq!(lines, ["Running 2.1.325", "Failed WslCommandNotFound"]);
         assert!(
             lines
                 .iter()

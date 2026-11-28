@@ -5,6 +5,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 pub mod contract;
+pub mod initialize;
 pub mod live;
 pub mod process;
 pub mod record_fs;

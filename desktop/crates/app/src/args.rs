@@ -2,7 +2,7 @@
 //! `--folder`
 //! belong to the `--replay` before them; `--pace`, `--window`, `--pane`, `--ready-file` and the
 //! measuring options (`--perf-log`, `--exit-after-replay`, `--scroll-through`) and the projects
-//! (`--project`, `--collapse`) apply to the whole run. The checks' options (`--open-folder`, `--mark-children`, `--mcp-config`, `--fail-launch`,
+//! (`--project`, `--collapse`, `--config-dir`, `--open`) apply to the whole run. The checks' options (`--open-folder`, `--mark-children`, `--mcp-config`, `--fail-launch`,
 //! `--fail-distro`, `--close-after`) open real folders and failing launches instead of replays; a
 //! failing launch may also follow replays. `--list-saved` lists a folder's saved sessions into the
 //! ready file and opens no window, so it goes with neither a replay, a folder nor a failing launch.
@@ -59,6 +59,10 @@ pub struct AppArgs {
     pub projects: Vec<String>,
     /// The folders that start as closed projects; one not among `projects` is added after them.
     pub collapsed: Vec<String>,
+    /// Where every project's saved sessions are read from, instead of asking the machine.
+    pub config_dir: Option<PathBuf>,
+    /// Whether the first project's resume popup starts open.
+    pub open_resume: bool,
 }
 
 /// Shows presence and counts only: the values are paths, folders and prompts.
@@ -94,6 +98,8 @@ impl std::fmt::Debug for AppArgs {
             .field("list_saved", &self.list_saved.is_some())
             .field("projects", &self.projects.len())
             .field("collapsed", &self.collapsed.len())
+            .field("config_dir", &self.config_dir.is_some())
+            .field("open_resume", &self.open_resume)
             .finish()
     }
 }
@@ -157,6 +163,19 @@ pub fn parse(args: impl IntoIterator<Item = String>) -> Result<AppArgs, String> 
             }
             "--project" => parsed.projects.push(value()?),
             "--collapse" => parsed.collapsed.push(value()?),
+            "--config-dir" => {
+                let dir = PathBuf::from(value()?);
+                set(&mut parsed.config_dir, option, dir)?;
+            }
+            "--open" => {
+                if value()? != "resume" {
+                    return Err(format!("{option} takes resume"));
+                }
+                if parsed.open_resume {
+                    return Err(format!("{option} is given twice"));
+                }
+                parsed.open_resume = true;
+            }
             "--prompt" => {
                 let text = value()?;
                 set(&mut replay(&mut parsed, option)?.prompt, option, text)?;
@@ -711,6 +730,44 @@ mod tests {
         let args = parsed(&["--project", "A", "--collapse", "A"]).unwrap();
         assert_eq!(args.settings().projects, [saved("A", true)]);
         assert!(parsed(&[]).unwrap().settings().projects.is_empty());
+    }
+
+    #[test]
+    fn config_dir_and_open_resume_are_read() {
+        let args = parsed(&[
+            "--project",
+            "A",
+            "--config-dir",
+            r"C:\c",
+            "--open",
+            "resume",
+        ])
+        .unwrap();
+        assert_eq!(args.config_dir, Some(PathBuf::from(r"C:\c")));
+        assert!(args.open_resume);
+        let none = parsed(&[]).unwrap();
+        assert_eq!(none.config_dir, None);
+        assert!(!none.open_resume);
+        let error = parsed(&["--config-dir", "a", "--config-dir", "b"]).unwrap_err();
+        assert_eq!(error, "--config-dir is given twice");
+        let error = parsed(&["--open", "resume", "--open", "resume"]).unwrap_err();
+        assert_eq!(error, "--open is given twice");
+    }
+
+    #[test]
+    fn open_takes_only_resume() {
+        let error = parsed(&["--open", "C:\\secret"]).unwrap_err();
+        assert_eq!(error, "--open takes resume");
+        assert_eq!(parsed(&["--open"]).unwrap_err(), "--open needs a value");
+    }
+
+    #[test]
+    fn debug_hides_the_config_dir() {
+        let args = parsed(&["--config-dir", r"C:\secret", "--open", "resume"]).unwrap();
+        let shown = format!("{args:?}");
+        assert!(!shown.contains("secret"), "{shown}");
+        assert!(shown.contains("config_dir: true"), "{shown}");
+        assert!(shown.contains("open_resume: true"), "{shown}");
     }
 
     fn saved(folder: &str, collapsed: bool) -> SavedProject {

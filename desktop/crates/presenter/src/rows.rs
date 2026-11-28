@@ -4,6 +4,7 @@
 //! before ([`ThreadRow::same`]), which is how a surface knows what it may leave alone.
 
 use std::collections::{HashMap, HashSet};
+use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
@@ -15,12 +16,14 @@ use crate::json::JsonFields;
 use crate::keyed::Keyed;
 use crate::records::attachment::AttachmentRecord;
 use crate::records::turn_end::TurnChangesRecord;
-use crate::rewind_targets::sent_asks;
+use crate::rewind_targets::live_asks;
 use crate::text::kt_is_blank;
-use crate::tool_line::{AgentSummary, ToolDetail, ToolLine, agent_summary, tool_detail, tool_line};
+use crate::tool_line::{
+    AgentSummary, ToolDetail, ToolLine, ToolLineState, agent_summary, result_text, tool_detail,
+    tool_line,
+};
 use crate::transcript::{
-    ApprovalRecord, CompactionMark, CompactionOutcome, MessageRecord, PartRecord, Role,
-    ToolCallRecord, Transcript,
+    ApprovalRecord, MessageRecord, PartRecord, Role, ToolCallRecord, Transcript,
 };
 
 /// One row of the conversation. Cloning one is cheap: each variant holds its row in an `Arc`.
@@ -35,7 +38,8 @@ pub enum ThreadRow {
     Card(Arc<CardRow>),
     TurnEnd(Arc<TurnEndRow>),
     SignIn(Arc<SignInRow>),
-    Compaction(Arc<CompactionRow>),
+    Divider(Arc<DividerRow>),
+    Notice(Arc<NoticeRow>),
 }
 
 impl ThreadRow {
@@ -50,7 +54,8 @@ impl ThreadRow {
             Self::Card(row) => &row.key,
             Self::TurnEnd(row) => &row.key,
             Self::SignIn(row) => &row.key,
-            Self::Compaction(row) => &row.key,
+            Self::Divider(row) => &row.key,
+            Self::Notice(row) => &row.key,
         }
     }
 
@@ -66,7 +71,8 @@ impl ThreadRow {
             Self::Card(row) => row.opens,
             Self::TurnEnd(row) => row.opens,
             Self::SignIn(_) => false,
-            Self::Compaction(row) => row.opens,
+            Self::Divider(row) => row.opens,
+            Self::Notice(row) => row.opens,
         }
     }
 
@@ -82,7 +88,8 @@ impl ThreadRow {
             (Self::Card(a), Self::Card(b)) => Arc::ptr_eq(a, b),
             (Self::TurnEnd(a), Self::TurnEnd(b)) => Arc::ptr_eq(a, b),
             (Self::SignIn(a), Self::SignIn(b)) => Arc::ptr_eq(a, b),
-            (Self::Compaction(a), Self::Compaction(b)) => Arc::ptr_eq(a, b),
+            (Self::Divider(a), Self::Divider(b)) => Arc::ptr_eq(a, b),
+            (Self::Notice(a), Self::Notice(b)) => Arc::ptr_eq(a, b),
             _ => false,
         }
     }
@@ -145,6 +152,20 @@ impl ExploredRow {
         self.members.iter().map(|it| &it.line).collect()
     }
 
+    /// The one state the folded line shows: a failure first, then a refusal, then a call still
+    /// running; done when all are.
+    pub fn state(&self) -> ToolLineState {
+        let has = |state: ToolLineState| self.members.iter().any(|it| it.line.state == state);
+        [
+            ToolLineState::Error,
+            ToolLineState::Denied,
+            ToolLineState::Running,
+        ]
+        .into_iter()
+        .find(|it| has(*it))
+        .unwrap_or(ToolLineState::Ok)
+    }
+
     /// How many different files (or searches) the calls looked at: the same file read twice is
     /// one.
     pub fn files(&self) -> usize {
@@ -161,7 +182,7 @@ impl ExploredRow {
     }
 }
 
-/// The to-do list a `TodoWrite` call wrote.
+/// The to-do list a `TodoWrite` call wrote, or a run of `TaskCreate` and `TaskUpdate` calls left.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct TodoRow {
     pub key: String,
@@ -169,11 +190,23 @@ pub struct TodoRow {
     pub opens: bool,
 }
 
-/// One to-do; `status` is the CLI's word for it (`pending`, `in_progress`, `completed`).
-#[derive(Clone, PartialEq, Eq, Debug)]
+/// One to-do; `status` is the CLI's word for it (`pending`, `in_progress`, `completed`). Its
+/// `Debug` shows the subject's length, not the subject (the user's or the CLI's words).
+#[derive(Clone, PartialEq, Eq)]
 pub struct TodoItem {
     pub content: String,
     pub status: String,
+}
+
+impl fmt::Debug for TodoItem {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "TodoItem(content {} bytes, status={})",
+            self.content.len(),
+            self.status
+        )
+    }
 }
 
 /// A card for one request of the CLI, after the message it came with.
@@ -206,19 +239,87 @@ pub struct SignInRow {
     pub key: String,
 }
 
-/// A compaction the CLI did (or failed to do), after the message it cut. `key` is `compaction/<n>`
-/// by the mark's place in the conversation, counted from 1.
+/// A line across the thread where the conversation changed under it; what came before stays
+/// above it.
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub struct CompactionRow {
+pub struct DividerRow {
     pub key: String,
-    pub outcome: CompactionOutcome,
+    pub divider: Divider,
     pub opens: bool,
+}
+
+/// What a [`DividerRow`] marks.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum Divider {
+    /// The conversation was cleared; `at` is when, as the CLI wrote it (ISO 8601, UTC), `None`
+    /// when it did not say.
+    Cleared { at: Option<String> },
+    /// The conversation was compacted (or failed to be): what started it, the tokens before and,
+    /// when the CLI said, after ([`CompactedRecord`](crate::transcript::CompactedRecord)).
+    Compacted {
+        trigger: String,
+        pre_tokens: i64,
+        post_tokens: Option<i64>,
+        failed: bool,
+    },
+}
+
+/// What an [`InformationalRecord`](crate::transcript::InformationalRecord) says of its level, as
+/// the CLI draws it: grey, or more prominent.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum NoticeLevel {
+    Notice,
+    Suggestion,
+    Warning,
+}
+
+/// The CLI's `suggestion` and `warning` are prominent; `notice` and any level not known are the
+/// quiet one.
+pub fn notice_level_of(level: &str) -> NoticeLevel {
+    match level {
+        "suggestion" => NoticeLevel::Suggestion,
+        "warning" => NoticeLevel::Warning,
+        _ => NoticeLevel::Notice,
+    }
+}
+
+/// A line of the CLI's own (`content`); `stopped` when the CLI did not go on after it. `Debug`
+/// shows the level and the length of `content`, never its words.
+#[derive(Clone, PartialEq, Eq)]
+pub struct NoticeRow {
+    pub key: String,
+    pub level: NoticeLevel,
+    pub content: String,
+    pub stopped: bool,
+    pub opens: bool,
+}
+
+impl fmt::Debug for NoticeRow {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "NoticeRow({:?}, {} bytes{})",
+            self.level,
+            self.content.len(),
+            if self.stopped { ", stopped" } else { "" }
+        )
+    }
 }
 
 /// The tools that only read; two or more in a row fold into one [`ExploredRow`].
 pub const READ_ONLY_TOOLS: [&str; 4] = ["Read", "Grep", "Glob", "LS"];
 
 const TODO_TOOL: &str = "TodoWrite";
+const TASK_CREATE: &str = "TaskCreate";
+const TASK_UPDATE: &str = "TaskUpdate";
+
+fn is_task_tool(name: &str) -> bool {
+    name == TASK_CREATE || name == TASK_UPDATE
+}
+
+fn is_task_row(row: &ThreadRow) -> bool {
+    matches!(row, ThreadRow::Tool(tool) if is_task_tool(&tool.tool_name))
+}
 
 /// An `Arc` as a key by its address (Kotlin's `IdentityHashMap`). The key holds the `Arc`, so the
 /// address cannot be freed and given to another record while the table has it.
@@ -280,7 +381,7 @@ pub struct ThreadRows {
     groups: HashMap<String, Arc<ExploredRow>>,
     cards: HashMap<ByPtr<ApprovalRecord>, Arc<CardRow>>,
     ends: HashMap<String, Arc<TurnEndRow>>,
-    compactions: HashMap<usize, Arc<CompactionRow>>,
+    tasks: TaskTodos,
 }
 
 impl ThreadRows {
@@ -289,27 +390,15 @@ impl ThreadRows {
         let mut next_parts = HashMap::new();
         let mut next_cards = HashMap::new();
         let mut next_ends = HashMap::new();
-        let mut next_compactions = HashMap::new();
         let mut rows = Vec::new();
         let go = plan_go_of(&transcript.operations);
         let by_anchor = ByAnchor::of(&transcript.approvals);
-        let asks = sent_asks(transcript);
+        let asks = live_asks(transcript);
         let followed: HashSet<&str> = asks
             .iter()
             .take(asks.len().saturating_sub(1))
             .map(String::as_str)
             .collect();
-        let marks = &transcript.compaction_marks;
-        // A mark that follows no message of this conversation goes first.
-        for (index, mark) in marks.iter().enumerate() {
-            if !mark
-                .after
-                .as_deref()
-                .is_some_and(|it| transcript.messages.contains(it))
-            {
-                rows.push(self.compaction_row(index, mark, &mut next_compactions));
-            }
-        }
         for message in transcript.messages.values() {
             let made = match self.messages.get(&by_ptr(message)) {
                 Some(kept) => {
@@ -337,11 +426,6 @@ impl ThreadRows {
                     go,
                 )));
             }
-            for (index, mark) in marks.iter().enumerate() {
-                if mark.after.as_deref() == Some(message.key.as_str()) {
-                    rows.push(self.compaction_row(index, mark, &mut next_compactions));
-                }
-            }
             if let Some(end) = self.turn_end_row(transcript, &message.key, &followed) {
                 next_ends.insert(end.key.clone(), Arc::clone(&end));
                 rows.push(ThreadRow::TurnEnd(end));
@@ -368,28 +452,8 @@ impl ThreadRows {
         self.parts = next_parts;
         self.cards = next_cards;
         self.ends = next_ends;
-        self.compactions = next_compactions;
-        self.grouped(rows)
-    }
-
-    /// The row of mark number `index`; the same `Arc` while the mark is the same.
-    fn compaction_row(
-        &self,
-        index: usize,
-        mark: &CompactionMark,
-        into: &mut HashMap<usize, Arc<CompactionRow>>,
-    ) -> ThreadRow {
-        let made = CompactionRow {
-            key: format!("compaction/{}", index + 1),
-            outcome: mark.outcome.clone(),
-            opens: false,
-        };
-        let row = match self.compactions.get(&index) {
-            Some(kept) if **kept == made => Arc::clone(kept),
-            _ => Arc::new(made),
-        };
-        into.insert(index, Arc::clone(&row));
-        ThreadRow::Compaction(row)
+        let grouped = self.grouped(rows);
+        self.tasks.folded(grouped, transcript)
     }
 
     fn turn_end_row(
@@ -590,7 +654,273 @@ fn row_of(key: String, part: &PartRecord, opens: bool) -> Option<ThreadRow> {
             detail: Some(tool_detail(call)),
             agent: agent_summary(call),
         }))),
+        PartRecord::Cleared(cleared) => Some(ThreadRow::Divider(Arc::new(DividerRow {
+            key,
+            divider: Divider::Cleared {
+                at: cleared.at.clone(),
+            },
+            opens,
+        }))),
+        PartRecord::Compacted(compacted) => Some(ThreadRow::Divider(Arc::new(DividerRow {
+            key,
+            divider: Divider::Compacted {
+                trigger: compacted.trigger.clone(),
+                pre_tokens: compacted.pre_tokens,
+                post_tokens: compacted.post_tokens,
+                failed: compacted.failed,
+            },
+            opens,
+        }))),
+        PartRecord::Informational(notice) => Some(ThreadRow::Notice(Arc::new(NoticeRow {
+            key,
+            level: notice_level_of(&notice.level),
+            content: notice.content.clone(),
+            stopped: notice.stopped,
+            opens,
+        }))),
         PartRecord::Other(_) | PartRecord::Attachment(_) => None,
+    }
+}
+
+/// Replaces the task calls' tool rows with the to-do list they build, one list per run of calls
+/// with nothing between them. The list starts empty and again after each `/clear`; a list that
+/// did not change is the same `Arc` as before. A run that leaves no task draws nothing, not even
+/// its tool rows. A message that is the same `Arc` as at the last read keeps the task calls found
+/// in it then (Kotlin's `callsOf`).
+#[derive(Default)]
+struct TaskTodos {
+    lists: HashMap<String, Arc<TodoRow>>,
+    calls_of: HashMap<String, MessageTaskCalls>,
+}
+
+/// A message as last read, and the parts of it that are task calls.
+struct MessageTaskCalls {
+    message: Arc<MessageRecord>,
+    calls: Vec<Arc<PartRecord>>,
+}
+
+impl TaskTodos {
+    fn folded(&mut self, rows: Vec<ThreadRow>, transcript: &Transcript) -> Vec<ThreadRow> {
+        if !rows.iter().any(is_task_row) {
+            self.lists = HashMap::new();
+            self.calls_of = HashMap::new();
+            return rows;
+        }
+        let calls_of = self.task_calls_of(transcript);
+        let calls = task_calls(transcript, &calls_of);
+        let mut out = Vec::with_capacity(rows.len());
+        let mut next_lists = HashMap::new();
+        let mut board = TaskBoard::default();
+        let mut first: Option<bool> = None;
+        for (index, row) in rows.iter().enumerate() {
+            if let ThreadRow::Divider(it) = row
+                && matches!(it.divider, Divider::Cleared { .. })
+            {
+                board.clear();
+            }
+            let ThreadRow::Tool(tool) = row else {
+                out.push(row.clone());
+                continue;
+            };
+            if !is_task_tool(&tool.tool_name) {
+                out.push(row.clone());
+                continue;
+            }
+            let opening = first.unwrap_or(tool.opens);
+            if let Some(call) = calls.get(tool.tool_use_id.as_str()) {
+                board.apply(call);
+            }
+            let run_goes_on = rows.get(index + 1).is_some_and(is_task_row);
+            first = run_goes_on.then_some(opening);
+            if !run_goes_on {
+                let items = board.items();
+                if items.is_empty() {
+                    continue;
+                }
+                let made = TodoRow {
+                    key: tool.key.clone(),
+                    items,
+                    opens: opening,
+                };
+                let list = match self.lists.get(&made.key) {
+                    Some(kept) if **kept == made => Arc::clone(kept),
+                    _ => Arc::new(made),
+                };
+                next_lists.insert(list.key.clone(), Arc::clone(&list));
+                out.push(ThreadRow::Todo(list));
+            }
+        }
+        self.lists = next_lists;
+        drop(calls);
+        self.calls_of = calls_of;
+        out
+    }
+
+    /// Each of the thread's own messages with its task calls, found again only in a message that
+    /// is not the `Arc` it was at the last read.
+    fn task_calls_of(&mut self, transcript: &Transcript) -> HashMap<String, MessageTaskCalls> {
+        transcript
+            .messages
+            .values()
+            .map(|message| {
+                let kept = self
+                    .calls_of
+                    .remove(&message.key)
+                    .filter(|it| Arc::ptr_eq(&it.message, message));
+                let found = kept.unwrap_or_else(|| MessageTaskCalls {
+                    message: Arc::clone(message),
+                    calls: message
+                        .parts
+                        .values()
+                        .filter(|part| {
+                            matches!(part.as_ref(), PartRecord::ToolCall(call) if is_task_tool(&call.tool_name))
+                        })
+                        .cloned()
+                        .collect(),
+                });
+                (message.key.clone(), found)
+            })
+            .collect()
+    }
+}
+
+/// The task calls of the thread's own messages by their tool use id: a row kept from before holds
+/// no call.
+fn task_calls<'a>(
+    transcript: &Transcript,
+    calls_of: &'a HashMap<String, MessageTaskCalls>,
+) -> HashMap<&'a str, &'a ToolCallRecord> {
+    transcript
+        .messages
+        .values()
+        .filter_map(|message| calls_of.get(&message.key))
+        .flat_map(|it| it.calls.iter())
+        .filter_map(|part| match part.as_ref() {
+            PartRecord::ToolCall(call) => Some((call.tool_use_id.as_str(), call)),
+            _ => None,
+        })
+        .collect()
+}
+
+/// What a `TaskCreate` result says first (`Task #1 created successfully: write tests`): the
+/// number after `Task #` of the first place that reads `Task #<digits> created`.
+fn task_created(text: &str) -> Option<&str> {
+    const HEAD: &str = "Task #";
+    text.match_indices(HEAD).find_map(|(at, _)| {
+        let rest = &text[at + HEAD.len()..];
+        let digits = rest.bytes().take_while(u8::is_ascii_digit).count();
+        (digits > 0 && rest[digits..].starts_with(" created")).then(|| &rest[..digits])
+    })
+}
+
+/// The tasks as the calls so far left them, by id, in the order they were created. A create not
+/// yet answered takes the number after the largest so far, the one the CLI gives next; if an
+/// answer later names that number, the unanswered one moves on to the next free number, so two
+/// tasks never share an id.
+#[derive(Default)]
+struct TaskBoard {
+    items: Vec<(String, TodoItem)>,
+    unanswered: HashSet<String>,
+}
+
+impl TaskBoard {
+    fn clear(&mut self) {
+        self.items.clear();
+        self.unanswered.clear();
+    }
+
+    fn items(&self) -> Vec<TodoItem> {
+        self.items.iter().map(|(_, item)| item.clone()).collect()
+    }
+
+    fn apply(&mut self, call: &ToolCallRecord) {
+        let Some(input) = call.input.as_deref().and_then(Value::as_object) else {
+            return;
+        };
+        if call.tool_name == TASK_CREATE {
+            self.create(call, input);
+        } else {
+            self.update(input);
+        }
+    }
+
+    fn create(&mut self, call: &ToolCallRecord, input: &serde_json::Map<String, Value>) {
+        let Some(subject) = input.string("subject") else {
+            return;
+        };
+        let item = TodoItem {
+            content: subject.to_owned(),
+            status: "pending".to_owned(),
+        };
+        let said = call
+            .result
+            .as_ref()
+            .and_then(|result| result.content.as_deref())
+            .and_then(|content| task_created(&result_text(content)).map(str::to_owned));
+        let Some(said) = said else {
+            let id = self.next_id();
+            self.unanswered.insert(id.clone());
+            self.put(id, item);
+            return;
+        };
+        if self.unanswered.contains(&said) {
+            self.move_on(&said);
+        }
+        self.put(said, item);
+    }
+
+    /// Sets the task `id`, keeping its place when the list holds it.
+    fn put(&mut self, id: String, item: TodoItem) {
+        match self.items.iter_mut().find(|(key, _)| *key == id) {
+            Some(slot) => slot.1 = item,
+            None => self.items.push((id, item)),
+        }
+    }
+
+    fn next_id(&self) -> String {
+        let largest = self
+            .items
+            .iter()
+            .filter_map(|(key, _)| key.parse::<i64>().ok())
+            .max()
+            .unwrap_or(0);
+        (largest + 1).to_string()
+    }
+
+    /// Gives the unanswered task `id` the next free number, keeping its place in the list.
+    fn move_on(&mut self, id: &str) {
+        let moved = self.next_id();
+        self.unanswered.remove(id);
+        self.unanswered.insert(moved.clone());
+        for (key, _) in &mut self.items {
+            if key == id {
+                key.clone_from(&moved);
+            }
+        }
+    }
+
+    /// An update of a task this list does not hold changes nothing.
+    fn update(&mut self, input: &serde_json::Map<String, Value>) {
+        let id = match input.get("taskId") {
+            Some(Value::String(text)) => text.clone(),
+            Some(Value::Number(number)) => number.to_string(),
+            _ => return,
+        };
+        let Some(at) = self.items.iter().position(|(key, _)| *key == id) else {
+            return;
+        };
+        let status = input.string("status");
+        if status == Some("deleted") {
+            self.items.remove(at);
+        } else {
+            let item = &mut self.items[at].1;
+            if let Some(subject) = input.string("subject") {
+                subject.clone_into(&mut item.content);
+            }
+            if let Some(status) = status {
+                status.clone_into(&mut item.status);
+            }
+        }
     }
 }
 
@@ -674,6 +1004,68 @@ mod tests {
         Transcript {
             messages: Keyed::new().put("m".into(), Arc::new(message)),
             ..Transcript::default()
+        }
+    }
+
+    fn explored_of(states: &[ToolLineState]) -> ExploredRow {
+        let members = states
+            .iter()
+            .enumerate()
+            .map(|(n, state)| {
+                Arc::new(ToolRow {
+                    key: format!("t{n}"),
+                    line: ToolLine {
+                        state: *state,
+                        label: "Read(a.rs)".into(),
+                        added: None,
+                        removed: None,
+                        denial: None,
+                    },
+                    tool_use_id: format!("t{n}"),
+                    tool_name: "Read".into(),
+                    depth: 0,
+                    opens: false,
+                    detail: None,
+                    agent: None,
+                })
+            })
+            .collect();
+        ExploredRow {
+            key: "t0".into(),
+            members,
+            depth: 0,
+            opens: false,
+        }
+    }
+
+    // The words are the CLI's and may say anything: a log shows the level and the length.
+    #[test]
+    fn a_notice_rows_debug_shows_its_level_not_its_words() {
+        let row = NoticeRow {
+            key: "m/notice".into(),
+            level: NoticeLevel::Warning,
+            content: "secret words".into(),
+            stopped: true,
+            opens: false,
+        };
+
+        let shown = format!("{row:?}");
+
+        assert!(shown.contains("Warning"), "{shown}");
+        assert!(!shown.contains("secret words"), "{shown}");
+    }
+
+    // ThreadViews.kt's explored line: a failure first, then a refusal, then one still running.
+    #[test]
+    fn an_explored_row_is_failed_then_denied_then_running_then_done() {
+        use ToolLineState::{Denied, Error, Ok, Running};
+        for (states, expected) in [
+            (vec![Ok, Denied, Error, Running], Error),
+            (vec![Ok, Running, Denied], Denied),
+            (vec![Ok, Running], Running),
+            (vec![Ok, Ok], Ok),
+        ] {
+            assert_eq!(expected, explored_of(&states).state(), "{states:?}");
         }
     }
 

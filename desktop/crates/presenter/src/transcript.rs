@@ -16,7 +16,7 @@
 use std::fmt;
 use std::sync::Arc;
 
-use imbl::{HashMap, HashSet, Vector};
+use imbl::{HashMap, HashSet};
 use serde_json::{Map, Value};
 
 use crate::keyed::Keyed;
@@ -61,29 +61,22 @@ pub struct Transcript {
     /// The key of the message whose reply said the CLI is not signed in, until the model's next
     /// reply.
     pub sign_in: Option<String>,
-    /// Where each compaction happened, oldest first; unlike `operations.compactions` none is
-    /// dropped.
-    pub compaction_marks: Vector<CompactionMark>,
+    /// The uuid of the `system/status` that said the last compaction did not succeed, until a
+    /// boundary, a `result` or a reset uses it up.
+    pub compact_failure: Option<String>,
     /// The keys of the user messages the session refused to send.
     pub not_sent: imbl::HashSet<String>,
-}
-
-/// One compaction as the conversation shows it: after `after`, the key of the last message when
-/// it happened (`None` when there was none).
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub struct CompactionMark {
-    pub after: Option<String>,
-    pub outcome: CompactionOutcome,
-}
-
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub enum CompactionOutcome {
-    Compacted {
-        trigger: String,
-        pre_tokens: i64,
-        post_tokens: i64,
-    },
-    Failed,
+    /// Where the conversation was last cleared: the place in `messages` of the message holding the
+    /// last [`ClearedRecord`], `None` while it never was. What comes before it belongs to a
+    /// conversation the CLI no longer has.
+    pub cleared_at: Option<usize>,
+    /// Where the conversation was last cleared by `/clear` (a reset whose trigger is `clear`):
+    /// the session is named by the first request after it. `None` while none was; a reset of
+    /// another trigger (leaving plan mode with a clear context) leaves it.
+    pub cleared_by_clear_at: Option<usize>,
+    /// Refusals whose call has no line yet, by the call's key; each is put on its line when the
+    /// line is made.
+    pub denials: HashMap<String, Denial>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -138,6 +131,86 @@ pub enum PartRecord {
     ToolCall(ToolCallRecord),
     Other(OtherRecord),
     Attachment(AttachmentRecord),
+    Cleared(ClearedRecord),
+    Compacted(CompactedRecord),
+    Informational(InformationalRecord),
+}
+
+/// A compaction as the thread shows it (`system/compact_boundary`): what started it (`unknown`
+/// when the CLI did not say), the tokens before and, when the CLI said, after. `failed` when a
+/// status said it did not succeed; one no boundary followed has no tokens (`pre_tokens` 0).
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct CompactedRecord {
+    pub key: String,
+    pub trigger: String,
+    pub pre_tokens: i64,
+    pub post_tokens: Option<i64>,
+    pub failed: bool,
+}
+
+/// A line the CLI would print in its own terminal (`system/informational`), of a `level` other
+/// than `info`. `stopped` is true when the CLI stopped going on after it. `Debug` shows the level
+/// and the length of `content`, never its words.
+#[derive(Clone, PartialEq, Eq)]
+pub struct InformationalRecord {
+    pub key: String,
+    pub level: String,
+    pub content: String,
+    pub stopped: bool,
+}
+
+impl fmt::Debug for InformationalRecord {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "InformationalRecord({}, {} bytes{})",
+            self.level,
+            self.content.len(),
+            if self.stopped { ", stopped" } else { "" }
+        )
+    }
+}
+
+/// Why the CLI refused a call on its own: the kind of decision (`mode`, `rule`, `classifier`...)
+/// and its own words, each when it gave them. `Debug` shows the kind and the length of `reason`,
+/// never its words.
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub struct Denial {
+    pub reason_type: Option<String>,
+    pub reason: Option<String>,
+}
+
+impl fmt::Debug for Denial {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Denial({}, ",
+            self.reason_type.as_deref().unwrap_or("no kind")
+        )?;
+        match &self.reason {
+            Some(reason) => write!(f, "reason of {} bytes)", reason.len()),
+            None => write!(f, "no reason)"),
+        }
+    }
+}
+
+/// Where the CLI discarded the conversation (`conversation_reset`): what came before stays shown,
+/// above it. `key` is its part key; `at` is when it happened as the CLI wrote it (ISO 8601, UTC),
+/// `None` when the line did not say. `Debug` shows the time alone.
+#[derive(Clone, PartialEq, Eq)]
+pub struct ClearedRecord {
+    pub key: String,
+    pub at: Option<String>,
+}
+
+impl fmt::Debug for ClearedRecord {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "ClearedRecord({})",
+            self.at.as_deref().unwrap_or("no time")
+        )
+    }
 }
 
 /// A text or thinking block. `streaming` is true from the stream's `content_block_start` until its
@@ -164,6 +237,8 @@ pub struct ToolCallRecord {
     /// A sub-agent's conversation, when this call started one.
     pub messages: Keyed<MessageRecord>,
     pub streaming: bool,
+    /// Set when the CLI refused this call on its own (`permission_denied`), without asking.
+    pub denied: Option<Denial>,
 }
 
 /// The `tool_result` for a call. `content` is `None` when the block carried none. `duration_ms`

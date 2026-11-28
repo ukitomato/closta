@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use super::record_files::RecordFs;
 
 /// The longest folder name the CLI makes, in UTF-16 units.
-pub const MAX_NAME_LENGTH: usize = 200;
+pub(crate) const MAX_NAME_LENGTH: usize = 200;
 
 /// The CLI's folder name for a working folder: every UTF-16 unit that is not an ASCII letter or digit is `-`.
 pub fn name_of(directory: &str) -> String {
@@ -165,6 +165,18 @@ mod tests {
         );
         assert_eq!(name_of("😀"), "--");
         assert_eq!(name_of("C:\\dev\\é"), "C--dev--");
+    }
+
+    // The xtask's `record_name` is tested with the same pairs; the two must not drift.
+    #[test]
+    fn names_follow_the_cli() {
+        for (path, name) in [
+            ("/home/me/closta", "-home-me-closta"),
+            ("/home/me/my.project/_x/1", "-home-me-my-project--x-1"),
+            ("C:\\dev\\x", "C--dev-x"),
+        ] {
+            assert_eq!(name_of(path), name, "{path}");
+        }
     }
 
     #[test]

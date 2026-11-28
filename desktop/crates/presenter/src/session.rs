@@ -6,7 +6,7 @@ use closta_model::ConversationState;
 
 use crate::fold::fold_transcript;
 use crate::input::PresenterInput;
-use crate::transcript::Transcript;
+use crate::transcript::{MessageSource, Transcript};
 
 /// What one session has to show: core's state of the conversation and the presenter's
 /// [`Transcript`] of it, folded from the same inputs in the same order — core first, then the
@@ -68,6 +68,44 @@ impl SessionView {
             transcript,
         }
     }
+}
+
+/// The id `view`'s conversation is saved under. A session launched or resumed by the host's
+/// `host_id` keeps it; once the conversation was cleared the CLI goes on under a new one, which
+/// its init after the clear names. From the clear until that init it is `host_id` again, never the
+/// id of the conversation that was cleared (resumeIdOf in SessionView.kt).
+pub fn resume_id_of(view: &SessionView, host_id: &str) -> String {
+    view.conversation
+        .session
+        .as_ref()
+        .filter(|_| view.transcript.cleared_at.is_some())
+        .map_or_else(|| host_id.to_owned(), |session| session.session_id.clone())
+}
+
+/// Whether a message was sent after the last `/clear`; false while the conversation was never
+/// cleared (sentAfterClear in ClearedTabs.kt, 022513f).
+pub fn sent_after_clear(transcript: &Transcript) -> bool {
+    transcript.cleared_at.is_some_and(|cleared| {
+        transcript
+            .messages
+            .order()
+            .skip(cleared + 1)
+            .filter_map(|key| transcript.messages.get(key))
+            .any(|message| message.source == MessageSource::Sent)
+    })
+}
+
+/// The id a restart starts a new conversation under: the CLI's, once the init after the last
+/// `/clear` named it, while nothing was sent since. The CLI may not have written that
+/// conversation's file before its first message, so there is none to resume (clearedTabOf in
+/// ClearedTabs.kt, 022513f). `None` before any clear, from the reset until that init, and once a
+/// message was sent after it.
+pub fn afresh_after_clear(view: &SessionView) -> Option<&str> {
+    view.conversation
+        .session
+        .as_ref()
+        .filter(|_| view.transcript.cleared_at.is_some() && !sent_after_clear(&view.transcript))
+        .map(|session| session.session_id.as_str())
 }
 
 #[cfg(test)]

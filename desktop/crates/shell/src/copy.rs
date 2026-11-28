@@ -4,10 +4,11 @@
 
 use closta_presenter::cards::plan::{PlanCard, PlanGo};
 use closta_presenter::cards::{SuggestionLine, ThreadCard};
-use closta_presenter::rows::{CardRow, CompactionRow, ExploredRow, TurnEndRow};
+use closta_presenter::rows::{CardRow, Divider, DividerRow, ExploredRow, NoticeRow, TurnEndRow};
 use closta_presenter::sessions::groups::AlertKind;
-use closta_presenter::tool_line::{AgentSummary, ToolLineState};
-use closta_presenter::transcript::{ApprovalOutcome, CompactionOutcome};
+use closta_presenter::text::kt_is_blank;
+use closta_presenter::tool_line::{AgentSummary, ToolLine, ToolLineState};
+use closta_presenter::transcript::{ApprovalOutcome, Denial};
 use closta_providers::claude::process::ProcessFailure;
 use closta_session::status::SessionFailure;
 
@@ -49,6 +50,13 @@ pub const SIGN_IN_ACTION: &str = "Sign in in the terminal";
 pub const TOOL_RUNNING: &str = "Running";
 pub const TOOL_DONE: &str = "Done";
 pub const TOOL_FAILED: &str = "Failed";
+/// A call the CLI refused on its own, when it said nothing of why (`thread.tool.denied`).
+pub const TOOL_DENIED: &str = "Denied without asking";
+pub const DENIED_MODE: &str = "Denied without asking in this permission mode";
+pub const DENIED_RULE: &str = "Denied by a rule";
+pub const DENIED_CLASSIFIER: &str = "Denied by the automatic check";
+/// After a notice of the CLI's that stopped it (`thread.notice.stopped`).
+pub const NOTICE_STOPPED: &str = "Claude stopped here";
 /// A card no one has answered yet (`thread.jump.waiting`).
 pub const CARD_WAITING: &str = "Waiting for your answer";
 
@@ -80,7 +88,8 @@ pub const CLAUDE_SCRIPT_ONLY: &str =
 
 /// A failed session's band.
 pub const RESTART: &str = "Restart";
-pub const RESTART_NOTE: &str = "Restart starts a new conversation.";
+pub const RESTART_CONTINUES: &str = "Restart continues this conversation.";
+pub const RESTART_AGAIN: &str = "Restart starts the session again.";
 pub const SESSION_ENDED: &str = "Session ended";
 
 /// While the window closes its sessions.
@@ -96,11 +105,60 @@ const MINUTE_S: i64 = 60;
 const MCP_PREFIX: &str = "mcp__";
 const EDITS: [&str; 3] = ["Edit", "MultiEdit", "NotebookEdit"];
 
+/// The resume popup's title, with the project's name.
+pub fn resume_title(name: &str) -> String {
+    format!("Resume a session · {name}")
+}
+
 pub fn tool_state(state: ToolLineState) -> &'static str {
     match state {
         ToolLineState::Running => TOOL_RUNNING,
         ToolLineState::Ok => TOOL_DONE,
         ToolLineState::Error => TOOL_FAILED,
+        ToolLineState::Denied => TOOL_DENIED,
+    }
+}
+
+/// `line`'s state in words; for a refused call, why it was refused (ThreadStyle.kt's
+/// `stateWord(line)`).
+pub fn tool_line_state(line: &ToolLine) -> String {
+    if line.state == ToolLineState::Denied {
+        denied_text(line.denial.as_ref())
+    } else {
+        tool_state(line.state).to_owned()
+    }
+}
+
+/// Why the CLI refused a call without asking (DeniedText.kt): its own words first when it gave
+/// some, then the kind of decision in ours (`mode`, `rule`, `classifier`; any other kind as the
+/// CLI named it). A blank word counts as none; a refusal that says nothing is [`TOOL_DENIED`].
+pub fn denied_text(denial: Option<&Denial>) -> String {
+    fn said(it: Option<&String>) -> Option<&str> {
+        it.map(String::as_str).filter(|it| !kt_is_blank(it))
+    }
+    let kind = denial
+        .and_then(|it| said(it.reason_type.as_ref()))
+        .map(|kind| match kind {
+            "mode" => DENIED_MODE,
+            "rule" => DENIED_RULE,
+            "classifier" => DENIED_CLASSIFIER,
+            other => other,
+        });
+    let reason = denial.and_then(|it| said(it.reason.as_ref()));
+    let words: Vec<&str> = reason.into_iter().chain(kind).collect();
+    if words.is_empty() {
+        TOOL_DENIED.to_owned()
+    } else {
+        words.join(" — ")
+    }
+}
+
+/// A notice of the CLI's in one line: its words, then that it stopped when it did.
+pub fn notice_line(row: &NoticeRow) -> String {
+    if row.stopped {
+        format!("{} {NOTICE_STOPPED}", row.content)
+    } else {
+        row.content.clone()
     }
 }
 
@@ -125,21 +183,32 @@ pub fn tokens(n: i64) -> String {
     }
 }
 
-/// The line a compaction's divider says: the tokens before and after, and `auto` when the CLI
-/// chose to compact.
-pub fn compaction_line(row: &CompactionRow) -> String {
-    match &row.outcome {
-        CompactionOutcome::Failed => COMPACTION_FAILED.to_owned(),
-        CompactionOutcome::Compacted {
+/// A clear's divider (`thread.divider.clearedNoTime`); the time it was cleared is said in stage 6g.
+pub const CLEARED: &str = "Conversation cleared";
+
+/// The line a divider says. A compaction's says the tokens before and after (or only before, when
+/// the CLI did not say after), and `auto` when the CLI chose to compact.
+pub fn divider_line(row: &DividerRow) -> String {
+    match &row.divider {
+        Divider::Cleared { .. } => CLEARED.to_owned(),
+        Divider::Compacted { failed: true, .. } => COMPACTION_FAILED.to_owned(),
+        Divider::Compacted {
             trigger,
             pre_tokens,
             post_tokens,
+            failed: false,
         } => {
-            let mut line = format!(
-                "Conversation compacted · {} → {} tokens",
-                tokens(*pre_tokens),
-                tokens(*post_tokens)
-            );
+            let mut line = match post_tokens {
+                Some(post_tokens) => format!(
+                    "Conversation compacted · {} → {} tokens",
+                    tokens(*pre_tokens),
+                    tokens(*post_tokens)
+                ),
+                None => format!(
+                    "Conversation compacted · {} tokens before",
+                    tokens(*pre_tokens)
+                ),
+            };
             if trigger == AUTO_TRIGGER {
                 line.push_str(" · auto");
             }
@@ -339,6 +408,14 @@ pub const NEEDS_YOU: &str = "NEEDS YOU";
 /// The left pane's tree: its heading and the heading of the sessions in no project.
 pub const PROJECTS_HEADING: &str = "PROJECTS";
 pub const OTHER_HEADING: &str = "OTHER";
+/// The resume popup.
+pub const RESUME_SEARCH: &str = "Search";
+pub const RESUME_LOADING: &str = "Loading…";
+pub const RESUME_NONE: &str = "No saved sessions";
+pub const RESUME_UNREADABLE: &str = "The saved sessions could not be read";
+pub const RESUME_NO_MATCHES: &str = "No matches";
+pub const RESUME_OPEN: &str = "Open";
+pub const RESUME_CLOSING: &str = "Closing…";
 pub const REMOVE_FROM_LIST: &str = "Remove from list";
 pub const CLOSE_ITS_SESSIONS: &str = "Close its sessions first.";
 pub const LIST_ALLOW: &str = "Allow";
@@ -582,9 +659,11 @@ mod tests {
     use closta_presenter::cards::plan::{PlanCard, PlanGo};
     use closta_presenter::cards::{PermissionCard, QuestionCard, QuestionView, ThreadCard};
     use closta_presenter::records::turn_end::{ChangedFile, TurnChangesRecord};
-    use closta_presenter::rows::{CardRow, ExploredRow, ToolRow, TurnEndRow};
+    use closta_presenter::rows::{
+        CardRow, ExploredRow, NoticeLevel, NoticeRow, ToolRow, TurnEndRow,
+    };
     use closta_presenter::tool_line::{AgentSummary, ToolDetail, ToolLine, ToolLineState};
-    use closta_presenter::transcript::ApprovalOutcome;
+    use closta_presenter::transcript::{ApprovalOutcome, Denial};
 
     use super::*;
 
@@ -596,6 +675,7 @@ mod tests {
                 label: format!("{name}({target})"),
                 added: None,
                 removed: None,
+                denial: None,
             },
             tool_use_id: key.to_owned(),
             tool_name: name.to_owned(),
@@ -1112,6 +1192,12 @@ mod tests {
             ("thread.name", CONVERSATION),
             ("toolwindow.tab.sessions", SESSIONS),
             ("sessions.window.detail.working", WORKING),
+            ("thread.divider.clearedNoTime", CLEARED),
+            ("thread.tool.denied", TOOL_DENIED),
+            ("thread.tool.denied.mode", DENIED_MODE),
+            ("thread.tool.denied.rule", DENIED_RULE),
+            ("thread.tool.denied.classifier", DENIED_CLASSIFIER),
+            ("thread.notice.stopped", NOTICE_STOPPED),
         ] {
             assert_eq!(bundle.get(key).map(String::as_str), Some(text), "{key}");
         }
@@ -1152,36 +1238,161 @@ mod tests {
         }
     }
 
-    fn compaction(outcome: CompactionOutcome) -> CompactionRow {
-        CompactionRow {
-            key: "compaction/1".to_owned(),
-            outcome,
+    fn compacted(
+        trigger: &str,
+        pre_tokens: i64,
+        post_tokens: Option<i64>,
+        failed: bool,
+    ) -> DividerRow {
+        DividerRow {
+            key: "turn/compacted".to_owned(),
+            divider: Divider::Compacted {
+                trigger: trigger.to_owned(),
+                pre_tokens,
+                post_tokens,
+                failed,
+            },
             opens: false,
         }
     }
 
-    fn compacted(trigger: &str, pre: i64, post: i64) -> CompactionRow {
-        compaction(CompactionOutcome::Compacted {
-            trigger: trigger.to_owned(),
-            pre_tokens: pre,
-            post_tokens: post,
-        })
-    }
-
+    // Was `compaction_lines_say_tokens_and_auto`: the desktop's own compaction row gave way to the
+    // divider (9a9d5a7); its words keep the desktop's form (the plan's writer's decision 11).
     #[test]
-    fn compaction_lines_say_tokens_and_auto() {
+    fn compacted_dividers_say_tokens_auto_and_failure() {
         assert_eq!(
-            compaction_line(&compacted("manual", 20_072, 1_235)),
-            "Conversation compacted · 20.1k → 1.2k tokens"
+            divider_line(&compacted("manual", 21_819, Some(3_447), false)),
+            "Conversation compacted · 21.8k → 3.4k tokens"
         );
         assert_eq!(
-            compaction_line(&compacted("auto", 20_072, 1_235)),
-            "Conversation compacted · 20.1k → 1.2k tokens · auto"
+            divider_line(&compacted("auto", 21_819, Some(3_447), false)),
+            "Conversation compacted · 21.8k → 3.4k tokens · auto"
         );
         assert_eq!(
-            compaction_line(&compaction(CompactionOutcome::Failed)),
+            divider_line(&compacted("manual", 21_819, None, false)),
+            "Conversation compacted · 21.8k tokens before"
+        );
+        assert_eq!(
+            divider_line(&compacted("manual", 21_819, Some(3_447), true)),
             "Compaction failed"
         );
+        assert_eq!(
+            divider_line(&compacted("unknown", 0, None, true)),
+            "Compaction failed"
+        );
+    }
+
+    // DeniedToolTest.kt: the words for a refusal are the reason first, then the kind in our words.
+    #[test]
+    fn the_words_for_a_refusal_are_the_reason_first_then_the_kind_in_our_words() {
+        let denial = |reason_type: Option<&str>, reason: Option<&str>| Denial {
+            reason_type: reason_type.map(str::to_owned),
+            reason: reason.map(str::to_owned),
+        };
+        for (expected, said) in [
+            (
+                "Denied without asking in this permission mode",
+                denied_text(Some(&denial(Some("mode"), None))),
+            ),
+            (
+                "Denied by a rule",
+                denied_text(Some(&denial(Some("rule"), None))),
+            ),
+            (
+                "Denied by the automatic check",
+                denied_text(Some(&denial(Some("classifier"), None))),
+            ),
+            (
+                "asyncAgent",
+                denied_text(Some(&denial(Some("asyncAgent"), None))),
+            ),
+            (
+                "Not on the list — Denied by a rule",
+                denied_text(Some(&denial(Some("rule"), Some("Not on the list")))),
+            ),
+            (
+                "Denied without asking",
+                denied_text(Some(&denial(None, None))),
+            ),
+            ("Denied without asking", denied_text(None)),
+        ] {
+            assert_eq!(expected, said);
+        }
+    }
+
+    // DeniedText.kt's `isNotBlank`: a reason or a kind of spaces alone says nothing.
+    #[test]
+    fn a_blank_reason_or_kind_is_left_out() {
+        let blank = Denial {
+            reason_type: Some(" ".to_owned()),
+            reason: Some(String::new()),
+        };
+        let blank_kind = Denial {
+            reason_type: Some(" \t".to_owned()),
+            reason: Some("Not on the list".to_owned()),
+        };
+
+        assert_eq!("Denied without asking", denied_text(Some(&blank)));
+        assert_eq!("Not on the list", denied_text(Some(&blank_kind)));
+    }
+
+    // ThreadViews.kt's `notice`: the CLI's words, then that it stopped when it did.
+    #[test]
+    fn a_notice_that_stopped_says_so() {
+        let notice = |stopped: bool| NoticeRow {
+            key: "m/notice".to_owned(),
+            level: NoticeLevel::Warning,
+            content: "Stop hook said no".to_owned(),
+            stopped,
+            opens: false,
+        };
+
+        assert_eq!(
+            "Stop hook said no Claude stopped here",
+            notice_line(&notice(true))
+        );
+        assert_eq!("Stop hook said no", notice_line(&notice(false)));
+    }
+
+    // ThreadStyle.kt's `stateWord(line)`: a refused call says why; any other its state.
+    #[test]
+    fn a_refused_line_says_why_and_any_other_its_state() {
+        let line = |state: ToolLineState, denial: Option<Denial>| ToolLine {
+            state,
+            label: "Bash(ls)".to_owned(),
+            added: None,
+            removed: None,
+            denial,
+        };
+        let rule = Denial {
+            reason_type: Some("rule".to_owned()),
+            reason: None,
+        };
+
+        assert_eq!(
+            "Denied by a rule",
+            tool_line_state(&line(ToolLineState::Denied, Some(rule)))
+        );
+        assert_eq!(
+            "Denied without asking",
+            tool_line_state(&line(ToolLineState::Denied, None))
+        );
+        assert_eq!("Failed", tool_line_state(&line(ToolLineState::Error, None)));
+        assert_eq!("Done", tool_line_state(&line(ToolLineState::Ok, None)));
+    }
+
+    // DividerText.kt: the time is said by the screen of stage 6g; until then the words alone,
+    // whether or not the CLI said when.
+    #[test]
+    fn the_divider_of_a_clear_says_cleared_without_a_time() {
+        for at in [Some("2026-11-14T12:26:36.305Z".to_owned()), None] {
+            let row = DividerRow {
+                key: "m/cleared".to_owned(),
+                divider: Divider::Cleared { at: at.clone() },
+                opens: false,
+            };
+            assert_eq!(divider_line(&row), "Conversation cleared", "{at:?}");
+        }
     }
 
     #[test]
@@ -1196,6 +1407,10 @@ mod tests {
         assert_eq!(tokens(999_999), "1.0M");
         assert_eq!(tokens(1_000_000), "1.0M");
         assert_eq!(tokens(1_234_567), "1.2M");
+        // TokenTextTest.kt (a22fa03); its 999_950 is above.
+        assert_eq!(tokens(21_819), "21.8k");
+        assert_eq!(tokens(3_447), "3.4k");
+        assert_eq!(tokens(12_345_678), "12.3M");
     }
 
     #[test]
@@ -1374,12 +1589,21 @@ mod tests {
                 "Only a script was found for claude; install the native claude.exe.",
             ),
             (RESTART, "Restart"),
-            (RESTART_NOTE, "Restart starts a new conversation."),
+            (RESTART_CONTINUES, "Restart continues this conversation."),
+            (RESTART_AGAIN, "Restart starts the session again."),
             (SESSION_ENDED, "Session ended"),
             (CLOSING, "Closing sessions…"),
             (CLOSE, "Close"),
+            (RESUME_SEARCH, "Search"),
+            (RESUME_LOADING, "Loading…"),
+            (RESUME_NONE, "No saved sessions"),
+            (RESUME_UNREADABLE, "The saved sessions could not be read"),
+            (RESUME_NO_MATCHES, "No matches"),
+            (RESUME_OPEN, "Open"),
+            (RESUME_CLOSING, "Closing…"),
         ] {
             assert_eq!(text, spec);
         }
+        assert_eq!(resume_title("closta"), "Resume a session · closta");
     }
 }

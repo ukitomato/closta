@@ -2,7 +2,6 @@
 
 #[cfg(feature = "replay")]
 mod args;
-#[cfg(feature = "replay")]
 mod list_saved;
 mod logging;
 mod ports;
@@ -10,6 +9,7 @@ mod ports;
 mod probe;
 #[cfg(feature = "replay")]
 mod replay;
+mod saved;
 mod settings;
 
 use std::process::ExitCode;
@@ -53,9 +53,15 @@ fn main() -> ExitCode {
     #[cfg(not(feature = "replay"))]
     let options = {
         let _ = started;
-        if std::env::args().nth(1).is_some() {
-            eprintln!("closta: this build takes no arguments");
-            return ExitCode::from(USAGE);
+        match list_saved::parse_release(std::env::args().skip(1)) {
+            Ok(None) => {}
+            Ok(Some((folder, ready_file))) => {
+                return list_saved::run(&folder, ready_file.as_deref());
+            }
+            Err(error) => {
+                eprintln!("closta: {error}");
+                return ExitCode::from(USAGE);
+            }
         }
         let (projects, settings) = kept_settings(true);
         PlatformOptions {
@@ -67,6 +73,7 @@ fn main() -> ExitCode {
             probe: None,
             ports: ports::real_ports(settings),
             projects,
+            open_resume: false,
         }
     };
     closta_platform::run(options);
@@ -91,6 +98,20 @@ fn kept_settings(keeps: bool) -> (Settings, Arc<dyn SettingsSink>) {
         }
     });
     (projects, sink)
+}
+
+/// The ports of a replay or a check: the real ones, except that `--config-dir` fixes the place
+/// every project's saved sessions are read from.
+#[cfg(feature = "replay")]
+fn replay_ports(
+    settings: Arc<dyn SettingsSink>,
+    args: &args::AppArgs,
+) -> closta_shell::state::Ports {
+    let mut ports = ports::real_ports(settings);
+    if let Some(dir) = &args.config_dir {
+        ports.saved_for = Arc::new(saved::RealSavedFor::in_config_dir(dir.clone()));
+    }
+    ports
 }
 
 /// The window and the slots the replay build was started with: the replays and what is
@@ -136,8 +157,9 @@ fn replay_options(
         panes: args.panes,
         measure,
         probe: None,
-        ports: ports::real_ports(settings),
+        ports: replay_ports(settings, &args),
         projects,
+        open_resume: args.open_resume,
     })
 }
 
@@ -153,7 +175,7 @@ fn probe_options(
     // A check reads and writes no settings; its projects are the ones it was given.
     let projects = args.settings();
     let (_, settings) = kept_settings(false);
-    let mut ports = ports::real_ports(settings);
+    let mut ports = replay_ports(settings, &args);
     // Wrapped before any folder is planned: every real session gets the mark and the
     // configuration, a Restart's too.
     if args.mark_children.is_some() || args.mcp_config.is_some() {
@@ -186,5 +208,6 @@ fn probe_options(
         probe,
         ports,
         projects,
+        open_resume: args.open_resume,
     })
 }

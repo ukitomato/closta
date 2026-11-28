@@ -8,11 +8,13 @@ use closta_goldens::synthetic::stream_script::{StreamScript, text, tool_use};
 use closta_model::AgentEvent;
 use closta_presenter::input::{PresenterInput, SendId, UserSent};
 use closta_presenter::keyed::Keyed;
-use closta_presenter::rows::{ThreadRow, ThreadRows, TodoItem, agent_rows, agent_transcript};
+use closta_presenter::rows::{
+    Divider, DividerRow, ThreadRow, ThreadRows, TodoItem, agent_rows, agent_transcript,
+};
 use closta_presenter::session::SessionView;
 use closta_presenter::transcript::{
-    ApprovalRecord, CompactionOutcome, MessageRecord, MessageSource, PartRecord, Role, TextRecord,
-    ToolCallRecord, Transcript,
+    ApprovalRecord, MessageRecord, MessageSource, PartRecord, Role, TextRecord, ToolCallRecord,
+    Transcript,
 };
 use closta_providers::claude::protocol::decode;
 use serde_json::{Value, json};
@@ -569,14 +571,18 @@ fn a_message_reused_once_still_keeps_its_part_rows_when_it_grows() {
     assert!(made[0].same(&after[0]), "{:?}", after[0]);
 }
 
-fn compaction_rows(rows: &[ThreadRow]) -> Vec<&Arc<closta_presenter::rows::CompactionRow>> {
+fn compaction_rows(rows: &[ThreadRow]) -> Vec<&Arc<DividerRow>> {
     rows.iter()
         .filter_map(|row| match row {
-            ThreadRow::Compaction(it) => Some(it),
+            ThreadRow::Divider(it) if matches!(it.divider, Divider::Compacted { .. }) => Some(it),
             _ => None,
         })
         .collect()
 }
+
+/// 21's `/compact` turn: the `command_uuid` of 21 lines 16 and 17, the message the golden holds
+/// the `compacted` part in.
+const COMPACT_TURN: &str = "a3ec4b73-9418-4ab2-ac4f-69dffff51945";
 
 #[test]
 fn a_compaction_is_one_row_after_the_ask_that_asked_for_it() {
@@ -584,30 +590,34 @@ fn a_compaction_is_one_row_after_the_ask_that_asked_for_it() {
     let compactions = compaction_rows(&rows);
     assert_eq!(1, compactions.len(), "{rows:?}");
     let row = compactions[0];
-    assert_eq!("compaction/1", row.key);
-    assert!(!row.opens);
+    let key = format!("{COMPACT_TURN}/compacted");
+    assert_eq!(key, row.key);
+    assert!(row.opens, "the first row of the turn's message");
+    // 21 line 21: the boundary's `compact_metadata`.
     assert_eq!(
-        CompactionOutcome::Compacted {
+        Divider::Compacted {
             trigger: "manual".to_owned(),
-            pre_tokens: 20072,
-            post_tokens: 1235,
+            pre_tokens: 21819,
+            post_tokens: Some(3447),
+            failed: false,
         },
-        row.outcome
+        row.divider
     );
     let at = rows
         .iter()
-        .position(|it| it.key() == "compaction/1")
+        .position(|it| it.key() == key)
         .unwrap_or_else(|| panic!("no compaction row"));
     let ask = rows
         .iter()
         .rposition(|it| matches!(it, ThreadRow::Ask(ask) if ask.text.trim() == "/compact"))
         .unwrap_or_else(|| panic!("no /compact ask: {rows:?}"));
-    assert!(ask < at, "after the ask: {rows:?}");
-    let end = rows[ask..]
-        .iter()
-        .position(|it| matches!(it, ThreadRow::TurnEnd(_)))
-        .unwrap_or_else(|| panic!("no turn end after the /compact ask: {rows:?}"));
-    assert!(at < ask + end, "before the turn end: {rows:?}");
+    // The golden's messages are send-2 then the turn, whose only part is `compacted`; the turn's
+    // `result` (21 line 24) ends it.
+    assert_eq!(ask + 1, at, "right after the ask: {rows:?}");
+    assert!(
+        matches!(rows.get(at + 1), Some(ThreadRow::TurnEnd(_))),
+        "the turn end follows: {rows:?}"
+    );
 }
 
 #[test]

@@ -107,7 +107,7 @@ fn only_a_sub_agents_call_takes_a_duration() {
         .view
         .transcript
         .clone();
-    let read = "toolu_017AYaBDFQPgf2trBHtoP1HN";
+    let read = "toolu_011Yw3MDkf6a4P4rzGqAqbyP";
     let message = RawJson(format!(
         r#"{{"role":"user","content":[{{"type":"tool_result","tool_use_id":"{read}","content":"x"}}]}}"#
     ));
@@ -134,9 +134,9 @@ fn a_sub_agent_row_says_what_it_does_and_how_many_tools_it_called() {
         .collect();
     assert_eq!(
         vec![Some(AgentSummary {
-            description: Some("Read NOTES.md and summarize".into()),
+            description: Some("Summarize NOTES.md".into()),
             tools: 1,
-            duration_ms: Some(3705),
+            duration_ms: Some(3539),
         })],
         agents
     );

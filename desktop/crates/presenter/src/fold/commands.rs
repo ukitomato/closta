@@ -8,7 +8,9 @@ use serde_json::Value;
 
 use crate::fold::operations::with_operations;
 use crate::json::{JsonFields, parse};
-use crate::records::composer::{SlashCommands, commands_of_init, commands_of_response};
+use crate::records::composer::{
+    SlashCommands, commands_of, commands_of_init, commands_of_response,
+};
 use crate::records::operations::OperationRecords;
 use crate::records::readings::models_of_response;
 use crate::transcript::Transcript;
@@ -54,6 +56,24 @@ pub(crate) fn fold_commands_of_response(
         ..OperationRecords::clone(operations)
     };
     with_operations(&with_commands, updated)
+}
+
+/// `system/commands_changed` carries the whole new list with its sentences; it replaces what the
+/// transcript had. Something that is not a list leaves the transcript as it was.
+pub(crate) fn fold_commands_of_change(
+    transcript: &Arc<Transcript>,
+    commands: &RawJson,
+) -> Arc<Transcript> {
+    match parse(&commands.0) {
+        Some(Value::Array(items)) => with_commands(
+            transcript,
+            SlashCommands {
+                items: commands_of(&items),
+                detailed: true,
+            },
+        ),
+        _ => Arc::clone(transcript),
+    }
 }
 
 /// `system/init` names the commands only; it is used while no `initialize` response has given the

@@ -7,10 +7,10 @@
 
 use std::sync::Arc;
 
-use closta_goldens::common::read_capture;
+use closta_goldens::common::{legacy_excerpt, read_capture};
 use closta_goldens::lines::{self, ResultLine};
 use closta_goldens::projector::project_tree;
-use closta_goldens::replay::{THREAD, inputs};
+use closta_goldens::replay::{THREAD, inputs, inputs_from};
 use closta_goldens::tree_reading::at;
 use closta_model::{AgentEvent, RawJson, TurnPhase};
 use closta_presenter::input::{
@@ -239,10 +239,10 @@ fn capture_06_the_answer_to_the_usage_request_is_the_context_and_a_request_with_
     let state = replayed("06-context-usage");
     assert_eq!(
         Some(&ContextRecord {
-            total_tokens: 16575,
-            max_tokens: 200_000,
-            percentage: 8.0,
-            auto_compact_threshold: Some(167_000),
+            total_tokens: 11645,
+            max_tokens: 1_000_000,
+            percentage: 1.0,
+            auto_compact_threshold: Some(967_000),
         }),
         state.ops().context.as_ref()
     );
@@ -356,11 +356,11 @@ fn a_failed_send_of_a_usage_request_is_no_longer_waited_for() {
     assert!(state.ops().waiting.is_empty());
 }
 
-#[test]
-fn capture_10_the_tokens_are_the_last_results_totals_over_the_models_not_a_sum_of_results() {
+/// The tokens after each `result` of `inputs`, and the state at the end.
+fn tokens_at_each_result(inputs: Vec<PresenterInput>) -> (Vec<TokenTotals>, Host) {
     let mut totals: Vec<TokenTotals> = Vec::new();
     let mut state = Host::default();
-    for input in inputs("10-background-task", false) {
+    for input in inputs {
         let is_result = matches!(input, PresenterInput::Event(AgentEvent::Result { .. }));
         state = state.with(input);
         if is_result {
@@ -372,6 +372,17 @@ fn capture_10_the_tokens_are_the_last_results_totals_over_the_models_not_a_sum_o
             );
         }
     }
+    (totals, state)
+}
+
+#[test]
+fn capture_10_the_tokens_are_the_last_results_totals_over_the_models_not_a_sum_of_results() {
+    // Lines an older CLI (2.1.282) sent; the current version makes no result over two models.
+    let (totals, state) = tokens_at_each_result(inputs_from(
+        "10-background-task",
+        false,
+        Some(&legacy_excerpt("10-background-task")),
+    ));
     assert_eq!(3, totals.len());
     // 20 + 511, 20 + 743 and 20 + 1089 output tokens: each result replaces the one before.
     assert_eq!(
@@ -399,6 +410,38 @@ fn capture_10_the_tokens_are_the_last_results_totals_over_the_models_not_a_sum_o
             0.156_007_250_000_000_04,
             state.0.conversation.usage.session_cost_usd
         );
+    }
+}
+
+#[test]
+fn capture_10_the_tokens_are_the_last_results_totals_from_the_one_model_not_a_sum_of_results() {
+    let (totals, state) = tokens_at_each_result(inputs("10-background-task", false));
+    assert_eq!(2, totals.len());
+    // 256 then 1519 output tokens: the second result replaces the first.
+    assert_eq!(
+        vec![256, 1519],
+        totals.iter().map(|it| it.output).collect::<Vec<_>>()
+    );
+    assert_eq!(
+        vec![4, 24],
+        totals.iter().map(|it| it.input).collect::<Vec<_>>()
+    );
+    assert_eq!(
+        vec![27601, 133_998],
+        totals.iter().map(|it| it.cache_read).collect::<Vec<_>>()
+    );
+    assert_eq!(
+        vec![8603, 26882],
+        totals
+            .iter()
+            .map(|it| it.cache_creation)
+            .collect::<Vec<_>>()
+    );
+    // The record's own spelling (10-background-task's total_cost_usd).
+    let cost: f64 = 0.21946859999999999;
+    #[allow(clippy::float_cmp)] // the sum core keeps, to the last bit
+    {
+        assert_eq!(cost, state.0.conversation.usage.session_cost_usd);
     }
 }
 
@@ -472,8 +515,8 @@ fn capture_21_the_compaction_is_kept_with_its_trigger_and_both_counts_and_compac
         vec![CompactionRecord {
             seq: 1,
             trigger: "manual".into(),
-            pre_tokens: 20072,
-            post_tokens: 1235,
+            pre_tokens: 21819,
+            post_tokens: 3447,
         }],
         state.ops().compactions.iter().cloned().collect::<Vec<_>>()
     );
@@ -544,19 +587,16 @@ fn capture_03_the_initialize_response_gives_the_models_and_one_without_models_le
  {
     let state = replayed("03-initialize-handshake");
     let models = &state.ops().models;
-    assert_eq!(8, models.len());
+    assert_eq!(11, models.len());
     let default = models
         .iter()
         .find(|it| it.value == "default")
         .unwrap_or_else(|| panic!("a default"));
-    assert_eq!(
-        Some("claude-opus-4-8[1m]"),
-        default.resolved_model.as_deref()
-    );
+    assert_eq!(Some("claude-opus-5-5"), default.resolved_model.as_deref());
     assert_eq!("Default (recommended)", default.display_name);
     assert_eq!(Some(true), default.supports_effort);
     assert_eq!(
-        Some(vec!["low", "medium", "high", "xhigh", "max"]),
+        Some(vec!["low", "medium", "high", "xhigh"]),
         default
             .supported_effort_levels
             .as_deref()
@@ -564,7 +604,7 @@ fn capture_03_the_initialize_response_gives_the_models_and_one_without_models_le
     );
     let haiku = models
         .iter()
-        .find(|it| it.value == "haiku")
+        .find(|it| it.value == "claude-haiku-4-5-20251001")
         .unwrap_or_else(|| panic!("a haiku"));
     assert_eq!(None, haiku.supports_effort);
     assert_eq!(None, haiku.supported_effort_levels);

@@ -502,3 +502,31 @@ fn a_media_type_is_read_without_its_parameters_and_case_and_a_text_type_is_taken
         "an empty type is no type, and the extension is read without case"
     );
 }
+
+/// F6 of the 6d-R2 final fixes: the composer's `Debug` does not show the session's cost (capture
+/// 01 line 16's `total_cost_usd` 0.12213600000000001), in any spelling of it.
+#[test]
+fn the_composers_debug_does_not_show_the_cost() {
+    let view = closta_goldens::replay::replay("01-baseline-text")
+        .pop()
+        .expect("01 has steps")
+        .view;
+    let state = composer_state(&view.conversation, &view.transcript);
+    let cost = state.cost_usd.expect("01 says a cost");
+    assert!((cost - 0.122_136).abs() < 1e-12, "{}", cost.to_bits());
+
+    let shown = format!("{state:?}");
+    for spelling in [
+        "0.12213600000000001".to_owned(),
+        format!("{cost}"),
+        format!("{cost:?}"),
+        "122136".to_owned(),
+    ] {
+        assert!(
+            !shown.contains(&spelling),
+            "the composer's Debug shows the cost ({} chars)",
+            spelling.len()
+        );
+    }
+    assert!(shown.contains("cost_usd"), "the field is named");
+}

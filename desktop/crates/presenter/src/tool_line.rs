@@ -6,13 +6,15 @@ use serde_json::{Map, Value};
 use crate::json::{JsonFields, compact, pretty};
 use crate::records::tasks::AGENT_TOOLS;
 use crate::text::{kt_is_blank, kt_lines, take_last_utf16, take_utf16, utf16_len};
-use crate::transcript::{PartRecord, ToolCallRecord};
+use crate::transcript::{Denial, PartRecord, ToolCallRecord};
 
+/// `Denied`: the CLI refused the call on its own, without asking; it never ran.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum ToolLineState {
     Running,
     Ok,
     Error,
+    Denied,
 }
 
 /// One tool call as one line of the conversation (`● Edit(AuthService.kt) +12 −3`).
@@ -22,6 +24,8 @@ pub struct ToolLine {
     pub label: String,
     pub added: Option<i32>,
     pub removed: Option<i32>,
+    /// Why the call was refused, when `state` is [`ToolLineState::Denied`].
+    pub denial: Option<Denial>,
 }
 
 /// The most UTF-16 units of a summary a line shows before it is cut with `…`.
@@ -51,6 +55,7 @@ pub fn tool_line(call: &ToolCallRecord) -> ToolLine {
         label,
         added,
         removed,
+        denial: call.denied.clone(),
     }
 }
 
@@ -63,6 +68,9 @@ fn text<'a>(input: Option<&'a Map<String, Value>>, key: &str) -> Option<&'a str>
 }
 
 fn state_of(call: &ToolCallRecord) -> ToolLineState {
+    if call.denied.is_some() {
+        return ToolLineState::Denied;
+    }
     match &call.result {
         None => ToolLineState::Running,
         Some(result) if result.is_error == Some(true) => ToolLineState::Error,
@@ -139,7 +147,7 @@ pub fn tool_detail(call: &ToolCallRecord) -> ToolDetail {
     }
 }
 
-fn result_text(content: &Value) -> String {
+pub(crate) fn result_text(content: &Value) -> String {
     match content {
         Value::String(text) => text.clone(),
         Value::Array(items) => items
@@ -250,6 +258,7 @@ mod tests {
                 label: "Edit(AuthService.kt)".into(),
                 added: Some(12),
                 removed: Some(3),
+                denial: None,
             },
             line
         );
@@ -267,6 +276,7 @@ mod tests {
                 label: "Write(New.kt)".into(),
                 added: Some(5),
                 removed: None,
+                denial: None,
             },
             line
         );

@@ -9,6 +9,7 @@ mod support;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use closta_providers::claude::fake::initialize::after_initialize;
 use closta_session::launch::{SessionLaunch, SessionLaunchPlanner};
 use closta_session::status::SessionFailure;
 use closta_shell::closing::{
@@ -132,6 +133,8 @@ fn a_slot_closed_while_it_plans_returns_at_once() {
             relaunch: None,
             project: None,
             settles_on_failure: false,
+            session_id: None,
+            resume: None,
         });
         assert_eq!(shell.live_runs(), 1);
         let end = future::or(
@@ -235,11 +238,14 @@ fn nothing_starts_or_sends_once_the_close_began() {
                 relaunch: None,
                 project: None,
                 settles_on_failure: false,
+                session_id: None,
+                resume: None,
             }
         }));
         let slot = shell.open(launch);
         running(&runtime.recv().await.unwrap()).await;
         let control = harness.control(0).await;
+        control.skip_initialize().await;
         shell.act(ShellAction::OpenNewSession);
         shell.act(ShellAction::EditFolder {
             text: r"C:\work\proj".to_owned(),
@@ -273,7 +279,7 @@ fn nothing_starts_or_sends_once_the_close_began() {
         }
         assert_eq!(shell.slots().len(), 1);
         assert_eq!(shell.live_runs(), runs);
-        assert!(control.stdin_lines().is_empty());
+        assert!(after_initialize(control.stdin_lines()).is_empty());
         let end = finish_closing(run, CLOSE_LIMIT, DESTROY_GRACE).await;
         assert_eq!(end, CloseEnd::Returned);
         assert_eq!(shell.live_runs(), 0);
@@ -308,5 +314,57 @@ fn closing_waits_for_the_settings_to_be_written() {
             panic!("the close did not end once the settings were written")
         })
         .await;
+    });
+}
+
+#[test]
+fn closing_waits_for_an_old_run_of_the_same_id() {
+    drive(|harness| async move {
+        harness.stubborn();
+        let mut shell = harness.shell();
+        let (mut launch, runtime) = harness.launch("stubborn");
+        launch.session_id = Some("same-id".to_owned());
+        let slot = shell.open(launch);
+        let runtime = runtime.recv().await.unwrap();
+        running(&runtime).await;
+        let old = harness.control(0).await;
+        let (mut launch, runtime) = harness.launch("next");
+        launch.session_id = Some("same-id".to_owned());
+        shell.replace(slot, launch).unwrap();
+        let runtime = runtime.recv().await.unwrap();
+        running(&runtime).await;
+        let new = harness.control(1).await;
+        assert_eq!(shell.live_runs(), 2);
+
+        let run = shell.close_all();
+        let mut returned = run.returned;
+        let early = future::or(
+            async {
+                (&mut returned).await;
+                true
+            },
+            async {
+                Timer::after(Duration::from_millis(300)).await;
+                false
+            },
+        )
+        .await;
+        assert!(!early, "both runs are still going");
+        old.exit(0);
+        let early = future::or(
+            async {
+                (&mut returned).await;
+                true
+            },
+            async {
+                Timer::after(Duration::from_millis(300)).await;
+                false
+            },
+        )
+        .await;
+        assert!(!early, "the new run is still going");
+        new.exit(0);
+        returned.await;
+        assert_eq!(shell.live_runs(), 0);
     });
 }

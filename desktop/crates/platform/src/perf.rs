@@ -104,6 +104,33 @@ impl IdleStart {
     }
 }
 
+/// A span measured from a user's act to the first frame drawn after the screen showed its
+/// result: `began` is the act, `shown` is when the result reached the screen's state.
+#[derive(Clone, Copy)]
+#[cfg_attr(not(feature = "profiler"), allow(dead_code))]
+struct Span {
+    began: Instant,
+    shown: Option<Instant>,
+}
+
+impl Span {
+    fn begin(at: Instant) -> Span {
+        Span {
+            began: at,
+            shown: None,
+        }
+    }
+
+    /// The span in milliseconds when a frame whose drawing started at `draw_start` and was
+    /// presented at `at` is the first drawn after the result was shown; `None` before that.
+    #[cfg_attr(not(feature = "profiler"), allow(dead_code))]
+    fn closed_by(&self, draw_start: Instant, at: Instant) -> Option<f64> {
+        let shown = self.shown?;
+        (draw_start > shown)
+            .then(|| at.saturating_duration_since(self.began).as_secs_f64() * 1000.0)
+    }
+}
+
 /// Where a measured run stands, and the log it writes to.
 pub(crate) struct Measuring {
     started: Instant,
@@ -121,6 +148,11 @@ pub(crate) struct Measuring {
     refreshed_at: Option<Instant>,
     /// The row the scroll through stands at, once it started.
     pub(crate) scroll_at: Option<usize>,
+    /// The resume popup's listing, from the act that opened it to the frame that drew the rows.
+    resume_list: Option<Span>,
+    /// The slot a pick opened and the span from the pick to the frame drawn after its history
+    /// was restored.
+    resume_open: Option<(SlotId, Span)>,
     #[cfg(feature = "profiler")]
     frames: Option<Frames>,
 }
@@ -152,6 +184,8 @@ impl Measuring {
             last_refresh: HashMap::new(),
             refreshed_at: None,
             scroll_at: None,
+            resume_list: None,
+            resume_open: None,
             #[cfg(feature = "profiler")]
             frames,
         }
@@ -265,6 +299,54 @@ impl Measuring {
         }
     }
 
+    /// The popup was asked for: writes `resume_opened` (the mark the judge's frame window starts
+    /// at) and starts timing the listing.
+    pub(crate) fn resume_opened(&mut self) {
+        self.record(RESUME_OPENED, 0.0);
+        self.resume_list = Some(Span::begin(Instant::now()));
+    }
+
+    /// The popup's rows are in the shell's state: the next frame drawn shows them.
+    pub(crate) fn resume_listed(&mut self) {
+        if let Some(span) = &mut self.resume_list {
+            span.shown.get_or_insert_with(Instant::now);
+        }
+    }
+
+    /// A pick opened `slot`: starts timing until its history is restored and drawn.
+    pub(crate) fn resume_picked(&mut self, slot: SlotId) {
+        self.resume_open = Some((slot, Span::begin(Instant::now())));
+    }
+
+    /// `slot` refreshed on rows it was told of with its earlier conversation put back (it runs
+    /// or has ended): for the slot a pick opened, the next frame drawn shows that conversation.
+    pub(crate) fn resume_restored(&mut self, slot: SlotId) {
+        if let Some((picked, span)) = &mut self.resume_open
+            && *picked == slot
+        {
+            span.shown.get_or_insert_with(Instant::now);
+        }
+    }
+
+    /// Closes the resume spans the frame presented at `at`, drawn from `draw_start`, ends.
+    #[cfg(feature = "profiler")]
+    fn close_resume_spans(&mut self, draw_start: Instant, at: Instant) {
+        if let Some(ms) = self
+            .resume_list
+            .and_then(|span| span.closed_by(draw_start, at))
+        {
+            self.resume_list = None;
+            self.record_at(at, "resume_list_ms", ms);
+        }
+        if let Some(ms) = self
+            .resume_open
+            .and_then(|(_, span)| span.closed_by(draw_start, at))
+        {
+            self.resume_open = None;
+            self.record_at(at, "resume_open_ms", ms);
+        }
+    }
+
     /// Writes the CPU time used since `start` and the wall-clock time it spans.
     pub(crate) fn record_idle(&mut self, start: IdleStart) {
         #[cfg(windows)]
@@ -292,6 +374,10 @@ impl Measuring {
                 self.record("frames_lost", lost as f64);
             }
             for presented in presented {
+                let draw_start = presented.at.checked_sub(presented.frame);
+                if let Some(draw_start) = draw_start {
+                    self.close_resume_spans(draw_start, presented.at);
+                }
                 self.record_at(
                     presented.at,
                     "frame_ms",
@@ -302,6 +388,28 @@ impl Measuring {
                 }
             }
         }
+    }
+}
+
+/// The row written when the resume popup is asked for.
+const RESUME_OPENED: &str = "resume_opened";
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_span_closes_on_the_first_frame_drawn_after_its_result_was_shown() {
+        let began = Instant::now();
+        let mut span = Span::begin(began);
+        let after = |ms| began + Duration::from_millis(ms);
+        // Nothing shown yet: no frame closes it.
+        assert_eq!(span.closed_by(after(5), after(9)), None);
+        span.shown = Some(after(10));
+        // Drawn before the result was shown, presented after it.
+        assert_eq!(span.closed_by(after(8), after(14)), None);
+        let ms = span.closed_by(after(12), after(20)).unwrap();
+        assert!((ms - 20.0).abs() < 1e-6, "{ms}");
     }
 }
 

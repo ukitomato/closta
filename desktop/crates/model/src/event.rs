@@ -7,8 +7,9 @@
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct RawJson(pub String);
 
-/// The stdout line kinds observed in the recorded captures. `wire_type` is the `type` field as it
-/// arrives, with `/<subtype>` appended for `system` lines.
+/// The stdout line kinds: the ones observed in the recorded captures, plus `system/informational` and
+/// `system/api_retry`, modelled from sdk.d.ts alone. `wire_type` is the `type` field as it arrives,
+/// with `/<subtype>` appended for `system` lines.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum AgentEventKind {
     StreamEvent,
@@ -29,11 +30,16 @@ pub enum AgentEventKind {
     ControlRequest,
     SystemCommandsChanged,
     SystemCompactBoundary,
+    SystemUiInvalidate,
+    ConversationReset,
+    SystemPermissionDenied,
+    SystemInformational,
+    SystemApiRetry,
 }
 
 impl AgentEventKind {
     /// Every kind, in the order Kotlin's `entries` lists them.
-    pub const ALL: [AgentEventKind; 18] = [
+    pub const ALL: [AgentEventKind; 23] = [
         Self::StreamEvent,
         Self::Assistant,
         Self::CommandLifecycle,
@@ -52,6 +58,11 @@ impl AgentEventKind {
         Self::ControlRequest,
         Self::SystemCommandsChanged,
         Self::SystemCompactBoundary,
+        Self::SystemUiInvalidate,
+        Self::ConversationReset,
+        Self::SystemPermissionDenied,
+        Self::SystemInformational,
+        Self::SystemApiRetry,
     ];
 
     pub fn wire_type(&self) -> &'static str {
@@ -74,6 +85,11 @@ impl AgentEventKind {
             Self::ControlRequest => "control_request",
             Self::SystemCommandsChanged => "system/commands_changed",
             Self::SystemCompactBoundary => "system/compact_boundary",
+            Self::SystemUiInvalidate => "system/ui_invalidate",
+            Self::ConversationReset => "conversation_reset",
+            Self::SystemPermissionDenied => "system/permission_denied",
+            Self::SystemInformational => "system/informational",
+            Self::SystemApiRetry => "system/api_retry",
         }
     }
 
@@ -83,8 +99,8 @@ impl AgentEventKind {
     }
 }
 
-/// One line of the agent CLI's stdout. Twenty variants: the eighteen [`AgentEventKind`]s plus
-/// [`AgentEvent::UnknownKind`] and [`AgentEvent::BrokenLine`].
+/// One line of the agent CLI's stdout. Twenty-five variants: the twenty-three [`AgentEventKind`]s
+/// plus [`AgentEvent::UnknownKind`] and [`AgentEvent::BrokenLine`].
 ///
 /// Not `Eq`: `Result::total_cost_usd` is an `f64`.
 #[derive(Clone, PartialEq, Debug)]
@@ -275,7 +291,65 @@ pub enum AgentEvent {
         compact_metadata: RawJson,
         logical_parent_uuid: Option<String>,
     },
-    /// A well-formed JSON object whose `type` is not one of the eighteen, or that lacks a field
+    /// Not in the official types; only the captures carry it. It notifies an unpublished UI
+    /// rendering mechanism (`event` is `ui.render` in every capture), and Closta does not use it.
+    SystemUiInvalidate {
+        uuid: String,
+        session_id: String,
+        event: Option<String>,
+    },
+    /// The conversation was discarded (`/clear`, or leaving plan mode with a clear context), and the
+    /// CLI goes on under a new session id, which the next `system/init` names. `session_id` is still
+    /// the old one. `trigger` says what discarded it and is informational; `user_message_uuid` is the
+    /// `/clear` message's uuid, only with the `clear` trigger; `timestamp` is when, in UTC. An older
+    /// CLI sends none of the three.
+    ConversationReset {
+        uuid: String,
+        session_id: String,
+        new_conversation_id: String,
+        trigger: Option<String>,
+        user_message_uuid: Option<String>,
+        timestamp: Option<String>,
+    },
+    /// The CLI refused a tool use on its own, without asking. `tool_use_id` names the refused call;
+    /// `agent_id` is set when a sub-agent made it. `decision_reason_type` (`mode`, `rule`,
+    /// `subcommandResults`, ...) and `decision_reason` say why, each only when the CLI did; `message`
+    /// is what the model was told. Neither `decision_reason` nor `message` goes to a log.
+    SystemPermissionDenied {
+        uuid: String,
+        session_id: String,
+        tool_name: String,
+        tool_use_id: String,
+        agent_id: Option<String>,
+        decision_reason_type: Option<String>,
+        decision_reason: Option<String>,
+        message: String,
+    },
+    /// A line the CLI would print in its own terminal. `level` is `info`, `notice`, `suggestion` or
+    /// `warning`, as the CLI wrote it; `prevent_continuation` is true when execution stops after it;
+    /// `tag` is an opaque feature tag. No capture carries one; `content` does not go to a log.
+    SystemInformational {
+        uuid: String,
+        session_id: String,
+        content: String,
+        level: String,
+        tool_use_id: Option<String>,
+        prevent_continuation: Option<bool>,
+        tag: Option<String>,
+    },
+    /// The CLI is trying a failed API request again: attempt `attempt` of `max_retries`, after
+    /// `retry_delay_ms`. `error_status` is the HTTP status when a response came; `error` names the
+    /// failure and does not go to a log. No capture carries one; its `no_response` figures are not read.
+    SystemApiRetry {
+        uuid: String,
+        session_id: String,
+        attempt: i32,
+        max_retries: i32,
+        retry_delay_ms: i64,
+        error_status: Option<i32>,
+        error: Option<String>,
+    },
+    /// A well-formed JSON object whose `type` is not one of the twenty-three, or that lacks a field
     /// the declared shape needs. Kept whole.
     UnknownKind { wire_type: String, raw: RawJson },
     /// A line that is not a JSON object.
@@ -306,6 +380,11 @@ impl AgentEvent {
             Self::ControlRequest { .. } => AgentEventKind::ControlRequest,
             Self::SystemCommandsChanged { .. } => AgentEventKind::SystemCommandsChanged,
             Self::SystemCompactBoundary { .. } => AgentEventKind::SystemCompactBoundary,
+            Self::SystemUiInvalidate { .. } => AgentEventKind::SystemUiInvalidate,
+            Self::ConversationReset { .. } => AgentEventKind::ConversationReset,
+            Self::SystemPermissionDenied { .. } => AgentEventKind::SystemPermissionDenied,
+            Self::SystemInformational { .. } => AgentEventKind::SystemInformational,
+            Self::SystemApiRetry { .. } => AgentEventKind::SystemApiRetry,
             Self::UnknownKind { .. } | Self::BrokenLine { .. } => return None,
         })
     }

@@ -12,18 +12,22 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 
-const EXPECTED_CAPTURES: usize = 40;
-const EXPECTED_LINES: usize = 2832;
-const CLI_VERSION: &str = "2.1.282";
+const EXPECTED_CAPTURES: usize = 44;
+const EXPECTED_LINES: usize = 2852;
+const CLI_VERSION: &str = "2.1.325";
 const FIRST_TOKEN_MS: i64 = 812;
 
-const STDOUT_MESSAGE_KINDS: usize = 44;
-const OBSERVED_KINDS: usize = 18;
-const DECLARED_IN_STDOUT_MESSAGE: usize = 17;
-const DECLARED_IN_SDK_MESSAGE: usize = 15;
-const NEVER_OBSERVED: usize = 27;
-const CAPTURES_WITH_LIFECYCLE: usize = 33;
-const CONTROL_PROTOCOL_LINES: usize = 104;
+const STDOUT_MESSAGE_KINDS: usize = 45;
+const OBSERVED_KINDS: usize = 21;
+const DECLARED_IN_STDOUT_MESSAGE: usize = 19;
+const DECLARED_IN_SDK_MESSAGE: usize = 17;
+const NEVER_OBSERVED: usize = 26;
+const CAPTURES_WITH_LIFECYCLE: usize = 37;
+const CONTROL_PROTOCOL_LINES: usize = 115;
+
+/// Modelled from sdk.d.ts alone, because no capture has one: their tests build the line by hand.
+/// Each goes when a capture carries it.
+const TYPE_ONLY: [&str; 2] = ["system/informational", "system/api_retry"];
 
 const DIAGNOSTIC: &str =
     "[ede_diagnostic] result_type=user last_content_type=n/a stop_reason=tool_use";
@@ -53,6 +57,25 @@ fn observed_kinds() -> BTreeSet<&'static str> {
 
 fn all_kinds() -> BTreeSet<&'static str> {
     AgentEventKind::ALL.iter().map(|k| k.wire_type()).collect()
+}
+
+fn all_kinds_but_the_type_only() -> BTreeSet<&'static str> {
+    all_kinds()
+        .into_iter()
+        .filter(|k| !TYPE_ONLY.contains(k))
+        .collect()
+}
+
+/// What a line decoded to, by kind only: a failure message must not print a refusal's message, a
+/// notice's content or a retry's error.
+fn kind_of(event: &AgentEvent) -> String {
+    match event {
+        AgentEvent::UnknownKind { wire_type, .. } => format!("unknown kind {wire_type}"),
+        AgentEvent::BrokenLine { .. } => "broken line".to_string(),
+        known => known
+            .kind()
+            .map_or_else(String::new, |k| k.wire_type().to_string()),
+    }
 }
 
 // --- ManifestTest -----------------------------------------------------------------------
@@ -333,9 +356,9 @@ fn the_captures_hold_the_recorded_number_of_lines_in_total_as_events() {
 #[test]
 fn a_line_carries_its_own_kind() {
     assert_eq!(
-        all_kinds(),
+        all_kinds_but_the_type_only(),
         observed_kinds(),
-        "every declared kind should appear in the captures, and no line should invent one"
+        "every modelled kind should appear in the captures (but the type-only ones), and no line should invent one"
     );
 }
 
@@ -471,27 +494,37 @@ fn a_trailing_newline_is_not_an_event() {
 // --- CoverageTest -----------------------------------------------------------------------
 
 #[test]
-fn the_captures_contain_exactly_the_kinds_that_are_modelled() {
+fn the_captures_contain_exactly_the_kinds_that_are_modelled_but_the_ones_modelled_from_the_types_alone()
+ {
     assert_eq!(
         OBSERVED_KINDS,
         observed_kinds().len(),
         "distinct kinds in the captures"
     );
     assert_eq!(
-        OBSERVED_KINDS,
+        OBSERVED_KINDS + TYPE_ONLY.len(),
         AgentEventKind::ALL.len(),
         "variants of AgentEvent that are kinds"
     );
     assert_eq!(
-        all_kinds(),
+        all_kinds_but_the_type_only(),
         observed_kinds(),
         "a modelled kind that never arrives is a branch no test can reach"
+    );
+    let observed = observed_kinds();
+    assert!(
+        TYPE_ONLY.iter().all(|k| !observed.contains(k)),
+        "a type-only kind leaves the list the day a capture carries it"
     );
 }
 
 #[test]
 fn the_one_kind_with_no_official_declaration_is_one_the_captures_really_send() {
-    let undeclared = [AgentEventKind::CommandLifecycle];
+    // `command_lifecycle` appears once in sdk.d.ts, in prose on `interrupt`; `ui_invalidate` not at all.
+    let undeclared = [
+        AgentEventKind::CommandLifecycle,
+        AgentEventKind::SystemUiInvalidate,
+    ];
     let lifecycle_captures = manifest()
         .scenarios
         .iter()
@@ -505,7 +538,7 @@ fn the_one_kind_with_no_official_declaration_is_one_the_captures_really_send() {
     let observed = observed_kinds();
     assert!(
         undeclared.iter().all(|k| observed.contains(k.wire_type())),
-        "the undeclared kind is in the captures"
+        "the undeclared kinds are in the captures"
     );
     assert_eq!(
         CAPTURES_WITH_LIFECYCLE, lifecycle_captures,
@@ -567,9 +600,9 @@ fn the_declared_kinds_that_never_arrive_are_left_unmodelled() {
 #[test]
 fn an_init_with_no_scratchpad_path_is_placed_with_the_path_null() {
     for (scenario, line) in [
-        ("16-permission-suggestion-accept", 5),
+        ("16-permission-suggestion-accept", 4),
         ("21-compact", 4),
-        ("21-compact", 21),
+        ("21-compact", 20),
     ] {
         let event = capture_line(scenario, line);
         let AgentEvent::SystemInit {
@@ -584,14 +617,14 @@ fn an_init_with_no_scratchpad_path_is_placed_with_the_path_null() {
 
 #[test]
 fn commands_changed_and_compact_boundary_lines_become_typed_values() {
-    for line in [1, 7, 8] {
-        let event = capture_line("16-permission-suggestion-accept", line);
+    for line in [6, 7] {
+        let event = capture_line("01-baseline-text", line);
         assert!(
             matches!(event, AgentEvent::SystemCommandsChanged { .. }),
             "line {line}: {event:?}"
         );
     }
-    let boundary = capture_line("21-compact", 22);
+    let boundary = capture_line("21-compact", 21);
     let AgentEvent::SystemCompactBoundary {
         compact_metadata,
         logical_parent_uuid,
@@ -603,13 +636,13 @@ fn commands_changed_and_compact_boundary_lines_become_typed_values() {
     assert!(compact_metadata.0.contains("trigger") && compact_metadata.0.contains("pre_tokens"));
     assert!(
         logical_parent_uuid.is_some(),
-        "21 line 22 carries logical_parent_uuid"
+        "21 line 21 carries logical_parent_uuid"
     );
 }
 
 #[test]
 fn the_result_of_a_local_command_is_placed_with_its_optional_fields_absent() {
-    let event = capture_line("21-compact", 25);
+    let event = capture_line("21-compact", 24);
     let AgentEvent::Result {
         local_command,
         stop_reason,
@@ -655,7 +688,7 @@ fn a_model_turn_result_still_carries_its_timing_fields_and_no_local_command() {
 #[test]
 fn a_result_names_every_message_its_turn_took_in_in_order() {
     // 31: the second message, sent while the first ran, was taken into the first's turn.
-    let event = capture_line("31-send-mid-turn", 54);
+    let event = capture_line("31-send-mid-turn", 52);
     let AgentEvent::Result {
         user_message_uuid,
         user_message_uuids,
@@ -671,7 +704,7 @@ fn a_result_names_every_message_its_turn_took_in_in_order() {
 
 #[test]
 fn a_result_without_the_list_has_none_and_one_with_stray_entries_keeps_only_its_strings() {
-    let line = &non_blank_lines(&text_of("31-send-mid-turn.ndjson"))[53];
+    let line = &non_blank_lines(&text_of("31-send-mid-turn.ndjson"))[51];
     let json: Value = serde_json::from_str(line).unwrap();
     let mut without = json.clone();
     without
@@ -705,7 +738,7 @@ fn a_result_without_the_list_has_none_and_one_with_stray_entries_keeps_only_its_
 #[test]
 fn an_error_result_without_a_result_text_says_what_went_wrong_with_its_errors() {
     // sdk.d.ts SDKResultError has errors and no result. 32 was interrupted while a foreground Bash ran.
-    let event = capture_line("32-interrupt-foreground", 80);
+    let event = capture_line("32-interrupt-foreground", 72);
     let AgentEvent::Result {
         subtype,
         is_error,
@@ -753,7 +786,7 @@ fn a_result_written_before_initialize_decodes() {
 #[test]
 fn a_control_response_lifts_request_id_subtype_and_error_and_a_success_lifts_no_error() {
     let rejected = capture_line("07-set-model-and-mode", 9);
-    let accepted = capture_line("07-set-model-and-mode", 4);
+    let accepted = capture_line("07-set-model-and-mode", 5);
     let AgentEvent::ControlResponse {
         request_id: rej_id,
         subtype: rej_sub,
@@ -782,4 +815,303 @@ fn a_control_response_lifts_request_id_subtype_and_error_and_a_success_lifts_no_
     assert_eq!(Some("success".to_string()), acc_sub);
     assert_eq!(Some("07-set-model-and-mode-req-6".to_string()), acc_id);
     assert_eq!(None, acc_err);
+}
+
+// --- CodecDecodeTest: the five kinds the 2.1.325 CLI sends or declares -------------------
+
+#[test]
+fn the_status_that_ends_a_compaction_carries_its_result() {
+    // CodecDecodeTest.kt: the status that ends a compaction carries its result
+    let event = capture_line("21-compact", 19);
+    let AgentEvent::SystemStatus {
+        status,
+        compact_result,
+        ..
+    } = event
+    else {
+        panic!("21 line 19: not a SystemStatus: {}", kind_of(&event));
+    };
+    assert_eq!(None, status);
+    assert_eq!(Some("success".to_string()), compact_result);
+}
+
+#[test]
+fn a_ui_invalidate_line_becomes_a_typed_value_with_its_event() {
+    // CodecDecodeTest.kt: a ui_invalidate line becomes a typed value with its event. Not in sdk.d.ts;
+    // the captures carry it at the start of a session.
+    for (scenario, line) in [("01-baseline-text", 1), ("08-subagent-task", 2)] {
+        let event = capture_line(scenario, line);
+        let AgentEvent::SystemUiInvalidate {
+            uuid,
+            session_id,
+            event,
+        } = &event
+        else {
+            panic!(
+                "{scenario} line {line}: not a SystemUiInvalidate: {}",
+                kind_of(&event)
+            );
+        };
+        assert_eq!(
+            Some("ui.render"),
+            event.as_deref(),
+            "{scenario} line {line}"
+        );
+        assert!(
+            !uuid.is_empty() && !session_id.is_empty(),
+            "{scenario} line {line}"
+        );
+    }
+}
+
+#[test]
+fn a_conversation_reset_line_becomes_a_typed_reset_naming_the_clear_that_made_it() {
+    // CodecDecodeTest.kt: a conversation_reset line becomes a typed reset naming the clear that made it.
+    // 41: the second message sent was `/clear`; the reset names it and the conversation it starts.
+    let mut commands: Vec<String> = Vec::new();
+    for e in read_capture("41-clear-reset.ndjson") {
+        if let AgentEvent::CommandLifecycle { command_uuid, .. } = e
+            && !commands.contains(&command_uuid)
+        {
+            commands.push(command_uuid);
+        }
+    }
+    let event = capture_line("41-clear-reset", 18);
+    let AgentEvent::ConversationReset {
+        session_id,
+        new_conversation_id,
+        trigger,
+        user_message_uuid,
+        timestamp,
+        ..
+    } = event
+    else {
+        panic!("41 line 18: not a ConversationReset: {}", kind_of(&event));
+    };
+    assert_eq!(Some("clear".to_string()), trigger);
+    assert_eq!(
+        Some("84d712ce-9cd0-4cec-b51e-4dfe8cf10d9a".to_string()),
+        user_message_uuid
+    );
+    assert_eq!(
+        Some(&commands[1]),
+        user_message_uuid.as_ref(),
+        "the second command sent is the /clear the reset names"
+    );
+    assert_eq!("c0817532-7496-4d9c-8870-b9c088a63253", new_conversation_id);
+    assert_eq!(Some("2026-11-14T12:26:36.305Z".to_string()), timestamp);
+    assert_eq!(
+        "a6635625-53e9-40b5-adfb-977a4e9163b2", session_id,
+        "the line still carries the old id"
+    );
+}
+
+#[test]
+fn a_conversation_reset_without_its_optional_fields_is_still_a_reset() {
+    // CodecDecodeTest.kt: a conversation_reset of an older CLI, without its optional fields, is still a reset
+    let event = parse(
+        r#"{"type":"conversation_reset","new_conversation_id":"n","uuid":"u","session_id":"s"}"#,
+    );
+    assert_eq!(
+        AgentEvent::ConversationReset {
+            uuid: "u".into(),
+            session_id: "s".into(),
+            new_conversation_id: "n".into(),
+            trigger: None,
+            user_message_uuid: None,
+            timestamp: None,
+        },
+        event
+    );
+}
+
+#[test]
+fn a_permission_denied_line_becomes_a_typed_refusal_naming_the_call_and_the_kind_of_decision() {
+    // CodecDecodeTest.kt: a permission_denied line becomes a typed refusal naming the call and the kind
+    // of decision
+    let event = capture_line("44-permission-denied", 23);
+    let AgentEvent::SystemPermissionDenied {
+        tool_name,
+        tool_use_id,
+        agent_id,
+        decision_reason_type,
+        decision_reason,
+        message,
+        ..
+    } = &event
+    else {
+        panic!(
+            "44 line 23: not a SystemPermissionDenied: {}",
+            kind_of(&event)
+        );
+    };
+    assert_eq!("Bash", tool_name);
+    assert_eq!("toolu_01LeMqLTAqR4JiZqRuLiYC21", tool_use_id);
+    assert_eq!(Some("mode"), decision_reason_type.as_deref());
+    assert!(
+        decision_reason.is_none(),
+        "44 line 23 has no decision_reason"
+    );
+    assert!(agent_id.is_none(), "44 line 23 is the main agent's refusal");
+    assert!(
+        !message.is_empty(),
+        "44 line 23 says what the model was told"
+    );
+}
+
+#[test]
+fn a_sub_agents_permission_denied_line_carries_the_agent_id() {
+    // CodecDecodeTest.kt: a sub-agent's permission_denied line carries the agent id
+    let event = capture_line("10-background-task", 72);
+    let AgentEvent::SystemPermissionDenied {
+        tool_name,
+        agent_id,
+        decision_reason_type,
+        ..
+    } = &event
+    else {
+        panic!(
+            "10 line 72: not a SystemPermissionDenied: {}",
+            kind_of(&event)
+        );
+    };
+    assert_eq!("Monitor", tool_name);
+    assert_eq!(Some("a40aca0599667cba4"), agent_id.as_deref());
+    assert_eq!(Some("subcommandResults"), decision_reason_type.as_deref());
+}
+
+#[test]
+fn an_informational_line_becomes_a_typed_value_with_its_level_and_flags() {
+    // CodecDecodeTest.kt: type only - an informational line becomes a typed value with its level and flags
+    let event = parse(concat!(
+        r#"{"type":"system","subtype":"informational","content":"Stop hook said no","level":"warning","#,
+        r#""prevent_continuation":true,"tag":"x","tool_use_id":"toolu_1","uuid":"u","session_id":"s"}"#
+    ));
+    assert_eq!(
+        AgentEvent::SystemInformational {
+            uuid: "u".into(),
+            session_id: "s".into(),
+            content: "Stop hook said no".into(),
+            level: "warning".into(),
+            tool_use_id: Some("toolu_1".into()),
+            prevent_continuation: Some(true),
+            tag: Some("x".into()),
+        },
+        event
+    );
+}
+
+#[test]
+fn an_informational_line_without_its_optional_fields_still_decodes() {
+    // CodecDecodeTest.kt: type only - an informational line without its optional fields still decodes
+    let event = parse(
+        r#"{"type":"system","subtype":"informational","content":"hi","level":"info","uuid":"u","session_id":"s"}"#,
+    );
+    let AgentEvent::SystemInformational {
+        tool_use_id,
+        prevent_continuation,
+        tag,
+        ..
+    } = &event
+    else {
+        panic!("not a SystemInformational: {}", kind_of(&event));
+    };
+    assert_eq!(None, *prevent_continuation);
+    assert_eq!(None, *tag);
+    assert_eq!(None, *tool_use_id);
+}
+
+#[test]
+fn an_api_retry_line_becomes_a_typed_value_and_a_null_status_stays_null() {
+    // CodecDecodeTest.kt: type only - an api retry line becomes a typed value, and a null status stays null
+    let line = concat!(
+        r#"{"type":"system","subtype":"api_retry","attempt":2,"max_retries":10,"retry_delay_ms":2500,"#,
+        r#""error_status":529,"error":"overloaded","uuid":"u","session_id":"s"}"#
+    );
+    assert_eq!(
+        AgentEvent::SystemApiRetry {
+            uuid: "u".into(),
+            session_id: "s".into(),
+            attempt: 2,
+            max_retries: 10,
+            retry_delay_ms: 2500,
+            error_status: Some(529),
+            error: Some("overloaded".into()),
+        },
+        parse(line)
+    );
+    let no_status = parse(&line.replace(r#""error_status":529"#, r#""error_status":null"#));
+    let AgentEvent::SystemApiRetry { error_status, .. } = &no_status else {
+        panic!("not a SystemApiRetry: {}", kind_of(&no_status));
+    };
+    assert_eq!(None, *error_status);
+}
+
+#[test]
+fn a_new_kind_missing_a_required_field_is_unknown() {
+    let cases = [
+        (
+            "system/permission_denied",
+            r#"{"type":"system","subtype":"permission_denied","tool_name":"Bash","message":"m","uuid":"u","session_id":"s"}"#,
+        ),
+        (
+            "system/api_retry",
+            r#"{"type":"system","subtype":"api_retry","attempt":"two","max_retries":10,"retry_delay_ms":2500,"error_status":null,"error":null,"uuid":"u","session_id":"s"}"#,
+        ),
+        (
+            "conversation_reset",
+            r#"{"type":"conversation_reset","trigger":"clear","uuid":"u","session_id":"s"}"#,
+        ),
+        (
+            "system/informational",
+            r#"{"type":"system","subtype":"informational","content":"hi","uuid":"u","session_id":"s"}"#,
+        ),
+        (
+            "system/ui_invalidate",
+            r#"{"type":"system","subtype":"ui_invalidate","event":"ui.render","session_id":"s"}"#,
+        ),
+    ];
+    for (wire_type, line) in cases {
+        let event = parse(line);
+        assert!(
+            matches!(&event, AgentEvent::UnknownKind { wire_type: w, .. } if w == wire_type),
+            "{wire_type}: {}",
+            kind_of(&event)
+        );
+    }
+}
+
+#[test]
+fn there_are_twenty_three_kinds() {
+    assert_eq!(23, AgentEventKind::ALL.len());
+    let last_five: Vec<(AgentEventKind, &str)> = AgentEventKind::ALL[18..]
+        .iter()
+        .map(|k| (*k, k.wire_type()))
+        .collect();
+    assert_eq!(
+        vec![
+            (AgentEventKind::SystemUiInvalidate, "system/ui_invalidate"),
+            (AgentEventKind::ConversationReset, "conversation_reset"),
+            (
+                AgentEventKind::SystemPermissionDenied,
+                "system/permission_denied"
+            ),
+            (AgentEventKind::SystemInformational, "system/informational"),
+            (AgentEventKind::SystemApiRetry, "system/api_retry"),
+        ],
+        last_five
+    );
+}
+
+#[test]
+fn json_differences_finds_every_difference_and_the_first_is_the_first() {
+    let expected = serde_json::json!({"a": 1, "b": [1, 2], "c": {"d": true}});
+    let actual = serde_json::json!({"a": 1, "b": [1, 3], "c": {"d": false}});
+    let all = json_differences(&expected, &actual);
+    let pointers: Vec<&str> = all.iter().map(|d| d.pointer.as_str()).collect();
+    assert_eq!(vec!["/b/1", "/c/d"], pointers);
+    assert_eq!(
+        json_first_difference(&expected, &actual),
+        all.into_iter().next()
+    );
 }

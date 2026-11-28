@@ -266,6 +266,47 @@ fn build(kind: AgentEventKind, f: &Fields) -> Result<AgentEvent, FieldError> {
             compact_metadata: f.raw("compact_metadata")?,
             logical_parent_uuid: f.text_or_null("logical_parent_uuid"),
         },
+        AgentEventKind::SystemUiInvalidate => AgentEvent::SystemUiInvalidate {
+            uuid: f.text("uuid")?,
+            session_id: f.text("session_id")?,
+            event: f.text_or_null("event"),
+        },
+        AgentEventKind::ConversationReset => AgentEvent::ConversationReset {
+            uuid: f.text("uuid")?,
+            session_id: f.text("session_id")?,
+            new_conversation_id: f.text("new_conversation_id")?,
+            trigger: f.text_or_null("trigger"),
+            user_message_uuid: f.text_or_null("user_message_uuid"),
+            timestamp: f.text_or_null("timestamp"),
+        },
+        AgentEventKind::SystemPermissionDenied => AgentEvent::SystemPermissionDenied {
+            uuid: f.text("uuid")?,
+            session_id: f.text("session_id")?,
+            tool_name: f.text("tool_name")?,
+            tool_use_id: f.text("tool_use_id")?,
+            agent_id: f.text_or_null("agent_id"),
+            decision_reason_type: f.text_or_null("decision_reason_type"),
+            decision_reason: f.text_or_null("decision_reason"),
+            message: f.text("message")?,
+        },
+        AgentEventKind::SystemInformational => AgentEvent::SystemInformational {
+            uuid: f.text("uuid")?,
+            session_id: f.text("session_id")?,
+            content: f.text("content")?,
+            level: f.text("level")?,
+            tool_use_id: f.text_or_null("tool_use_id"),
+            prevent_continuation: f.flag_or_null("prevent_continuation")?,
+            tag: f.text_or_null("tag"),
+        },
+        AgentEventKind::SystemApiRetry => AgentEvent::SystemApiRetry {
+            uuid: f.text("uuid")?,
+            session_id: f.text("session_id")?,
+            attempt: f.count("attempt")?,
+            max_retries: f.count("max_retries")?,
+            retry_delay_ms: f.whole("retry_delay_ms")?,
+            error_status: f.count_or_null("error_status")?,
+            error: f.text_or_null("error"),
+        },
     })
 }
 

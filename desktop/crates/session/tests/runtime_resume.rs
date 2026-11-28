@@ -28,7 +28,7 @@ use closta_session::status::SessionStatus;
 use support::{ID, Processes, WORKING_DIR, drive, reach, runtime, until};
 
 /// The id capture 22's record was saved under, and both of its CLIs say.
-const RESUMED: &str = "336ed47b-2675-4317-b3f5-a3b48abb03a2";
+const RESUMED: &str = "f728d9f6-8d2f-4834-b749-4d085a4ef2c0";
 const CAPTURE: &str = "22-resume.ndjson";
 const TURN: &str = "01-baseline-text.ndjson";
 const PROJECT: &str = "/work/the project";
@@ -350,7 +350,7 @@ fn a_record_cut_by_its_size_says_so() {
             log.lines().iter().any(|line| line
                 == &format!(
                     "INFO claude session {RESUMED}: put back 5 lines of the saved record \
-                     (SavedTranscript(5 events, 22 skipped, 7 dropped))"
+                     (SavedTranscript(5 events, 31 skipped, 7 dropped))"
                 )),
             "{:?}",
             log.lines()
