@@ -51,7 +51,7 @@ struct Pending {
 /// The golden differences the presenter features of stage R2 will port, row by row. Each R2 task
 /// deletes its own rows (a row it no longer needs fails the test); the last R2 task deletes the
 /// table and the types. Do not merge to main while this table is here.
-const PENDING_6DR2: [Pending; 7] = [
+const PENDING_6DR2: [Pending; 5] = [
     Pending {
         scenario: "01-baseline-text",
         pointer: "/threads/byId/thread-1/commands",
@@ -79,20 +79,6 @@ const PENDING_6DR2: [Pending; 7] = [
         before: Before::Absent,
         commit: "9a9d5a7",
         r2_task: "the compaction",
-    },
-    Pending {
-        scenario: "41-clear-reset",
-        pointer: "/threads/byId/thread-1/messages/byId/84d712ce-9cd0-4cec-b51e-4dfe8cf10d9a/parts/order",
-        before: Before::Json("[]"),
-        commit: "3bbede1",
-        r2_task: "/clear",
-    },
-    Pending {
-        scenario: "41-clear-reset",
-        pointer: "/threads/byId/thread-1/messages/byId/84d712ce-9cd0-4cec-b51e-4dfe8cf10d9a/parts/byId/cleared",
-        before: Before::Absent,
-        commit: "3bbede1",
-        r2_task: "/clear",
     },
     Pending {
         scenario: "44-permission-denied",

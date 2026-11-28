@@ -11,7 +11,7 @@ use closta_presenter::transcript::{
     ApprovalRecord, MessageRecord, MessageSource, PartRecord, Role, TextRecord, ToolCallRecord,
     Transcript,
 };
-use serde_json::Value;
+use serde_json::{Value, json};
 
 use super::extras::{extras, thread_node};
 use super::leaves::tool_leaves;
@@ -280,6 +280,9 @@ impl<'a> ThreadProjection<'a> {
             PartRecord::Text(text) => text_node(text, text_status(text, place)),
             PartRecord::Other(other) => other_node(other),
             PartRecord::Attachment(attachment) => attachment_node(attachment),
+            // A part of its own type, which a client that does not know it shows as unknown
+            // (TreeNodes.kt's `clearedNode`).
+            PartRecord::Cleared(_) => json!({ "type": "cleared" }),
             PartRecord::ToolCall(call) => return self.tool_call(key, call, place),
         };
         Projected {

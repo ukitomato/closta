@@ -5,7 +5,8 @@
 use std::collections::HashSet;
 
 use closta_presenter::rows::{
-    AskRow, CompactionRow, ExploredRow, ThinkingRow, ThreadRow, TodoRow, ToolRow, TurnEndRow,
+    AskRow, CompactionRow, DividerRow, ExploredRow, ThinkingRow, ThreadRow, TodoRow, ToolRow,
+    TurnEndRow,
 };
 use closta_presenter::tool_line::{ToolDetail, ToolLine, ToolLineState};
 use closta_shell::copy;
@@ -102,6 +103,7 @@ pub(super) fn row(
             compaction_row(compaction, cx),
             copy::compaction_line(compaction),
         ),
+        ThreadRow::Divider(divider) => (divider_row(divider, cx), copy::divider_line(divider)),
     };
     let id = SharedString::from(format!("row-{}", row.key()));
     div()
@@ -169,6 +171,16 @@ pub(super) fn ask_row(ask: &AskRow, cx: &App) -> AnyElement {
 
 /// A compaction's divider: its line in the middle between two faint rules.
 pub(super) fn compaction_row(row: &CompactionRow, cx: &App) -> AnyElement {
+    ruled_line(copy::compaction_line(row), cx)
+}
+
+/// A divider where the conversation changed under the thread, drawn as a compaction's is.
+pub(super) fn divider_row(row: &DividerRow, cx: &App) -> AnyElement {
+    ruled_line(copy::divider_line(row), cx)
+}
+
+/// `line` in the middle between two faint rules.
+fn ruled_line(line: String, cx: &App) -> AnyElement {
     let theme = cx.theme();
     let rule = || div().flex_1().h(px(1.)).bg(theme.border);
     h_flex()
@@ -180,7 +192,7 @@ pub(super) fn compaction_row(row: &CompactionRow, cx: &App) -> AnyElement {
             div()
                 .flex_none()
                 .text_color(theme.muted_foreground)
-                .child(copy::compaction_line(row)),
+                .child(line),
         )
         .child(rule())
         .into_any_element()

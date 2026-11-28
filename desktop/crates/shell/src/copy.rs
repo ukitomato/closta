@@ -4,7 +4,9 @@
 
 use closta_presenter::cards::plan::{PlanCard, PlanGo};
 use closta_presenter::cards::{SuggestionLine, ThreadCard};
-use closta_presenter::rows::{CardRow, CompactionRow, ExploredRow, TurnEndRow};
+use closta_presenter::rows::{
+    CardRow, CompactionRow, Divider, DividerRow, ExploredRow, TurnEndRow,
+};
 use closta_presenter::sessions::groups::AlertKind;
 use closta_presenter::tool_line::{AgentSummary, ToolLineState};
 use closta_presenter::transcript::{ApprovalOutcome, CompactionOutcome};
@@ -151,6 +153,16 @@ pub fn compaction_line(row: &CompactionRow) -> String {
             }
             line
         }
+    }
+}
+
+/// A clear's divider (`thread.divider.clearedNoTime`); the time it was cleared is said in stage 6g.
+pub const CLEARED: &str = "Conversation cleared";
+
+/// The line a divider says.
+pub fn divider_line(row: &DividerRow) -> String {
+    match &row.divider {
+        Divider::Cleared { .. } => CLEARED.to_owned(),
     }
 }
 
@@ -1126,6 +1138,7 @@ mod tests {
             ("thread.name", CONVERSATION),
             ("toolwindow.tab.sessions", SESSIONS),
             ("sessions.window.detail.working", WORKING),
+            ("thread.divider.clearedNoTime", CLEARED),
         ] {
             assert_eq!(bundle.get(key).map(String::as_str), Some(text), "{key}");
         }
@@ -1196,6 +1209,20 @@ mod tests {
             compaction_line(&compaction(CompactionOutcome::Failed)),
             "Compaction failed"
         );
+    }
+
+    // DividerText.kt: the time is said by the screen of stage 6g; until then the words alone,
+    // whether or not the CLI said when.
+    #[test]
+    fn the_divider_of_a_clear_says_cleared_without_a_time() {
+        for at in [Some("2026-11-14T12:26:36.305Z".to_owned()), None] {
+            let row = DividerRow {
+                key: "m/cleared".to_owned(),
+                divider: Divider::Cleared { at: at.clone() },
+                opens: false,
+            };
+            assert_eq!(divider_line(&row), "Conversation cleared", "{at:?}");
+        }
     }
 
     #[test]

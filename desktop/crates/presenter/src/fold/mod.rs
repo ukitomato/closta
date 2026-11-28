@@ -5,6 +5,7 @@ mod operations;
 pub mod paths;
 pub mod routing;
 mod sent;
+pub(crate) mod session_line;
 pub mod sign_in;
 pub mod snapshot;
 mod stop;
@@ -197,6 +198,9 @@ fn fold_event(
         AgentEvent::SystemInit { slash_commands, .. } => {
             fold_commands_of_init(transcript, slash_commands)
         }
+        AgentEvent::ConversationReset {
+            uuid, timestamp, ..
+        } => session_line::fold_reset(transcript, uuid, timestamp.as_deref()),
         AgentEvent::SystemBackgroundTasksChanged { .. }
         | AgentEvent::SystemTaskProgress { .. }
         | AgentEvent::SystemTaskStarted { .. } => fold_background(transcript, event),
@@ -207,7 +211,6 @@ fn fold_event(
         | AgentEvent::SystemTaskNotification { .. }
         | AgentEvent::SystemCommandsChanged { .. }
         | AgentEvent::SystemUiInvalidate { .. }
-        | AgentEvent::ConversationReset { .. }
         | AgentEvent::SystemPermissionDenied { .. }
         | AgentEvent::SystemInformational { .. }
         | AgentEvent::SystemApiRetry { .. }

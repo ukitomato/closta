@@ -3,6 +3,8 @@
 //! of the saved record leaves out from (`rewind_before`); `None` leaves nothing out of a fork and
 //! keeps nothing of a rewind.
 
+use std::collections::HashSet;
+
 use crate::transcript::{Role, Transcript};
 
 /// Opens a copy without the ask and what came after; `rewind_before` `None` keeps nothing (a new
@@ -45,6 +47,9 @@ pub enum RewindRefusal {
     Unknown,
     /// Nothing came after the turn.
     NothingAfter,
+    /// The ask came before the conversation was cleared: the CLI's conversation now has no record
+    /// of it.
+    BeforeClear,
 }
 
 fn refused(why: RewindRefusal) -> AskActions {
@@ -59,15 +64,20 @@ fn refused(why: RewindRefusal) -> AskActions {
 /// What the ask `ask_key` offers. `running` is whether the thread is running
 /// ([`thread_is_running`](crate::thread_running::thread_is_running)).
 pub fn ask_actions(transcript: &Transcript, running: bool, ask_key: &str) -> AskActions {
-    let asks = sent_asks(transcript);
+    let asks = live_asks(transcript);
     let at = asks.iter().position(|it| it == ask_key);
     match at {
+        // Before a clear nothing is ever offered, running or not: the screen does not show the
+        // buttons at all.
+        None if before_clear(transcript, ask_key) => refused(RewindRefusal::BeforeClear),
         _ if running => refused(RewindRefusal::Running),
         None => refused(RewindRefusal::Unknown),
         Some(at) => {
             // The record's first user line has no parent to cut at: rewinding to it keeps nothing.
-            let keeps_nothing =
-                at == 0 && !transcript.restored.as_ref().is_some_and(|it| it.partly);
+            // After a clear the record starts afresh, whatever was put back of the one before.
+            let keeps_nothing = at == 0
+                && (transcript.cleared_at.is_some()
+                    || !transcript.restored.as_ref().is_some_and(|it| it.partly));
             let uuid_of = |key: &str| transcript.user_uuids.get(key).cloned();
             let before = if keeps_nothing {
                 None
@@ -95,9 +105,11 @@ pub fn ask_actions(transcript: &Transcript, running: bool, ask_key: &str) -> Ask
 /// What the end of the turn that answered `ask_key` offers: rewinding to right after it (no
 /// fork).
 pub fn turn_end_actions(transcript: &Transcript, running: bool, ask_key: &str) -> AskActions {
-    let asks = sent_asks(transcript);
+    let asks = live_asks(transcript);
     let at = asks.iter().position(|it| it == ask_key);
     match at {
+        // Before a clear nothing is ever offered, running or not, as for an ask.
+        None if before_clear(transcript, ask_key) => refused(RewindRefusal::BeforeClear),
         _ if running => refused(RewindRefusal::Running),
         None => refused(RewindRefusal::Unknown),
         Some(at) => match asks.get(at + 1) {
@@ -124,4 +136,22 @@ pub(crate) fn sent_asks(transcript: &Transcript) -> Vec<String> {
         })
         .map(str::to_owned)
         .collect()
+}
+
+/// [`sent_asks`] after the last clear: the asks of the conversation the CLI has now.
+pub(crate) fn live_asks(transcript: &Transcript) -> Vec<String> {
+    let asks = sent_asks(transcript);
+    let Some(cleared) = transcript.cleared_at else {
+        return asks;
+    };
+    let after: HashSet<&str> = transcript.messages.order().skip(cleared + 1).collect();
+    asks.into_iter()
+        .filter(|it| after.contains(it.as_str()))
+        .collect()
+}
+
+/// Whether `ask_key` is an ask the CLI knew that came before the last clear: one of
+/// [`sent_asks`] that [`live_asks`] left out.
+fn before_clear(transcript: &Transcript, ask_key: &str) -> bool {
+    transcript.cleared_at.is_some() && sent_asks(transcript).iter().any(|it| it == ask_key)
 }

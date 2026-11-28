@@ -105,6 +105,8 @@ pub fn scenes() -> Vec<Scene> {
             "thread-compact",
             replay("21-compact.ndjson", Some(COMPACT_PROMPT)),
         ),
+        // A turn, /clear and a turn of the new conversation: the divider between them.
+        scene("thread-clear", replay("41-clear-reset.ndjson", None)),
         scene("thread-synthetic-tail", replay("synth.ndjson", None)),
         // A WSL launch that ends with 127: the failure band, its hint and Restart, and the
         // composer of a session that is not running.
@@ -300,6 +302,7 @@ mod tests {
                 "thread-subagent",
                 "thread-todo",
                 "thread-compact",
+                "thread-clear",
                 "thread-synthetic-tail",
             ]
         );
@@ -326,6 +329,13 @@ mod tests {
         assert_eq!(
             find("thread-synthetic-tail").unwrap().args,
             ["--replay", r"C:\dev\tools\closta\replay\synth.ndjson"]
+        );
+        assert_eq!(
+            find("thread-clear").unwrap().args,
+            [
+                "--replay",
+                r"C:\dev\tools\closta\replay\41-clear-reset.ndjson"
+            ]
         );
         assert!(find("thread-nothing").is_none());
     }
@@ -377,7 +387,7 @@ mod tests {
     #[test]
     fn every_scene_is_shot_at_the_three_sizes() {
         assert_eq!(SIZES, [(1024, 700), (1600, 1000), (2560, 1440)]);
-        assert_eq!(scenes().len() * SIZES.len(), 45);
+        assert_eq!(scenes().len() * SIZES.len(), 48);
     }
 
     #[test]

@@ -15,7 +15,7 @@ use crate::json::JsonFields;
 use crate::keyed::Keyed;
 use crate::records::attachment::AttachmentRecord;
 use crate::records::turn_end::TurnChangesRecord;
-use crate::rewind_targets::sent_asks;
+use crate::rewind_targets::live_asks;
 use crate::text::kt_is_blank;
 use crate::tool_line::{AgentSummary, ToolDetail, ToolLine, agent_summary, tool_detail, tool_line};
 use crate::transcript::{
@@ -36,6 +36,7 @@ pub enum ThreadRow {
     TurnEnd(Arc<TurnEndRow>),
     SignIn(Arc<SignInRow>),
     Compaction(Arc<CompactionRow>),
+    Divider(Arc<DividerRow>),
 }
 
 impl ThreadRow {
@@ -51,6 +52,7 @@ impl ThreadRow {
             Self::TurnEnd(row) => &row.key,
             Self::SignIn(row) => &row.key,
             Self::Compaction(row) => &row.key,
+            Self::Divider(row) => &row.key,
         }
     }
 
@@ -67,6 +69,7 @@ impl ThreadRow {
             Self::TurnEnd(row) => row.opens,
             Self::SignIn(_) => false,
             Self::Compaction(row) => row.opens,
+            Self::Divider(row) => row.opens,
         }
     }
 
@@ -83,6 +86,7 @@ impl ThreadRow {
             (Self::TurnEnd(a), Self::TurnEnd(b)) => Arc::ptr_eq(a, b),
             (Self::SignIn(a), Self::SignIn(b)) => Arc::ptr_eq(a, b),
             (Self::Compaction(a), Self::Compaction(b)) => Arc::ptr_eq(a, b),
+            (Self::Divider(a), Self::Divider(b)) => Arc::ptr_eq(a, b),
             _ => false,
         }
     }
@@ -215,6 +219,23 @@ pub struct CompactionRow {
     pub opens: bool,
 }
 
+/// A line across the thread where the conversation changed under it; what came before stays
+/// above it.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct DividerRow {
+    pub key: String,
+    pub divider: Divider,
+    pub opens: bool,
+}
+
+/// What a [`DividerRow`] marks.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum Divider {
+    /// The conversation was cleared; `at` is when, as the CLI wrote it (ISO 8601, UTC), `None`
+    /// when it did not say.
+    Cleared { at: Option<String> },
+}
+
 /// The tools that only read; two or more in a row fold into one [`ExploredRow`].
 pub const READ_ONLY_TOOLS: [&str; 4] = ["Read", "Grep", "Glob", "LS"];
 
@@ -293,7 +314,7 @@ impl ThreadRows {
         let mut rows = Vec::new();
         let go = plan_go_of(&transcript.operations);
         let by_anchor = ByAnchor::of(&transcript.approvals);
-        let asks = sent_asks(transcript);
+        let asks = live_asks(transcript);
         let followed: HashSet<&str> = asks
             .iter()
             .take(asks.len().saturating_sub(1))
@@ -589,6 +610,13 @@ fn row_of(key: String, part: &PartRecord, opens: bool) -> Option<ThreadRow> {
             opens,
             detail: Some(tool_detail(call)),
             agent: agent_summary(call),
+        }))),
+        PartRecord::Cleared(cleared) => Some(ThreadRow::Divider(Arc::new(DividerRow {
+            key,
+            divider: Divider::Cleared {
+                at: cleared.at.clone(),
+            },
+            opens,
         }))),
         PartRecord::Other(_) | PartRecord::Attachment(_) => None,
     }

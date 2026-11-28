@@ -66,6 +66,10 @@ pub struct Transcript {
     pub compaction_marks: Vector<CompactionMark>,
     /// The keys of the user messages the session refused to send.
     pub not_sent: imbl::HashSet<String>,
+    /// Where the conversation was last cleared: the place in `messages` of the message holding the
+    /// last [`ClearedRecord`], `None` while it never was. What comes before it belongs to a
+    /// conversation the CLI no longer has.
+    pub cleared_at: Option<usize>,
 }
 
 /// One compaction as the conversation shows it: after `after`, the key of the last message when
@@ -138,6 +142,26 @@ pub enum PartRecord {
     ToolCall(ToolCallRecord),
     Other(OtherRecord),
     Attachment(AttachmentRecord),
+    Cleared(ClearedRecord),
+}
+
+/// Where the CLI discarded the conversation (`conversation_reset`): what came before stays shown,
+/// above it. `key` is its part key; `at` is when it happened as the CLI wrote it (ISO 8601, UTC),
+/// `None` when the line did not say. `Debug` shows the time alone.
+#[derive(Clone, PartialEq, Eq)]
+pub struct ClearedRecord {
+    pub key: String,
+    pub at: Option<String>,
+}
+
+impl fmt::Debug for ClearedRecord {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "ClearedRecord({})",
+            self.at.as_deref().unwrap_or("no time")
+        )
+    }
 }
 
 /// A text or thinking block. `streaming` is true from the stream's `content_block_start` until its
