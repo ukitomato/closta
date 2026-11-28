@@ -197,6 +197,30 @@ class TaskOutputTest {
         )
     }
 
+    @Test
+    fun `type only - the process ending drops every request still waiting for an answer`() {
+        val waiting =
+            HostState()
+                .with(PresenterInput.Launched(null))
+                .with(PresenterInput.ControlRequested("n1", ControlKind.RENAME, "Name"))
+                .with(PresenterInput.ControlRequested("p1", ControlKind.PERMISSION_RULES))
+                .with(PresenterInput.ControlRequested("l1", ControlKind.RELOAD_PLUGINS))
+                .with(PresenterInput.ControlRequested("b1", ControlKind.BACKGROUND, "tool-1"))
+                .with(PresenterInput.ControlRequested("c1", ControlKind.CANCEL_QUEUED, "uuid-1"))
+        val before = waiting.ops()
+        assertTrue(before.renameAsks.isNotEmpty() && before.rulesWaiting.isNotEmpty())
+        assertTrue(before.reloadWaiting.isNotEmpty() && before.backgroundAsks.isNotEmpty())
+        assertTrue(before.backgrounding.isNotEmpty())
+        val after = waiting.with(PresenterInput.ProcessEnded).ops()
+        assertTrue(after.renameAsks.isEmpty())
+        assertTrue(after.rulesWaiting.isEmpty())
+        assertTrue(after.reloadWaiting.isEmpty())
+        assertTrue(after.backgroundAsks.isEmpty())
+        assertTrue(after.backgrounding.isEmpty())
+        assertTrue(after.cancelAsks.isEmpty())
+        assertTrue(after.cancels.values.none { it.phase == CancelPhase.WAITING })
+    }
+
     private fun changedLine(id: String) =
         """{"type":"system","subtype":"background_tasks_changed","tasks":[""" +
             """{"task_id":"$id","task_type":"local_bash","description":"d"}],"uuid":"u-ch","session_id":"s"}"""

@@ -114,6 +114,8 @@ internal class BackgroundOffers(
 ) {
     private val asked = transcript.operations.backgrounding
     private val away: Set<String>
+    private val openCalls: List<ToolCallRecord> = callsOfOpenTurn(transcript)
+    private val openIds = openCalls.mapTo(HashSet()) { it.toolUseId }
 
     init {
         val background = transcript.background
@@ -121,12 +123,17 @@ internal class BackgroundOffers(
         away = tasks.mapNotNullTo(HashSet()) { background.toolUseIds[it] ?: background.progress[it]?.toolUseId }
     }
 
+    /** Whether a call of the open turn runs in front and can be moved to the background. */
+    fun any(): Boolean = live && openCalls.any { runsInFront(it) }
+
     fun of(part: PartRecord): BackgroundOffer? =
-        if (live && part is ToolCallRecord && runsInFront(part)) {
+        if (live && part is ToolCallRecord && offerable(part)) {
             asked[part.toolUseId] ?: BackgroundOffer(BackgroundPhase.OFFER)
         } else {
             null
         }
+
+    private fun offerable(call: ToolCallRecord): Boolean = call.toolUseId in openIds && runsInFront(call)
 
     private fun runsInFront(call: ToolCallRecord): Boolean =
         call.result == null &&
@@ -140,23 +147,26 @@ internal class BackgroundOffers(
         ((call.input as? JsonObject)?.get("run_in_background") as? JsonBool)?.value == true
 }
 
-/** How many of the newest messages are looked at for a running call: a call in front is part of the turn that runs. */
-private const val RECENT_MESSAGES = 16
+/**
+ * The calls of the turn that runs: those in the messages after the last user message. A call of an earlier turn, or
+ * one restored from a saved record, may never get a result; the CLI that runs now did not start it.
+ */
+private fun callsOfOpenTurn(transcript: Transcript): List<ToolCallRecord> {
+    val calls = ArrayList<ToolCallRecord>()
+    for (key in transcript.messages.order.asReversed()) {
+        val message = transcript.messages[key]
+        if (message?.role == Role.USER) break
+        message?.parts?.values()?.filterIsInstanceTo(calls)
+    }
+    return calls
+}
 
-/** Whether a call among the newest messages runs in front and can be moved to the background (send all). */
+/** Whether a call of the open turn runs in front and can be moved to the background (send all). */
 fun canBackground(
     transcript: Transcript,
     conversation: ConversationState,
     live: Boolean,
-): Boolean {
-    val offers = backgroundOffersOf(transcript, conversation, live, enabled = true)
-    return transcript.messages.order
-        .asReversed()
-        .asSequence()
-        .take(RECENT_MESSAGES)
-        .mapNotNull { transcript.messages[it] }
-        .any { message -> message.role != Role.USER && message.parts.values().any { offers.of(it) != null } }
-}
+): Boolean = backgroundOffersOf(transcript, conversation, live, enabled = true).any()
 
 /** The offers of a build of the rows: nothing is offered unless the CLI is up and a turn runs. */
 internal fun backgroundOffersOf(

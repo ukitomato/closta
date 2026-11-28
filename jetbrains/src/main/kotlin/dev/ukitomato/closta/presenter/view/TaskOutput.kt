@@ -62,8 +62,22 @@ private fun outputOf(
     }
 }
 
-/** The CLI process ended: its tasks are gone with it, and nothing waits for an answer from it. */
-internal fun OperationRecords.processEnded(): OperationRecords = copy(outputAsk = null, processEnded = true)
+/**
+ * The CLI process ended: its tasks are gone with it, and nothing waits for an answer from it. No later launch clears
+ * what was asked, so everything waiting is cleared here, as a launch does; a withdrawal already made stays.
+ */
+internal fun OperationRecords.processEnded(): OperationRecords =
+    copy(
+        outputAsk = null,
+        processEnded = true,
+        renameAsks = emptyMap(),
+        rulesWaiting = emptyList(),
+        reloadWaiting = emptyList(),
+        backgroundAsks = emptyMap(),
+        backgrounding = emptyMap(),
+        cancelAsks = emptyMap(),
+        cancels = cancels.filterValues { it.phase == CancelPhase.CANCELLED },
+    )
 
 /** The tasks of the CLI that ended or was replaced are not running: its list is not the next one's. */
 internal fun Transcript.withoutTasks(): Transcript =

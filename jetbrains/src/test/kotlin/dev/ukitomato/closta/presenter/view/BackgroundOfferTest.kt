@@ -257,4 +257,20 @@ class BackgroundOfferTest {
         assertTrue(canBackground(running.transcript, running.conversation, live = true))
         assertFalse(canBackground(running.transcript, running.conversation, live = false))
     }
+
+    @Test
+    fun `type only - a call of an earlier turn that never got a result is not offered in a new turn`() {
+        val old = turn().lines(call("old", "Bash", "command" to "sleep 9"))
+        val next =
+            old
+                .next(PresenterInput.UserSent("u2", "again", uuid = "c2"))
+                .next(PresenterInput.Event(Lines.queued("c2")))
+                .next(PresenterInput.Event(Lines.started("c2")))
+        assertNull(next.offerOf("old"))
+        assertFalse(canBackground(next.transcript, next.conversation, live = true))
+        val running = next.lines(call("new", "Bash", "command" to "sleep 9"))
+        assertEquals(BackgroundOffer(BackgroundPhase.OFFER), running.offerOf("new"))
+        assertNull(running.offerOf("old"))
+        assertTrue(canBackground(running.transcript, running.conversation, live = true))
+    }
 }
