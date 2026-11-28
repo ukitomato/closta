@@ -157,12 +157,29 @@ const PERF_RUN: [&str; 14] = [
     "--no-capture",
 ];
 
+/// The exit code `perf` ends with when the lock stays taken for the whole wait: apart from a
+/// failed budget (1) and a busy machine (2).
+pub const LOCK_TIMEOUT_EXIT: u8 = 3;
+
+/// `flock`'s arguments that wait `wait` seconds for `lock` and end with `LOCK_TIMEOUT_EXIT` when
+/// the wait runs out.
+fn lock_args(wait: &str, lock: &str) -> Vec<String> {
+    let code = LOCK_TIMEOUT_EXIT.to_string();
+    strings(&["-w", wait, "-E", &code, lock])
+}
+
 /// The lock `perf` waits for, around the whole of `perf-held` run by `exe`.
 pub fn perf_locked(exe: &Path) -> (String, Vec<String>) {
-    let mut args = strings(&["-w", "1800", LOCK]);
+    let mut args = lock_args("1800", LOCK);
     args.push(exe.display().to_string());
     args.push("perf-held".to_owned());
     ("flock".to_owned(), args)
+}
+
+/// The line `perf` prints for the exit code it ends with, when that code needs naming.
+pub fn perf_exit_note(code: u8) -> Option<&'static str> {
+    (code == LOCK_TIMEOUT_EXIT)
+        .then_some("perf: the build lock stayed taken for 1800 s; perf did not run")
 }
 
 /// The exit code a child's status passes on; a child killed by a signal has none.
@@ -314,7 +331,7 @@ mod tests {
     }
 
     #[test]
-    fn perf_runs_only_the_ignored_budgets_in_release_under_the_lock() {
+    fn perf_runs_only_the_ignored_budgets_in_release() {
         let steps = perf_steps();
         let Some(Step::Command { program, args, .. }) = steps.last() else {
             panic!("a last command");
@@ -369,8 +386,36 @@ mod tests {
         assert_eq!(program, "flock");
         assert_eq!(
             args,
-            strings(&["-w", "1800", LOCK, "/x/target/debug/xtask", "perf-held"])
+            strings(&[
+                "-w",
+                "1800",
+                "-E",
+                "3",
+                LOCK,
+                "/x/target/debug/xtask",
+                "perf-held"
+            ])
         );
+    }
+
+    #[test]
+    fn a_lock_wait_that_runs_out_ends_perf_with_three() {
+        let path = std::env::temp_dir().join(format!("closta-xtask-lock-{}", std::process::id()));
+        let held = std::fs::File::create(&path).unwrap();
+        held.lock().unwrap();
+        let mut args = lock_args("0", &path.display().to_string());
+        args.push("true".to_owned());
+        let code = run_child("flock", &args);
+        drop(held);
+        let _ = std::fs::remove_file(&path);
+        assert_eq!(code, LOCK_TIMEOUT_EXIT);
+        assert_eq!(
+            perf_exit_note(LOCK_TIMEOUT_EXIT),
+            Some("perf: the build lock stayed taken for 1800 s; perf did not run")
+        );
+        for code in [0, 1, 2] {
+            assert_eq!(perf_exit_note(code), None, "{code}");
+        }
     }
 
     #[test]

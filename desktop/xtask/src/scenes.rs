@@ -474,8 +474,10 @@ mod tests {
             .join(win::CAPTURES)
             .join(file);
         let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{file}: {e}"));
+        // Counted as `--stop-at` counts them: blank lines are not lines.
         let row = text
             .lines()
+            .filter(|row| !row.trim().is_empty())
             .nth(line - 1)
             .unwrap_or_else(|| panic!("{file} has no line {line}"));
         serde_json::from_str(row).unwrap_or_else(|e| panic!("{file}:{line}: {e}"))

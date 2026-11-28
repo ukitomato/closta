@@ -65,7 +65,11 @@ fn main() -> ExitCode {
             };
             println!("perf: waiting for the build lock");
             let (program, args) = check::perf_locked(&exe);
-            ExitCode::from(check::run_child(&program, &args))
+            let code = check::run_child(&program, &args);
+            if let Some(note) = check::perf_exit_note(code) {
+                eprintln!("{note}");
+            }
+            ExitCode::from(code)
         }
         "perf-held" => {
             let result = check::run_steps(&desktop_root(), &check::perf_steps());
