@@ -10,6 +10,9 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use closta_model::{AgentEventKind, ConversationState};
 use closta_presenter::fold::paths::message_at;
+use closta_presenter::input::{ControlRequested, PresenterInput};
+use closta_presenter::records::operations::ControlKind;
+use closta_presenter::session::SessionView;
 use closta_presenter::transcript::PartRecord;
 use closta_providers::claude::fake::process::ProcessScript;
 use closta_providers::claude::fake::spawner::FakeSpawner;
@@ -257,4 +260,95 @@ fn the_new_kinds_leave_none_of_their_text_in_the_log() {
         })
         .collect();
     assert!(leaks.is_empty(), "{}", leaks.join("; "));
+}
+
+#[test]
+fn the_usage_answer_leaves_its_cost_and_reset_time_out_of_the_log_and_the_debug() {
+    // 43's usage answer (line 16): the cost and the reset time of the five-hour window.
+    let id = "43-usage-and-rules-req-2";
+    let answer = common::capture_line("43-usage-and-rules", 16);
+    // Precondition: line 16 is the answer to `id`, and folded after its request it is a usage
+    // record. The runtime's own replay asks no usage (that is a later stage's), so the record is
+    // made here by the same fold.
+    // The cost's digits as far as every float printing agrees on them.
+    let cost = "0.0495899";
+    let resets = field_in_response(&[
+        "response",
+        "response",
+        "rate_limits",
+        "five_hour",
+        "resets_at",
+    ]);
+    let asked = SessionView::default().fold(&PresenterInput::ControlRequested(ControlRequested {
+        request_id: id.to_owned(),
+        kind: ControlKind::Usage,
+        value: None,
+    }));
+    let folded = asked.fold(&PresenterInput::Event(answer));
+    assert!(
+        folded.transcript.operations.usage.is_some(),
+        "the answer is read as a usage record"
+    );
+    let shown = format!("{:?}", folded.transcript.operations);
+    for (name, text) in [("cost", cost), ("resets_at", resets.as_str())] {
+        assert!(
+            !shown.contains(text),
+            "the operations' Debug shows the {name}"
+        );
+    }
+    let raw = common::non_blank_lines(&common::text_of("43-usage-and-rules.ndjson"))[15].clone();
+    assert!(raw.contains(cost), "the cost looked for is the answer's");
+
+    let lines = common::non_blank_lines(&common::text_of("43-usage-and-rules.ndjson"));
+    let spawner = Arc::new(FakeSpawner::new(move |launch| {
+        Ok(if launch.args == ["--version"] {
+            ProcessScript::replaying(vec![format!("{VERSION} (Claude Code)")])
+        } else {
+            ProcessScript::replaying(lines.clone())
+        })
+    }));
+    let planner = Arc::new(NativeSessionLaunchPlanner::new(
+        spawner,
+        Arc::new(SecretEnv::default),
+    ));
+    let log = Arc::new(RecordingLog::default());
+    let mut config = SessionConfig::new(
+        ID,
+        planner,
+        Some(WORKING_DIR.to_owned()),
+        Arc::clone(&log) as Arc<dyn SessionLog>,
+    );
+    config.version_timeout = GUARD;
+    let (runtime, run) = SessionRuntime::new(config);
+    drive(|executor| async move { executor.spawn(run).await });
+
+    let written = log.lines();
+    assert!(!written.is_empty(), "the run wrote nothing to the log");
+    let shown = format!("{:?}", runtime.view().transcript.operations);
+    for (name, text) in [("cost", cost), ("resets_at", resets.as_str())] {
+        assert!(
+            !shown.contains(text),
+            "the operations' Debug shows the {name}"
+        );
+        let leaks: Vec<usize> = written
+            .iter()
+            .enumerate()
+            .filter(|(_, line)| line.contains(text))
+            .map(|(i, _)| i + 1)
+            .collect();
+        assert!(leaks.is_empty(), "the {name} is in log lines {leaks:?}");
+    }
+}
+
+/// The text of the member at `path` of 43's line 16, which must hold a number or a string.
+fn field_in_response(path: &[&str]) -> String {
+    let line = common::non_blank_lines(&common::text_of("43-usage-and-rules.ndjson"))[15].clone();
+    let mut value: serde_json::Value = serde_json::from_str(&line).unwrap();
+    for key in path {
+        value = value[key].take();
+    }
+    match value {
+        serde_json::Value::String(text) => text,
+        other => other.to_string(),
+    }
 }

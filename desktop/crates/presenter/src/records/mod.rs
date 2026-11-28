@@ -9,3 +9,4 @@ pub mod readings;
 pub mod rewind;
 pub mod tasks;
 pub mod turn_end;
+pub mod usage;

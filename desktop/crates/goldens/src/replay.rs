@@ -322,9 +322,11 @@ fn requests(scenario: &str) -> HashMap<String, ControlRequested> {
             table.put(ControlKind::Mode, 2, Some("bypassPermissions"));
             table.put(ControlKind::Mode, 3, Some("plan"));
         }
-        // The usage after the turn (req-2; its record is for a later stage), and the whole context
-        // usage last (req-6).
-        "43-usage-and-rules" => table.put(ControlKind::Context, 6, None),
+        // The usage after the turn (req-2, line 16), and the whole context usage last (req-6).
+        "43-usage-and-rules" => {
+            table.put(ControlKind::Usage, 2, None);
+            table.put(ControlKind::Context, 6, None);
+        }
         _ => {}
     }
     table.by_id

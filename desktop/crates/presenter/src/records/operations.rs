@@ -13,6 +13,7 @@ use crate::json::{JsonFields, parse};
 use crate::records::mcp::{McpServerRecord, mcp_sentence};
 use crate::records::readings::models_of_response;
 use crate::records::rewind::RewindRecord;
+use crate::records::usage::{UsageRecord, usage_of};
 use crate::refusal_sentence::{NO_SENTENCE, plain_sentence_of};
 use crate::text::kt_is_blank;
 
@@ -23,6 +24,8 @@ pub enum ControlKind {
     Model,
     Mode,
     Context,
+    /// The session's cost and the plan's limits (`get_usage`): it waits in its own column.
+    Usage,
     /// The list of MCP servers: it waits in its own column, as the usage does.
     McpStatus,
     /// An MCP server turned on, off, or reconnected; the value is the server's name.
@@ -167,6 +170,11 @@ pub struct OperationRecords {
     pub seq: i32,
     pub switches: Vector<SwitchRecord>,
     pub waiting: Vector<String>,
+    /// The ids of the `get_usage` requests not answered yet, a column of their own as
+    /// `mcp_waiting` is.
+    pub usage_waiting: Vector<String>,
+    /// The last `get_usage` answer that could be read; `None` before the first.
+    pub usage: Option<UsageRecord>,
     pub context: Option<ContextRecord>,
     pub compactions: Vector<CompactionRecord>,
     pub compacting: bool,
@@ -352,6 +360,10 @@ impl OperationRecords {
                 waiting: pushed(&self.waiting, id.to_owned(), MAX_WAITING),
                 ..self.clone()
             },
+            ControlKind::Usage => Self {
+                usage_waiting: pushed(&self.usage_waiting, id.to_owned(), MAX_WAITING),
+                ..self.clone()
+            },
             ControlKind::McpStatus => Self {
                 mcp_waiting: pushed(&self.mcp_waiting, id.to_owned(), MAX_WAITING),
                 ..self.clone()
@@ -493,6 +505,11 @@ impl OperationRecords {
                 waiting: without(&self.waiting, id),
                 ..self.clone()
             }
+        } else if self.usage_waiting.contains(&id.to_owned()) {
+            Self {
+                usage_waiting: without(&self.usage_waiting, id),
+                ..self.clone()
+            }
         } else if self.settings_waiting.contains(&id.to_owned()) {
             // A sandbox check that could not be asked waits for the next settings request.
             Self {
@@ -517,6 +534,7 @@ impl OperationRecords {
         let id = id.to_owned();
         self.has_switch(&id)
             || self.waiting.contains(&id)
+            || self.usage_waiting.contains(&id)
             || self.mcp_waiting.contains(&id)
             || self.settings_waiting.contains(&id)
     }
@@ -540,6 +558,17 @@ impl OperationRecords {
             Self {
                 waiting: without(&self.waiting, id),
                 context: read.or_else(|| self.context.clone()),
+                ..self.clone()
+            }
+        } else if self.usage_waiting.contains(&owned) {
+            let read = if answer.succeeded() {
+                answer.body().as_ref().and_then(usage_of)
+            } else {
+                None
+            };
+            Self {
+                usage_waiting: without(&self.usage_waiting, id),
+                usage: read.or_else(|| self.usage.clone()),
                 ..self.clone()
             }
         } else if self.mcp_waiting.contains(&owned) {
