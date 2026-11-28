@@ -22,14 +22,14 @@ plugins {
 val pluginBasePackage = "dev.ukitomato.closta"
 
 dependencies {
-    testImplementation(platform("org.junit:junit-bom:5.14.4"))
+    testImplementation(platform("org.junit:junit-bom:6.1.3"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 
     // The AgentSessionContract base lives in testFixtures and carries @Test methods that the
     // src/test subclasses inherit, so testFixtures needs the JUnit 5 API at compile time.
     // JUnit is already a declared project dependency (above); this is not a coroutines/IDE-borrowed one.
-    testFixturesImplementation(platform("org.junit:junit-bom:5.14.4"))
+    testFixturesImplementation(platform("org.junit:junit-bom:6.1.3"))
     testFixturesImplementation("org.junit.jupiter:junit-jupiter-api")
     // The synthetic sessions (providers/claude/synthetic) live in testFixtures for src/test and the dev tools plugin,
     // and build stream-json with the same Gson the provider parses it with.
