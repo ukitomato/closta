@@ -61,7 +61,7 @@ dependencies {
     }
     implementation("software.amazon.awssdk:auth:2.30.0")
     implementation("software.amazon.awssdk:regions:2.30.0")
-    implementation("software.amazon.awssdk:url-connection-client:2.30.0")
+    implementation("software.amazon.awssdk:url-connection-client:2.59.0")
 
     // Main scope, packed into the plugin like the AWS SDK: the transcript fold keeps its growing collections in
     // persistent ones, so a line costs the same at any length of the conversation. Not com.intellij, so presenter
