@@ -67,8 +67,6 @@ fn type_in(shell: &mut ShellState, slot: SlotId, text: &str) {
     });
 }
 
-const BASELINE: &str = "01-baseline-text.ndjson";
-
 #[test]
 fn asks_are_read_off_the_captures() {
     let expected = [
@@ -136,7 +134,7 @@ fn an_ask_with_no_request_id_names_the_capture() {
 
 #[test]
 fn the_baseline_lines_are_what_their_names_say() {
-    let text = common::text_of(BASELINE);
+    let text = common::text_of(support::BASELINE);
     let lines = common::non_blank_lines(&text);
     let open: serde_json::Value = serde_json::from_str(&lines[support::BASELINE_OPEN - 1]).unwrap();
     assert_eq!(open["type"], "stream_event");

@@ -532,6 +532,8 @@ pub fn ask_in_text(name: &str, text: &str, tool: &str, nth: usize) -> Ask {
         .unwrap_or_else(|| panic!("{name}: no can_use_tool #{nth} for {tool}"))
 }
 
+/// The baseline capture.
+pub const BASELINE: &str = "01-baseline-text.ndjson";
 /// The baseline capture's first text delta: its turn is open.
 pub const BASELINE_OPEN: usize = 10;
 /// The baseline capture's last line.

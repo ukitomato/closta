@@ -181,9 +181,12 @@ pub fn perf_locked(exe: &Path) -> (String, Vec<String>) {
 
 /// The line `perf` prints for the exit code it ends with, when that code needs naming.
 pub fn perf_exit_note(code: u8) -> Option<String> {
-    (code == LOCK_TIMEOUT_EXIT).then(|| {
-        format!("perf: the build lock stayed taken for {LOCK_WAIT_SECS} s; perf did not run")
-    })
+    (code == LOCK_TIMEOUT_EXIT).then(|| lock_wait_note(LOCK_WAIT_SECS))
+}
+
+/// The line `perf` prints when the build lock stayed taken for `secs` seconds.
+fn lock_wait_note(secs: u64) -> String {
+    format!("perf: the build lock stayed taken for {secs} s; perf did not run")
 }
 
 /// The exit code a child's status passes on; a child killed by a signal has none.
@@ -401,14 +404,7 @@ mod tests {
         let at = args.iter().position(|it| it == "-w").expect("a -w");
         let in_args: u64 = args[at + 1].parse().expect("a number of seconds");
         let note = perf_exit_note(LOCK_TIMEOUT_EXIT).expect("a note for the lock's code");
-        let in_message: u64 = note
-            .split(" for ")
-            .nth(1)
-            .and_then(|rest| rest.split_whitespace().next())
-            .and_then(|word| word.parse().ok())
-            .expect("the seconds the message names");
-        assert_eq!(in_args, in_message);
-        assert_eq!(1800, in_args, "the wait is half an hour");
+        assert_eq!(lock_wait_note(in_args), note);
     }
 
     #[test]

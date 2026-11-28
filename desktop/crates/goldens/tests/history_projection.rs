@@ -5,8 +5,9 @@
 //!
 //! Kotlin also holds each tree to the contract (`TreeChecks`), which stays on the Kotlin side.
 
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
+use closta_goldens::common::{non_blank_lines, text_of};
 use closta_goldens::projector::project_tree;
 use closta_goldens::records::read_capture_record;
 use closta_goldens::replay::{THREAD, inputs};
@@ -22,9 +23,41 @@ use serde_json::{Map, Value, json};
 const TIME: &str = "2026-10-17T05:40:20.000Z";
 const CAPTURE: &str = "22-resume.ndjson";
 
-/// The session of capture 22, as its saved record names it (`22-resume.transcript.jsonl`).
+/// The session of capture 22, as its saved record names it (`22-resume.transcript.jsonl`), read
+/// once.
+static SESSION: LazyLock<String> = LazyLock::new(|| read_capture_record(CAPTURE).session_id);
+
 fn session() -> String {
-    read_capture_record(CAPTURE).session_id
+    SESSION.clone()
+}
+
+/// The ids `key` names in the non-blank lines of `file`, each once, in their order.
+fn ids_in(file: &str, key: &str) -> Vec<String> {
+    let mut ids: Vec<String> = Vec::new();
+    for line in non_blank_lines(&text_of(file)) {
+        let value: Value = serde_json::from_str(&line).unwrap_or_else(|e| panic!("{file}: {e}"));
+        if let Some(id) = value.get(key).and_then(Value::as_str)
+            && !ids.iter().any(|it| it == id)
+        {
+            ids.push(id.to_owned());
+        }
+    }
+    ids
+}
+
+/// Task 9's review: [`session`] is the one session capture 22's saved record names on every line
+/// that names one (36 lines of `22-resume.transcript.jsonl`), and the one its stdout says, not
+/// capture 01's.
+#[test]
+fn the_session_is_the_one_capture_22_and_its_record_name() {
+    assert_eq!(
+        vec![session()],
+        ids_in("22-resume.transcript.jsonl", "sessionId")
+    );
+    assert_eq!(vec![session()], ids_in("22-resume.ndjson", "session_id"));
+    let baseline = ids_in("01-baseline-text.ndjson", "session_id");
+    assert_eq!(1, baseline.len());
+    assert_ne!(session(), baseline[0]);
 }
 
 fn fold(state: SessionView, inputs: impl IntoIterator<Item = PresenterInput>) -> SessionView {

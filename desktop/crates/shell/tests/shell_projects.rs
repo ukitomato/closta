@@ -20,8 +20,8 @@ use closta_shell::settings::{
 use closta_shell::slot::{SlotId, SlotLaunch, SlotMark, slot_elapsed};
 use closta_shell::state::{Overlay, Ports, ShellAction, ShellState};
 use support::{
-    Ask, BASELINE_ALL, BASELINE_OPEN, Harness, Machine, Planners, RecordingSettings, ask_in, drive,
-    replay_launch, running, until, waits_on,
+    Ask, BASELINE, BASELINE_ALL, BASELINE_OPEN, Harness, Machine, Planners, RecordingSettings,
+    ask_in, drive, replay_launch, running, until, waits_on,
 };
 
 const CLOSTA: &str = r"C:\work\closta";
@@ -757,8 +757,6 @@ fn a_long_first_request_is_cut_at_sixty() {
         assert_eq!(shell.slot_title(slot), Some("x".repeat(60)));
     });
 }
-
-const BASELINE: &str = "01-baseline-text.ndjson";
 
 /// Waits until the slot's session runs a turn (or has none), then refreshes the slot at `now_ms`.
 async fn refreshed(
