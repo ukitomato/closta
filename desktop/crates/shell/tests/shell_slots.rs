@@ -569,16 +569,51 @@ fn after_a_clear_the_title_is_the_first_request_after_the_divider() {
     });
 }
 
-/// The 6d-R design's `/clear` section (session): a Restart after a `/clear` resumes the id the
-/// CLI goes on under, not the one the slot was opened with.
+/// F1 of the 6d-R2 final fixes (ClearedTabs.kt, 022513f: with nothing sent after the `/clear`
+/// there is no conversation to resume): a Restart after a `/clear` with nothing sent since (41
+/// through line 22, the `/clear`'s turn over) starts a new conversation under the id the CLI goes
+/// on under, resuming neither that id nor the one the slot was opened with.
 #[test]
-fn a_restart_after_a_clear_resumes_the_new_id() {
+fn a_restart_after_a_clear_with_nothing_sent_since_starts_the_new_id() {
     drive(|harness| async move {
         let mut shell = harness.shell();
         let ports = harness.ports();
         let (slot, runtime, control) =
             open_cleared(&harness, &mut shell, launch_in(CLEARED_FOLDER, &ports), 0).await;
         play_cleared(&mut shell, slot, &runtime, &control, 22).await;
+        end_slot(&mut shell, slot, &control).await;
+        until(|| shell.live_runs() == 0).await;
+        assert!(runtime.sent());
+        assert_eq!(shell.session_id(slot).as_deref(), Some(AFTER_CLEAR));
+        assert!(!shell.restart_resumes(slot));
+
+        let acted = shell.act(ShellAction::Restart { slot });
+        assert_eq!(acted.started, Some(slot));
+        let args = harness.launch_args(1).await;
+        assert!(
+            args.contains(&format!("--session-id={AFTER_CLEAR}")),
+            "{args:?}"
+        );
+        assert!(
+            !args.iter().any(|it| it.starts_with("--resume")),
+            "{args:?}"
+        );
+        assert_eq!(shell.session_id(slot).as_deref(), Some(AFTER_CLEAR));
+    });
+}
+
+/// The 6d-R design's `/clear` section (session), narrowed by F1 of the 6d-R2 final fixes: once
+/// a request was sent after the `/clear` (41's third, lines 23 on), a Restart resumes the id the
+/// CLI goes on under, not the one the slot was opened with.
+#[test]
+fn a_restart_after_a_request_past_a_clear_resumes_the_new_id() {
+    drive(|harness| async move {
+        let mut shell = harness.shell();
+        let ports = harness.ports();
+        let (slot, runtime, control) =
+            open_cleared(&harness, &mut shell, launch_in(CLEARED_FOLDER, &ports), 0).await;
+        play_cleared(&mut shell, slot, &runtime, &control, 22).await;
+        play_after_clear(&mut shell, slot, &runtime, &control).await;
         end_slot(&mut shell, slot, &control).await;
         until(|| shell.live_runs() == 0).await;
         assert!(shell.restart_resumes(slot));

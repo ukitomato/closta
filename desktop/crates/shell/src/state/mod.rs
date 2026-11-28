@@ -1037,11 +1037,12 @@ impl ShellState {
     }
 
     /// Whether a Restart continues the slot's conversation with `--resume`: its session sent
-    /// a request, or it was opened by resuming. Otherwise it starts the same id again.
+    /// a request, or it was opened by resuming. Otherwise it starts the same id again, and after
+    /// a `/clear` with nothing sent since it starts the CLI's new id afresh.
     pub fn restart_resumes(&self, slot: SlotId) -> bool {
         self.slots
             .get(&slot)
-            .is_some_and(|it| it.runtime.sent() || it.resumed)
+            .is_some_and(|it| !it.runtime.restarts_afresh() && (it.runtime.sent() || it.resumed))
     }
 
     /// What a Restart does, said under its button; `None` while none is on offer.

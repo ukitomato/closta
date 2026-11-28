@@ -14,7 +14,7 @@ use closta_presenter::rewind_targets::{
     ForkFrom, RewindConversation, RewindRefusal, ask_actions, turn_end_actions,
 };
 use closta_presenter::rows::{AskRow, Divider, DividerRow, ThreadRow, ThreadRows};
-use closta_presenter::session::{SessionView, resume_id_of};
+use closta_presenter::session::{SessionView, afresh_after_clear, resume_id_of, sent_after_clear};
 use closta_presenter::transcript::{MessageSource, PartRecord, Role, Transcript};
 
 const SCENARIO: &str = "41-clear-reset";
@@ -368,6 +368,45 @@ fn resume_id_of_is_the_clis_id_only_after_a_clear() {
     assert_eq!(SECOND_SESSION, resume_id_of(last, HOST_ID));
     assert_eq!(HOST_ID, resume_id_of(&cleared_without_session, HOST_ID));
     assert_eq!(HOST_ID, resume_id_of(&session_without_clear, HOST_ID));
+}
+
+/// F1 of the 6d-R2 final fixes, after ClearedTabs.kt's sentAfterClear and clearedTabOf (022513f):
+/// a restart starts a new conversation under the CLI's id only from the init after the reset
+/// (41 line 20) until a message is sent after the divider (the third, queued at 41 line 23).
+/// Before the clear, and between the reset and that init, there is no such id.
+#[test]
+fn a_new_conversation_is_offered_only_from_the_init_after_a_clear_until_a_request_after_it() {
+    let steps = steps();
+    let sends: Vec<usize> = steps
+        .iter()
+        .enumerate()
+        .filter(|(_, step)| matches!(step.input, PresenterInput::UserSent(_)))
+        .map(|(at, _)| at)
+        .collect();
+    assert_eq!(3, sends.len(), "41 sends three messages");
+    let third = sends[2];
+    let named = steps
+        .iter()
+        .position(|step| {
+            step.view
+                .conversation
+                .session
+                .as_ref()
+                .is_some_and(|it| it.session_id == SECOND_SESSION)
+        })
+        .unwrap_or_else(|| panic!("41's init after the reset names the second session"));
+    assert!(
+        steps[named - 1].view.transcript.cleared_at.is_some(),
+        "the reset comes before the init that names the new id"
+    );
+    assert!(sends[1] < named && named < third, "{sends:?} {named}");
+
+    for (at, step) in steps.iter().enumerate() {
+        let view = &step.view;
+        let expected = (named..third).contains(&at).then_some(SECOND_SESSION);
+        assert_eq!(expected, afresh_after_clear(view), "step {at}");
+        assert_eq!(at >= third, sent_after_clear(&view.transcript), "step {at}");
+    }
 }
 
 /// A reset that says no trigger still divides the thread.

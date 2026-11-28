@@ -17,7 +17,7 @@ use closta_core::ports::SavedSessions;
 use closta_model::AgentEvent;
 use closta_presenter::input::{Launched, PresenterInput};
 use closta_presenter::records::operations::asks_for_settings;
-use closta_presenter::session::{SessionView, resume_id_of};
+use closta_presenter::session::{SessionView, afresh_after_clear, resume_id_of};
 use closta_providers::claude::launch::spec::LaunchSpec;
 use closta_providers::claude::launch::version::{VERSION_TIMEOUT, check_version_within};
 use closta_providers::claude::launch::{Launch, LaunchError};
@@ -31,7 +31,7 @@ use crate::history::SessionOpening;
 use crate::launch::{SessionLaunch, SessionLaunchPlanner};
 use crate::live::{LiveProcesses, Tracked};
 use crate::log::SessionLog;
-use crate::sandbox::{SandboxStartWatch, carried_choices, restart_spec};
+use crate::sandbox::{RestartFrom, SandboxStartWatch, carried_choices, restart_spec};
 use crate::status::{SessionFailure, SessionStatus};
 use crate::store::ConversationStore;
 
@@ -225,6 +225,15 @@ impl SessionRuntime {
             .read(|view| resume_id_of(view, &self.shared.id))
     }
 
+    /// Whether a restart starts a new conversation under [`SessionRuntime::resume_id`] rather
+    /// than resuming one: the conversation was cleared, the CLI's init named its new id, and
+    /// nothing was sent since ([`afresh_after_clear`]).
+    pub fn restarts_afresh(&self) -> bool {
+        self.shared
+            .store
+            .read(|view| afresh_after_clear(view).is_some())
+    }
+
     /// Where the session is now.
     pub fn status(&self) -> SessionStatus {
         self.shared.state().status.clone()
@@ -393,15 +402,14 @@ async fn life(
                 ),
                 ProcessEnd::Restart(switch) => {
                     let view = shared.store.view();
-                    let spec = restart_spec(
-                        &first,
-                        sent_of(&view)
-                            .then(|| resume_id_of(&view, &shared.id))
-                            .as_deref(),
-                        config.opening,
-                        &carried_choices(&view),
-                        true,
-                    );
+                    let resume_id = resume_id_of(&view, &shared.id);
+                    let from = match afresh_after_clear(&view) {
+                        Some(id) => RestartFrom::ClearedTo(id),
+                        None if sent_of(&view) => RestartFrom::SentUnder(&resume_id),
+                        None => RestartFrom::Unsent,
+                    };
+                    let spec =
+                        restart_spec(&first, from, config.opening, &carried_choices(&view), true);
                     (spec, Some(switch))
                 }
             };

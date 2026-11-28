@@ -49,25 +49,44 @@ fn applied(view: &SessionView, kind: SwitchKind) -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
-/// The spec a restart launches. `sent_under` is the id the conversation is saved under now once a
-/// message was sent (the launch's own id, or the CLI's new one after a `/clear`), `None` while
-/// none was. After a message, or in a session opened as a resume, it resumes the session by that
-/// id (`--resume=<id>`, without the fork and the cut); a resume with nothing sent by its own id. A
-/// new session with nothing sent starts as it was launched (keeping its `--session-id`: capture
-/// 40). The `carried` mode, model and effort win over the launch's, and `sandbox` is the given
-/// value.
+/// Where the conversation a restart continues stands.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum RestartFrom<'a> {
+    /// No message was sent.
+    Unsent,
+    /// A message was sent and the conversation is saved under this id: the launch's own, or the
+    /// CLI's new one after a `/clear` once a message was sent after it.
+    SentUnder(&'a str),
+    /// The conversation was cleared, the CLI's init after the clear named this id, and nothing
+    /// was sent since.
+    ClearedTo(&'a str),
+}
+
+/// The spec a restart launches from `from`. After a message, or in a session opened as a
+/// resume, it resumes the session by the id it is saved under (`--resume=<id>`, without the fork
+/// and the cut); a resume with nothing sent by its own id. A new session with nothing sent starts
+/// as it was launched (keeping its `--session-id`: capture 40). After a `/clear` with nothing
+/// sent since, a new conversation starts under the CLI's new id (`--session-id=<id>`), whatever
+/// the session was opened as: there is no conversation to resume (ClearedTabs.kt, 022513f). The
+/// `carried` mode, model and effort win over the launch's, and `sandbox` is the given value.
 pub fn restart_spec(
     launched: &LaunchSpec,
-    sent_under: Option<&str>,
+    from: RestartFrom<'_>,
     opening: SessionOpening,
     carried: &CarriedChoices,
     sandbox: bool,
 ) -> LaunchSpec {
     let mut spec = launched.clone();
-    if sent_under.is_some() || opening == SessionOpening::Resume {
-        spec.resume = Some(sent_under.map_or_else(|| launched.session_id.clone(), str::to_owned));
-        spec.fork_session = false;
-        spec.resume_session_at = None;
+    match from {
+        RestartFrom::ClearedTo(id) => {
+            spec.session_id = id.to_owned();
+            reopen(&mut spec, None);
+        }
+        RestartFrom::SentUnder(id) => reopen(&mut spec, Some(id.to_owned())),
+        RestartFrom::Unsent if opening == SessionOpening::Resume => {
+            reopen(&mut spec, Some(launched.session_id.clone()));
+        }
+        RestartFrom::Unsent => {}
     }
     spec.permission_mode = carried
         .mode
@@ -77,6 +96,13 @@ pub fn restart_spec(
     spec.effort = carried.effort.clone().or_else(|| launched.effort.clone());
     spec.sandbox = sandbox;
     spec
+}
+
+/// `spec` resuming `resume` (a new conversation when `None`), without the fork and the cut.
+fn reopen(spec: &mut LaunchSpec, resume: Option<String>) {
+    spec.resume = resume;
+    spec.fork_session = false;
+    spec.resume_session_at = None;
 }
 
 /// Holds back a sandboxed CLI's `result` lines until it says anything else: a CLI that cannot
@@ -227,7 +253,7 @@ mod tests {
     fn after_a_message_resumes_the_session() {
         let argv = args(&restart_spec(
             &LaunchSpec::new(ID),
-            Some(ID),
+            RestartFrom::SentUnder(ID),
             SessionOpening::New,
             &none(),
             true,
@@ -249,7 +275,7 @@ mod tests {
 
         let argv = args(&restart_spec(
             &LaunchSpec::new(ID),
-            Some(cleared),
+            RestartFrom::SentUnder(cleared),
             SessionOpening::New,
             &none(),
             true,
@@ -264,10 +290,51 @@ mod tests {
     }
 
     #[test]
+    fn a_restart_after_a_clear_with_nothing_sent_since_starts_the_new_id() {
+        // ClearedTabs.kt (022513f): with nothing sent after the `/clear` there is no conversation
+        // to resume, and the CLI may not have written the new id's file yet. A new conversation
+        // starts under the id 41's init after its reset names (41 line 20), a resumed or forked
+        // session's too.
+        let cleared = "b3c1b6ae-517a-4b6a-8b61-f3693facb4f1";
+        let forked = LaunchSpec {
+            resume: Some(PARENT.to_owned()),
+            fork_session: true,
+            resume_session_at: Some(CUT.to_owned()),
+            ..LaunchSpec::new(ID)
+        };
+        let cases = [
+            (LaunchSpec::new(ID), SessionOpening::New),
+            (LaunchSpec::new(ID), SessionOpening::Resume),
+            (forked, SessionOpening::New),
+        ];
+
+        for (launched, opening) in cases {
+            let argv = args(&restart_spec(
+                &launched,
+                RestartFrom::ClearedTo(cleared),
+                opening,
+                &none(),
+                true,
+            ));
+
+            assert!(
+                argv.contains(&format!("--session-id={cleared}")),
+                "{argv:?}"
+            );
+            assert!(
+                !argv.iter().any(|it| it.starts_with("--resume")),
+                "{argv:?}"
+            );
+            assert!(!argv.iter().any(|it| it == "--fork-session"), "{argv:?}");
+            assert!(argv.iter().any(|it| it == "--settings"), "{argv:?}");
+        }
+    }
+
+    #[test]
     fn before_the_first_message_keeps_the_session_id() {
         let argv = args(&restart_spec(
             &LaunchSpec::new(ID),
-            None,
+            RestartFrom::Unsent,
             SessionOpening::New,
             &none(),
             true,
@@ -285,7 +352,7 @@ mod tests {
     fn a_resumed_session_restarts_with_resume_even_with_nothing_sent() {
         let argv = args(&restart_spec(
             &LaunchSpec::new(ID),
-            None,
+            RestartFrom::Unsent,
             SessionOpening::Resume,
             &none(),
             true,
@@ -309,7 +376,7 @@ mod tests {
 
         let argv = args(&restart_spec(
             &launched,
-            Some(ID),
+            RestartFrom::SentUnder(ID),
             SessionOpening::New,
             &none(),
             true,
@@ -342,9 +409,15 @@ mod tests {
         };
         assert_eq!(
             Some("acceptEdits"),
-            restart_spec(&launched, Some(ID), SessionOpening::New, &carried, true)
-                .permission_mode
-                .as_deref()
+            restart_spec(
+                &launched,
+                RestartFrom::SentUnder(ID),
+                SessionOpening::New,
+                &carried,
+                true
+            )
+            .permission_mode
+            .as_deref()
         );
     }
 
@@ -362,7 +435,13 @@ mod tests {
             effort: Some("high".to_owned()),
         };
 
-        let spec = restart_spec(&launched, Some(ID), SessionOpening::New, &carried, true);
+        let spec = restart_spec(
+            &launched,
+            RestartFrom::SentUnder(ID),
+            SessionOpening::New,
+            &carried,
+            true,
+        );
 
         assert_eq!(
             (Some("plan"), Some("opus"), Some("high")),
@@ -403,7 +482,7 @@ mod tests {
         assert_eq!(None, carried.effort);
         let argv = args(&restart_spec(
             &LaunchSpec::new(ID),
-            Some(ID),
+            RestartFrom::SentUnder(ID),
             SessionOpening::New,
             &carried,
             true,

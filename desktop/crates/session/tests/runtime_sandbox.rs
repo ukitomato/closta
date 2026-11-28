@@ -31,7 +31,7 @@ use closta_session::commands::SessionCommands;
 use closta_session::history::SessionOpening;
 use closta_session::launch::{NativeSessionLaunchPlanner, SessionLaunchPlanner};
 use closta_session::runtime::SessionRuntime;
-use closta_session::sandbox::{carried_choices, restart_spec};
+use closta_session::sandbox::{RestartFrom, carried_choices, restart_spec};
 use closta_session::status::SessionStatus;
 use futures_lite::{StreamExt, future, stream};
 use smol::Timer;
@@ -495,7 +495,7 @@ fn turning_on_restarts_with_resume_and_settings() {
                 .expect("planned");
         let expected = restart_spec(
             &planned.spec,
-            Some(ID),
+            RestartFrom::SentUnder(ID),
             SessionOpening::New,
             &carried_choices(&before),
             true,
@@ -524,10 +524,11 @@ fn turning_on_restarts_with_resume_and_settings() {
     });
 }
 
-/// Not ported from Kotlin (the design's `/clear` section): a restart after `/clear` resumes the
-/// conversation the init after the reset named, not the one the session was launched under.
+/// F1 of the 6d-R2 final fixes (ClearedTabs.kt, 022513f: with nothing sent after the `/clear`
+/// there is no conversation to resume): a restart after `/clear` with nothing sent since starts a
+/// new conversation under the id the init after the reset named, resuming none.
 #[test]
-fn a_sandbox_restart_after_a_clear_resumes_the_new_id() {
+fn a_sandbox_restart_after_a_clear_with_nothing_sent_since_starts_the_new_id() {
     drive(|executor| async move {
         let processes = Processes::new();
         let (runtime, run, _log) = runtime(&processes, |_| {});
@@ -551,17 +552,62 @@ fn a_sandbox_restart_after_a_clear_resumes_the_new_id() {
 
         let args = processes.session_args();
         assert!(
+            has_arg(&args[1], &format!("--session-id={AFTER_CLEAR}")),
+            "{:?}",
+            args[1]
+        );
+        assert!(
+            !args[1].iter().any(|it| it.starts_with("--resume")),
+            "{:?}",
+            args[1]
+        );
+        runtime.close();
+        within(run).await;
+    });
+}
+
+/// Not ported from Kotlin (the design's `/clear` section, narrowed by F1 of the 6d-R2 final
+/// fixes): once a message was sent after the `/clear`, a restart resumes the conversation the
+/// init after the reset named, not the one the session was launched under.
+#[test]
+fn a_sandbox_restart_after_a_request_past_a_clear_resumes_the_new_id() {
+    drive(|executor| async move {
+        let processes = Processes::new();
+        let (runtime, run, _log) = runtime(&processes, |_| {});
+        let run = executor.spawn(run);
+        let commands = running_on(&runtime, &processes, 1).await;
+        let control = processes.controls()[0].clone();
+        let after_clear: Vec<usize> = (15..=22).collect();
+        cleared(&runtime, &commands, &control, &after_clear).await;
+        // The third message, its turn from its queued lifecycle (41 line 23) to its completed one
+        // (line 97, the capture's last).
+        let lines = common::non_blank_lines(&common::text_of(CLEARED));
+        assert_eq!(97, lines.len());
+        commands
+            .send_message(SendId::new("m3").expect("a key"), "which word", &[])
+            .expect("sent");
+        for line in &lines[22..] {
+            control.emit(line);
+        }
+        until(|| {
+            let view = runtime.view();
+            view.transcript.routing.sends == 3
+                && !thread_is_running(&view.conversation, &view.transcript)
+        })
+        .await;
+        assert_eq!(AFTER_CLEAR, runtime.resume_id());
+
+        assert!(runtime.turn_sandbox_on());
+        running_on(&runtime, &processes, 2).await;
+
+        let args = processes.session_args();
+        assert!(
             has_arg(&args[1], &format!("--resume={AFTER_CLEAR}")),
             "{:?}",
             args[1]
         );
         assert!(
-            !has_arg(&args[1], &format!("--resume={ID}")),
-            "{:?}",
-            args[1]
-        );
-        assert!(
-            !has_arg(&args[1], &format!("--resume={BEFORE_CLEAR}")),
+            !args[1].iter().any(|it| it.starts_with("--session-id")),
             "{:?}",
             args[1]
         );
