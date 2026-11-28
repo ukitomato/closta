@@ -182,6 +182,7 @@ class ProjectTranscripts(
         var dropped = 0
         var oldestUnread = false
         var stopped = false
+        val names = RecordTitles.Names()
 
         // Keeps a line, or counts it as skipped. False when the line is the one the read stops at (kept or not, as
         // [stop] says).
@@ -243,7 +244,13 @@ class ProjectTranscripts(
                 if (reading.oldestUnread) ", the oldest part of the record was not read" else "",
         )
         return ReadResult(
-            SavedTranscript(reading.kept.map { it.event }, reading.skipped, reading.dropped),
+            SavedTranscript(
+                reading.kept.map { it.event },
+                reading.skipped,
+                reading.dropped,
+                // A fork's read stops before a line: it is another session, and does not carry this one's name.
+                customTitle = if (stop == null) reading.names.custom else null,
+            ),
             reading.kept.toList(),
             reading.stopped,
         )
@@ -265,7 +272,11 @@ class ProjectTranscripts(
                     reading.tooLong++
                 }
                 (line as BoundedLines.Line.Text).text.isBlank() -> Unit
-                else -> if (!reading.take(RecordLines.eventOf(line.text), stop)) return
+                else -> {
+                    // The prefilter keeps the name lines' parse off every other line of a big record.
+                    if (line.text.contains(CUSTOM_TITLE)) RecordTitles.takeName(line.text, reading.names)
+                    if (!reading.take(RecordLines.eventOf(line.text), stop)) return
+                }
             }
         }
     }
@@ -281,6 +292,7 @@ class ProjectTranscripts(
         const val MAX_RECORD_BYTES = 64L * 1024 * 1024
 
         private const val SUFFIX = ".jsonl"
+        private const val CUSTOM_TITLE = "custom-title"
 
         /** The name of a project's place: the directory with every character but a letter or a digit made a `-`. */
         fun nameOf(directory: String): String =

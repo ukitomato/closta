@@ -47,6 +47,11 @@ data class ConversationState(
      * The `control_request`'s content stays in its `RawJson` and never lands here.
      */
     val pendingApprovals: List<PendingApproval> = emptyList(),
+    /**
+     * The ids of the elicitations taken out of [pendingApprovals] (answered, withdrawn or ended by a result), newest
+     * last, at most 256: a request that comes again under one of them is not held again.
+     */
+    val settledElicitations: List<String> = emptyList(),
 )
 
 /**

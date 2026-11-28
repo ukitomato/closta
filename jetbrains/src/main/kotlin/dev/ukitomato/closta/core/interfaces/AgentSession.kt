@@ -3,6 +3,7 @@ package dev.ukitomato.closta.core.interfaces
 import dev.ukitomato.closta.core.models.AgentEvent
 import dev.ukitomato.closta.core.models.ApprovalDecision
 import dev.ukitomato.closta.core.models.Attachment
+import dev.ukitomato.closta.core.models.ElicitationDecision
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -47,7 +48,7 @@ interface AgentSession {
      * Returns the host's decision about a pending approval to the agent. [decision] carries the outcome
      * kind ([ApprovalDecision]); [payload] is the host's raw, provider-shaped response body
      * (answers / updatedInput) passed through opaquely — core never builds or reads it — and is null for
-     * a plain allow/deny/afk. Its precise framing is the provider's.
+     * a plain allow/deny. Its precise framing is the provider's.
      *
      * [updatedPermissions] is the permission suggestions the user accepted along with an allow: a JSON array
      * string in the provider's own shape, passed through opaquely like [payload]. Null leaves the
@@ -57,6 +58,15 @@ interface AgentSession {
         decision: ApprovalDecision,
         payload: String? = null,
         updatedPermissions: String? = null,
+    )
+
+    /**
+     * Answers an MCP server's request for input. [content] is the form's values as a JSON object string, passed through
+     * opaquely like the approval payload; null leaves the field out (a decline, a cancel, a url request).
+     */
+    suspend fun respondToElicitation(
+        decision: ElicitationDecision,
+        content: String?,
     )
 
     /**
@@ -91,6 +101,61 @@ interface AgentSession {
      * for [requestContextUsage].
      */
     suspend fun requestUsage(requestId: String)
+
+    /**
+     * Reloads the plugins from disk. With [refuseIfBusy] the CLI reloads nothing while a turn or other work is live
+     * and answers with an error instead. Only issues the request; the answer carries [requestId], as for
+     * [requestContextUsage].
+     */
+    suspend fun reloadPlugins(
+        refuseIfBusy: Boolean,
+        requestId: String,
+    )
+
+    /**
+     * Withdraws the message [messageUuid] the CLI has queued and not yet started. Only issues the request; the answer
+     * carries [requestId], as for [requestContextUsage], and says whether the message was still queued.
+     */
+    suspend fun cancelQueuedMessage(
+        messageUuid: String,
+        requestId: String,
+    )
+
+    /**
+     * Moves running foreground work to the background: only the task started by the tool use [toolUseId], or every
+     * foreground task when it is null. Only issues the request; the answer carries [requestId], as for
+     * [requestContextUsage].
+     */
+    suspend fun backgroundTasks(
+        toolUseId: String?,
+        requestId: String,
+    )
+
+    /**
+     * Asks for the end of the output of the shell task [taskId]. Only issues the request; the answer carries
+     * [requestId], as for [requestContextUsage].
+     */
+    suspend fun requestTaskOutput(
+        taskId: String,
+        requestId: String,
+    )
+
+    /**
+     * Asks for the permission rules the session runs with and the directories it works in. Only issues the request;
+     * the answer carries [requestId], as for [requestContextUsage].
+     */
+    suspend fun requestPermissionRules(requestId: String)
+
+    /**
+     * Names the running session [title], as the user chose it in the host: [sessionId] is the session the name is
+     * for, and the CLI refuses the request when its process has moved to another one. The answer, a `ControlResponse`
+     * carrying [requestId], says whether it took the name. Only issues the request, as [requestContextUsage].
+     */
+    suspend fun renameSession(
+        title: String,
+        sessionId: String,
+        requestId: String,
+    )
 
     /**
      * Asks for the settings in effect: the answer, a `ControlResponse` carrying [requestId], says the effort

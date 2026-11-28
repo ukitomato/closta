@@ -5,13 +5,21 @@ import dev.ukitomato.closta.core.interfaces.Clock
 import dev.ukitomato.closta.core.models.ApprovalDecision
 import dev.ukitomato.closta.core.models.Attachment
 import dev.ukitomato.closta.core.models.ConversationState
+import dev.ukitomato.closta.core.models.ElicitationDecision
+import dev.ukitomato.closta.core.services.BackgroundTasks
+import dev.ukitomato.closta.core.services.CancelQueuedMessage
 import dev.ukitomato.closta.core.services.Interrupt
 import dev.ukitomato.closta.core.services.ReconnectMcpServer
+import dev.ukitomato.closta.core.services.ReloadPlugins
+import dev.ukitomato.closta.core.services.RenameSession
 import dev.ukitomato.closta.core.services.RequestContextUsage
 import dev.ukitomato.closta.core.services.RequestMcpStatus
+import dev.ukitomato.closta.core.services.RequestPermissionRules
 import dev.ukitomato.closta.core.services.RequestSettings
+import dev.ukitomato.closta.core.services.RequestTaskOutput
 import dev.ukitomato.closta.core.services.RequestUsage
 import dev.ukitomato.closta.core.services.RespondToApproval
+import dev.ukitomato.closta.core.services.RespondToElicitation
 import dev.ukitomato.closta.core.services.RewindFiles
 import dev.ukitomato.closta.core.services.SendMessage
 import dev.ukitomato.closta.core.services.SetMcpServerEnabled
@@ -63,10 +71,17 @@ class SessionCommands internal constructor(
 ) {
     private val send = SendMessage(session)
     private val respond = RespondToApproval(session, clock)
+    private val respondElicitation = RespondToElicitation(session)
     private val switch = SwitchModel(session)
     private val modeUseCase = SwitchPermissionMode(session)
     private val usageUseCase = RequestContextUsage(session)
     private val usageOfPlan = RequestUsage(session)
+    private val taskOutputUseCase = RequestTaskOutput(session)
+    private val rulesUseCase = RequestPermissionRules(session)
+    private val renameUseCase = RenameSession(session)
+    private val reloadPluginsUseCase = ReloadPlugins(session)
+    private val cancelQueuedUseCase = CancelQueuedMessage(session)
+    private val backgroundUseCase = BackgroundTasks(session)
     private val settingsUseCase = RequestSettings(session)
     private val effortUseCase = SwitchEffort(session)
     private val mcpStatusUseCase = RequestMcpStatus(session)
@@ -141,6 +156,29 @@ class SessionCommands internal constructor(
         }
     }
 
+    /**
+     * Answers an MCP server's request for input, in the same lock as the event fold. One that is not pending (already
+     * answered, taken away by a `result`) is not answered again. A write that fails leaves the request pending with the
+     * host's sentence written on it, and throws the failure again; the form's values stay out of both.
+     */
+    suspend fun respondToElicitation(
+        decision: ElicitationDecision,
+        content: String?,
+    ) = conversation.transition { view ->
+        if (view.conversation.pendingApprovals.none { it.requestId == decision.requestId }) return@transition view
+        val after =
+            try {
+                respondElicitation(view.conversation, decision, content)
+            } catch (cancel: CancellationException) {
+                throw cancel
+            } catch (
+                @Suppress("TooGenericExceptionCaught") failure: Exception,
+            ) {
+                throw CommitThenFail(view.answerFailed(decision.requestId, ANSWER_FAILED), failure)
+            }
+        view.elicitationDecided(after, decision, content)
+    }
+
     /** An answer for [approvalId] could not be passed on: the approval says so, in the host's one fixed sentence. */
     suspend fun answerFailed(approvalId: String) =
         conversation.transition { it.answerFailed(approvalId, ANSWER_FAILED) }
@@ -181,6 +219,48 @@ class SessionCommands internal constructor(
 
     /** Asks the CLI for the session's cost and the plan's limits, as [switchModel] does. */
     suspend fun requestUsage() = requested(ControlKind.USAGE, null) { usageOfPlan(it) }
+
+    /** Asks the CLI for the permission rules and working directories the session runs with, as [switchModel] does. */
+    suspend fun requestPermissionRules() = requested(ControlKind.PERMISSION_RULES, null) { rulesUseCase(it) }
+
+    /**
+     * Names the session [sessionId] (the CLI's own id for it) [title], as [switchModel] does: the name is the view's
+     * only once the CLI says it took it.
+     */
+    suspend fun renameSession(
+        title: String,
+        sessionId: String,
+    ) = requested(ControlKind.RENAME, title) { renameUseCase(title, sessionId, it) }
+
+    /**
+     * Asks the CLI to reload the plugins from disk, as [switchModel] does. The CLI is asked to refuse while the session
+     * has work going only when its `system/init` said it honors that; the answer is the view's plugins.
+     */
+    suspend fun reloadPlugins() {
+        val refuseIfBusy = conversation.view.value.transcript.operations.refuseIfBusy
+        requested(ControlKind.RELOAD_PLUGINS, null) { reloadPluginsUseCase(refuseIfBusy, it) }
+    }
+
+    /**
+     * Withdraws the message [messageUuid] the CLI has queued and not started, as [switchModel] does: the row of the
+     * message says what became of it once the CLI answers.
+     */
+    suspend fun cancelQueuedMessage(messageUuid: String) =
+        requested(ControlKind.CANCEL_QUEUED, messageUuid) { cancelQueuedUseCase(messageUuid, it) }
+
+    /**
+     * Asks the CLI to move the running call [toolUseId] to the background, or with null every running one, as
+     * [switchModel] does: the line of the call says how the CLI answered.
+     */
+    suspend fun backgroundTasks(toolUseId: String?) =
+        requested(ControlKind.BACKGROUND, toolUseId) { backgroundUseCase(toolUseId, it) }
+
+    /**
+     * Asks the CLI for the end of the output of the shell task [taskId], as [switchModel] does: the answer is the
+     * view's output, and only the newest request is waited for.
+     */
+    suspend fun requestTaskOutput(taskId: String) =
+        requested(ControlKind.TASK_OUTPUT, taskId) { taskOutputUseCase(taskId, it) }
 
     /**
      * Asks the CLI for the settings in effect, as [switchModel] does; the answer is the view's effort and model.

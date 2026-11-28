@@ -3,6 +3,7 @@ package dev.ukitomato.closta.platforms.intellij.sessions
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.text.StringUtil
+import com.intellij.ui.DocumentAdapter
 import com.intellij.ui.components.JBTextField
 import com.intellij.ui.dsl.builder.AlignX
 import com.intellij.ui.dsl.builder.Cell
@@ -19,12 +20,15 @@ import dev.ukitomato.closta.platforms.intellij.thread.CardAnswer
 import dev.ukitomato.closta.platforms.intellij.thread.CardKey
 import dev.ukitomato.closta.platforms.intellij.thread.CardKind
 import dev.ukitomato.closta.platforms.intellij.thread.CardPanel
+import dev.ukitomato.closta.platforms.intellij.thread.ElicitationBody
+import dev.ukitomato.closta.platforms.intellij.thread.ElicitationHost
 import dev.ukitomato.closta.platforms.intellij.thread.MarkdownBlocks
 import dev.ukitomato.closta.platforms.intellij.thread.ThreadStyle
 import dev.ukitomato.closta.platforms.intellij.thread.cardButton
 import dev.ukitomato.closta.platforms.intellij.thread.cardKeys
 import dev.ukitomato.closta.platforms.intellij.thread.diffBox
 import dev.ukitomato.closta.platforms.intellij.thread.diffNote
+import dev.ukitomato.closta.platforms.intellij.thread.draftOf
 import dev.ukitomato.closta.platforms.intellij.thread.enterNeverPresses
 import dev.ukitomato.closta.platforms.intellij.thread.headlineOf
 import dev.ukitomato.closta.platforms.intellij.thread.inputRows
@@ -34,6 +38,8 @@ import dev.ukitomato.closta.platforms.intellij.ui.noHtml
 import dev.ukitomato.closta.platforms.intellij.ui.plainHtml
 import dev.ukitomato.closta.platforms.intellij.ui.plainTip
 import dev.ukitomato.closta.presenter.view.ApprovalRecord
+import dev.ukitomato.closta.presenter.view.ElicitationCard
+import dev.ukitomato.closta.presenter.view.ElicitationRecord
 import dev.ukitomato.closta.presenter.view.PermissionCard
 import dev.ukitomato.closta.presenter.view.PermissionChoice
 import dev.ukitomato.closta.presenter.view.PlanCard
@@ -56,6 +62,8 @@ internal class AnswerContext(
     val ask: AnswerGate.Ask,
     /** The shown request's approval record now; null once it is gone. */
     val approval: () -> ApprovalRecord?,
+    /** The shown request's elicitation record now; null once it is gone. */
+    val elicitation: () -> ElicitationRecord?,
     val openConversation: () -> Unit,
     val markdown: MarkdownBlocks,
 )
@@ -69,6 +77,7 @@ internal fun answerView(
         is PermissionCard -> PermissionPane(card, context)
         is QuestionCard -> QuestionPane(card, context)
         is PlanCard -> PlanPane(card, context)
+        is ElicitationCard -> ElicitationPane(card, context)
     }
 
 /**
@@ -149,6 +158,7 @@ internal class ReasonLine(
     sendText: String,
     ask: AnswerGate.Ask,
     private val send: (String) -> Unit,
+    private val typed: (String) -> Unit = {},
 ) {
     private val field = JBTextField().apply { emptyText.text = placeholder }
     private val button = cardButton(sendText) { send(field.text.trim()) }
@@ -157,6 +167,11 @@ internal class ReasonLine(
 
     init {
         field.addActionListener { send(field.text.trim()) }
+        field.document.addDocumentListener(
+            object : DocumentAdapter() {
+                override fun textChanged(e: javax.swing.event.DocumentEvent) = typed(field.text)
+            },
+        )
         ask.guard(button)
     }
 
@@ -304,5 +319,43 @@ internal class PermissionPane(
         context.ask.send {
             context.approval()?.let { CardAnswer(card.requestId, ApprovalDecision.Deny(card.requestId), sentence) }
         }
+    }
+}
+
+/**
+ * An MCP server's request for input in the detail pane: its form or link as in the conversation, answered through the
+ * pane's [AnswerGate.Ask]. What was typed is the pane's [draft], given back to the pane made again for the request.
+ */
+internal class ElicitationPane(
+    card: ElicitationCard,
+    context: AnswerContext,
+) : AnswerView(context) {
+    private val body =
+        ElicitationBody(
+            card,
+            ElicitationHost(
+                send = { make -> context.elicitation()?.let { context.ask.sendElicitation(make) } ?: false },
+                guard = { button, ready -> context.ask.guard(button, ready) },
+                resized = { revalidate() },
+            ),
+        )
+
+    init {
+        add(body.component, BorderLayout.CENTER)
+        keys(CardKind.ELICITATION, 0) { key ->
+            when (key) {
+                CardKey.Answer -> body.submit()
+                CardKey.Deny -> body.close()
+                CardKey.LeaveText -> requestFocusInWindow()
+                else -> Unit
+            }
+        }
+        onKeyboard = { inside -> body.keysShown(inside) }
+    }
+
+    override fun draft(): Any? = body.draft()
+
+    override fun restore(draft: Any?) {
+        draftOf(draft)?.let(body::restore)
     }
 }

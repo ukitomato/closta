@@ -4,6 +4,7 @@ import dev.ukitomato.closta.core.interfaces.Clock
 import dev.ukitomato.closta.core.interfaces.SavedSessions
 import dev.ukitomato.closta.core.models.AgentEvent
 import dev.ukitomato.closta.core.models.ConversationState
+import dev.ukitomato.closta.core.services.DiagnosticsReport
 import dev.ukitomato.closta.presenter.view.ControlKind
 import dev.ukitomato.closta.presenter.view.PresenterInput
 import dev.ukitomato.closta.presenter.view.SwitchKind
@@ -15,9 +16,10 @@ import dev.ukitomato.closta.presenter.view.runningTasks
 import dev.ukitomato.closta.presenter.view.threadIsRunning
 import dev.ukitomato.closta.providers.claude.AgentProcess
 import dev.ukitomato.closta.providers.claude.ClaudeSession
+import dev.ukitomato.closta.providers.claude.host.HostAgentProcess
+import dev.ukitomato.closta.providers.claude.host.HostHooks
 import dev.ukitomato.closta.providers.claude.launch.ProcessSpawner
 import dev.ukitomato.closta.providers.claude.launch.launchClaude
-import dev.ukitomato.closta.providers.claude.mcp.McpAgentProcess
 import dev.ukitomato.closta.providers.claude.mcp.SdkMcpServer
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -51,9 +53,10 @@ import kotlin.time.Duration.Companion.seconds
  * the first collection: `withContext` throws away its result when the caller was cancelled meanwhile, and the
  * process it created would otherwise have no owner.
  *
- * With [sdkServers] the started process goes through [McpAgentProcess], which declares the servers in an
- * `initialize` written before anything else and answers the CLI's `mcp_message` requests. With none — the default —
- * nothing is wrapped and no `initialize` is written: the session is a plain one.
+ * Every started process goes through [HostAgentProcess], which writes `initialize` before anything else, declaring the
+ * [sdkServers] and the hooks [hostHooks] brings (both may be empty), and answers the CLI's `mcp_message` and
+ * `hook_callback` requests. Even a session with nothing to answer for is wrapped, so an MCP server's request for
+ * input can be answered.
  *
  * Free of `com.intellij`, so the fast `src/test` suite measures it with fake processes.
  */
@@ -92,6 +95,8 @@ class SessionRuntime(
     private val sandbox: Boolean = false,
     /** The time a `result` is seen at, which the prompt cache's clock counts from. */
     private val clock: Clock = SystemClock(),
+    /** What the host brings besides MCP servers; read once for each process it starts. */
+    private val hostHooks: () -> HostHooks = { HostHooks() },
 ) {
     init {
         // A resumed session is opened by the id it was saved under: the tree's thread, the bridge's checks and the user
@@ -182,6 +187,10 @@ class SessionRuntime(
      * depends on its settings, and this ends the processes even if that wait is cut short.
      */
     fun destroyNow() = live.destroyAll()
+
+    /** Marks the card of [requestId] as not answered when the session takes no answer, so it can be tried again. */
+    suspend fun elicitationNotSent(requestId: String) =
+        store.transition { it.answerFailed(requestId, SessionCommands.ANSWER_FAILED) }
 
     /**
      * Turns the sandbox on: the CLI is started again with `--settings` (a restart, as a live `apply_flag_settings`
@@ -311,7 +320,8 @@ class SessionRuntime(
         relaunch: Boolean,
         switchId: String?,
     ): ProcessEnd {
-        val process = startProcess(planned, switchId)
+        val hooks = hostHooks()
+        val process = startProcess(planned, switchId, hooks)
         val session = ClaudeSession(process, id)
         val sandboxed = planned.spec.sandbox
         // The tree says the effort and the in-process MCP servers' names from its first snapshot on, before the
@@ -333,18 +343,37 @@ class SessionRuntime(
         }
         val commands = SessionCommands(session, clock, store, beforeSend, log::warn)
         statusFlow.value = SessionStatus.Running(version, commands)
-        // A CLI in the sandbox is asked its settings at once, so a session that writes no `initialize` still
-        // learns whether the sandbox is on.
+        // A CLI in the sandbox is asked its settings at once, without waiting for `initialize` to be answered.
         if (sandboxed) askSettings(commands)
         var ended: ProcessEnd? = null
         coroutineScope {
-            val job = launch { ended = collect(session, commands, sandboxed) }
+            val job = launch { ended = collect(session, commands, sandboxed, hooks) }
+            // The hooks' reports are taken for as long as this process runs, and no longer.
+            val reporting =
+                launch {
+                    hooks.reports.collect { (toolUseId, report) ->
+                        reportDiagnostics(toolUseId, report)
+                    }
+                }
             processJob = job
             // A switch marked before this job was known cancels it here: one of the two sides always sees the other.
             if (restartFor != null) job.cancel()
             job.join()
+            reporting.cancel()
         }
+        // Whatever the process asked can no longer be answered; a start after a restart says it runs again.
+        store.transition { it.requested(PresenterInput.ProcessEnded) }
         return settled(process, ended, switchId)
+    }
+
+    /** Puts a report on the line of its call: the count, and the first errors as `12:5 message`. */
+    private suspend fun reportDiagnostics(
+        toolUseId: String,
+        report: DiagnosticsReport,
+    ) {
+        if (report.added.isEmpty()) return
+        val lines = report.added.take(REPORTED_LINES).map { "${it.line}:${it.column} ${oneLine(it.message)}" }
+        store.transition { it.requested(PresenterInput.DiagnosticsReported(toolUseId, report.added.size, lines)) }
     }
 
     // How the process whose collection is over ended, with the records that says: a CLI that did not start in the
@@ -373,13 +402,14 @@ class SessionRuntime(
     private suspend fun startProcess(
         launch: SessionLaunch,
         switchId: String?,
+        hooks: HostHooks,
     ): AgentProcess {
         val process =
             try {
                 // [current] is set where the process is registered, so a cancellation right after the spawn still
                 // finds it to wait for.
                 withContext(Dispatchers.IO) {
-                    live.track(withServers(launchProcess(launch)), AgentProcess::destroy).also { current = it }
+                    live.track(wrapped(launchProcess(launch), hooks), AgentProcess::destroy).also { current = it }
                 }
             } catch (start: SessionStartException) {
                 if (switchId != null) {
@@ -387,7 +417,7 @@ class SessionRuntime(
                 }
                 throw start
             }
-        log.info("claude session $id: started ${launch.spec.toArgv()}")
+        log.info("claude session $id: started ${launch.spec.toLoggedArgv()}")
         return process
     }
 
@@ -400,6 +430,7 @@ class SessionRuntime(
         session: ClaudeSession,
         commands: SessionCommands,
         sandboxed: Boolean,
+        hooks: HostHooks,
     ): ProcessEnd {
         val watch = SandboxStartWatch(sandboxed)
         // A sandboxed CLI was asked its settings as it started.
@@ -410,7 +441,12 @@ class SessionRuntime(
                 contextAsked = false,
             )
         try {
-            session.events.collect { line -> watch.pass(line).forEach { foldEvent(it, commands, checks) } }
+            session.events.collect { line ->
+                watch.pass(line).forEach {
+                    foldEvent(it, commands, checks)
+                    if (it is AgentEvent.Result) turnEnded(hooks)
+                }
+            }
         } catch (cancel: CancellationException) {
             throw cancel
         } catch (
@@ -419,6 +455,17 @@ class SessionRuntime(
             if (watch.started) throw failure
         }
         return if (watch.started) ProcessEnd.Ended else ProcessEnd.NotStarted(watch.detail)
+    }
+
+    // A hook's callback is the host's own code: its failure must not end the session, and says only its type.
+    private fun turnEnded(hooks: HostHooks) {
+        try {
+            hooks.turnEnded()
+        } catch (
+            @Suppress("TooGenericExceptionCaught") failure: Exception,
+        ) {
+            log.warn("claude session $id: the end of a turn could not be passed on (${failure.javaClass.name})")
+        }
     }
 
     // What one process was checked for; each process is checked again.
@@ -444,8 +491,8 @@ class SessionRuntime(
             if (event.sessionId != id) throw SessionStartException(SessionFailure.ForkIdMismatch)
         }
         // The settings in effect (the effort and the model the next request goes with) are asked for
-        // once `initialize` is answered, and again after a model or an effort switch the CLI took. A session
-        // with no `initialize` (no in-process server) asks at its first `system/init`.
+        // once `initialize` is answered, and again after a model or an effort switch the CLI took. A CLI that
+        // refused `initialize` is asked at its first `system/init`.
         val asks =
             store.view.value.transcript.operations
                 .asksForSettings(event) ||
@@ -456,10 +503,8 @@ class SessionRuntime(
         val firstInit = !checks.contextAsked && event is AgentEvent.SystemInit
         if (firstInit) checks.contextAsked = true
         val asksContext = asksForContext(event) || firstInit
-        store.transition { it.event(PresenterInput.Event(event)) }
-        if (event is AgentEvent.Result) {
-            store.transition { it.requested(PresenterInput.ResultSeenAt(clock.now().toEpochMilli())) }
-        }
+        val seenAtMs = if (event is AgentEvent.Result) clock.now().toEpochMilli() else null
+        store.transition { it.event(PresenterInput.Event(event, seenAtMs)) }
         if (asks) {
             checks.settingsAsked = true
             askSettings(commands)
@@ -605,11 +650,14 @@ class SessionRuntime(
                 before.restored(lines, dropped)
             }
         }
+        read.customTitle?.let { named -> store.transition { it.requested(PresenterInput.TitleRestored(named)) } }
         log.info("claude session $id: put back ${read.events.size} lines of the saved record ($read)")
     }
 
-    private fun withServers(process: AgentProcess): AgentProcess =
-        if (sdkServers.isEmpty()) process else McpAgentProcess(process, sdkServers)
+    private fun wrapped(
+        process: AgentProcess,
+        hooks: HostHooks,
+    ): AgentProcess = HostAgentProcess(process, sdkServers, hooks, log = { log.warn(it) })
 
     private fun launchProcess(launch: SessionLaunch): AgentProcess =
         try {
@@ -626,6 +674,13 @@ internal val CLOSE_WAIT: Duration = 5.seconds
 internal val KILL_WAIT: Duration = 2.seconds
 
 private const val SANDBOX_ON = "true"
+
+// How many of a report's errors the tool line shows.
+private const val REPORTED_LINES = 5
+private const val REPORTED_MESSAGE_CHARS = 300
+private val LINE_BREAKS = Regex("\\s+")
+
+private fun oneLine(message: String) = message.replace(LINE_BREAKS, " ").trim().take(REPORTED_MESSAGE_CHARS)
 
 private fun SwitchRecord.isPendingSandbox(): Boolean = kind == SwitchKind.SANDBOX && outcome == SwitchOutcome.PENDING
 

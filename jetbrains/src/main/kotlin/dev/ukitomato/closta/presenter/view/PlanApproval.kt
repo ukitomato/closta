@@ -113,3 +113,10 @@ fun planAnswer(
         PlanChoice.ASK_EDITS -> PlanAnswer(ApprovalDecision.Allow(card.requestId), allowPayload(approval), null)
         PlanChoice.KEEP_PLANNING -> PlanAnswer(ApprovalDecision.Deny(card.requestId), comment.trim(), null)
     }
+
+/** The answer that keeps planning with [feedback], the edits made to the plan (see [planFeedback]). */
+fun planAnswerWithFeedback(
+    card: PlanCard,
+    @Suppress("UNUSED_PARAMETER") approval: ApprovalRecord,
+    feedback: String,
+): PlanAnswer = PlanAnswer(ApprovalDecision.Deny(card.requestId), feedback, null)

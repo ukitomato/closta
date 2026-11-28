@@ -7,6 +7,8 @@ import dev.ukitomato.closta.core.models.ApprovalKind
 import dev.ukitomato.closta.core.models.Attachment
 import dev.ukitomato.closta.core.models.AttachmentKind
 import dev.ukitomato.closta.core.models.ConversationState
+import dev.ukitomato.closta.core.models.ElicitationAction
+import dev.ukitomato.closta.core.models.ElicitationDecision
 import dev.ukitomato.closta.core.models.PendingApproval
 import dev.ukitomato.closta.core.models.resolveApproval
 import kotlinx.coroutines.cancelAndJoin
@@ -48,9 +50,6 @@ abstract class AgentSessionContract {
         /** Must emit a control request, block on it, then resume to a result once the host denies. */
         APPROVAL_DENY,
 
-        /** Must emit a control request, block on it, then resume to a result once the host times out (AFK). */
-        AFK_TIMEOUT,
-
         /** Must emit a control request, block on it, then end when the host interrupts (never answered). */
         INTERRUPT,
 
@@ -66,9 +65,6 @@ abstract class AgentSessionContract {
 
     /** The system under test for [scenario]: a [FakeAgentSession], or a `ClaudeSession`. */
     protected abstract fun sessionFor(scenario: Scenario): AgentSession
-
-    /** The opaque body the host attaches to an AFK timeout (`updatedInput.afkTimeoutMs`); null by default. */
-    protected open fun afkPayload(): String? = null
 
     /**
      * The accepted permissions [session] was given with each allow, in order, as the JSON text it passed on (null for
@@ -137,6 +133,30 @@ abstract class AgentSessionContract {
                 ),
                 requestsGiven(session).filter { it.subtype.startsWith("mcp_") },
             ) { "each line carries the caller's id as its request_id, the name, and for a toggle the wanted value" }
+        }
+
+    /** The elicitation answers [session] was given, in order, as written: the request id, the action, the content. */
+    protected abstract fun elicitationsGiven(session: AgentSession): List<Triple<String, String, String?>>
+
+    @Test
+    @Timeout(TIMEOUT_SECONDS)
+    fun `an elicitation answer carries the request id, the action and the form values`() =
+        runBlocking {
+            val session = sessionFor(Scenario.UNANSWERED)
+            val received = mutableListOf<AgentEvent>()
+            val collector = launch { session.events.collect { received += it } }
+            awaitControlRequest(received)
+            session.respondToElicitation(ElicitationDecision("e1", ElicitationAction.ACCEPT), """{"name":"Ada"}""")
+            session.respondToElicitation(ElicitationDecision("e2", ElicitationAction.DECLINE), null)
+            repeat(MAX_YIELDS) { yield() }
+            collector.cancelAndJoin()
+            assertEquals(
+                listOf(
+                    Triple("e1", "accept", """{"name":"Ada"}"""),
+                    Triple("e2", "decline", null),
+                ),
+                elicitationsGiven(session),
+            )
         }
 
     /** The uuids of the user messages [session] was given, in order; null where none is to be seen. */
@@ -231,20 +251,6 @@ abstract class AgentSessionContract {
     @Timeout(TIMEOUT_SECONDS)
     fun `deny completes an approval round trip and drops only its pending`() =
         roundTrip(Scenario.APPROVAL_DENY) { ApprovalDecision.Deny(it) }
-
-    @Test
-    @Timeout(TIMEOUT_SECONDS)
-    fun `an afk timeout resolves the question with no waiting`() =
-        runBlocking {
-            val session = sessionFor(Scenario.AFK_TIMEOUT)
-            val received = mutableListOf<AgentEvent>()
-            val collector = launch { session.events.collect { received += it } }
-            val request = awaitControlRequest(received)
-            session.respondToApproval(ApprovalDecision.AfkTimeout(request.requestId), afkPayload())
-            collector.join()
-            assertTrue(received.any { it is AgentEvent.Result }) { "the turn should resume after the afk timeout" }
-            assertDropsOnly(request.requestId, ApprovalDecision.AfkTimeout(request.requestId))
-        }
 
     @Test
     @Timeout(TIMEOUT_SECONDS)

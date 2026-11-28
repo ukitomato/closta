@@ -21,6 +21,13 @@
 //   {kind:'mcpReconnect', serverName}       mcp_reconnect control request (same as above). Waits for the answer
 //   {kind:'rewindFiles', userIndex, dryRun} rewind_files control request. userIndex is the position (from 1) of the user line sent in that phase,
 //                                           and that line's uuid becomes user_message_id. Waits for the answer
+//   {kind:'cancelQueued', userIndex}        cancel_async_message control request for the userIndex-th user line sent in that phase (from 1, found as for rewindFiles; an error if there is none).
+//                                           Waits for the answer
+//   {kind:'backgroundTool', toolName?}      background_tasks control request with the id of the last tool_use of toolName seen on stdout (no tool_use_id without toolName). Waits for the answer
+//   {kind:'taskOutput', times, everyMs}     get_task_output control request with the task_id of the last system/task_started seen on stdout, times times, one every everyMs. Waits for each answer
+//   {kind:'renameSession', title, previousSession}
+//                                           rename_session control request (source "host") for the session_id of the last system/init seen on stdout
+//                                           (the one before it, a different session_id, when previousSession is true). Waits for the answer
 //   rewindFiles may appear only in the first phase's steps (not in resume.steps). Such a scenario sets stdinFile true and has rewindRead.
 //
 // rewindRead: {includes, excludes}  for a scenario with rewindFiles, what the Read tool_result after the rewind should show (a word it includes and one it excludes; neither empty).
@@ -33,6 +40,8 @@
 //   starts the CLI with its URL (http://localhost:<port>/mcp, a form that matches http://localhost* in the managed settings allow list) via --mcp-config,
 //   and stops it once recording ends (even on failure). The port differs on every recording, so the scrubber replaces it with a fixed fake value.
 //
+// extraDirs: [name]  folders created next to the cwd (in the recording's temporary directory). {EXTRA:<name>} in flags becomes the folder's absolute path.
+//
 // seed: {name: content}  files placed in the cwd from the start (Edit targets, etc.). A name may hold a directory (.claude/settings.json).
 //
 // hideCommands: [name]  the child's PATH becomes one directory of symlinks to every command on PATH except these names
@@ -43,11 +52,21 @@
 //   The manifest entry gets then_flags and exit_codes (one per CLI).
 //   If then.sameId is true, the second CLI gets the first CLI's --session-id instead of a new one (still not a resume).
 //
+// hooks: {event: [{matcher?, hookCallbackIds, timeout?}]}  the hook callbacks the initialize request declares ({} when absent).
+//
+// hookCallback: {respond(req, ctx) -> {holdMs?, payload}}  the answer to a hook_callback control request. ctx is {index, cwd}: index counts the
+//   hook_callback requests of the scenario from 0, cwd is the recording's directory. payload null sends the error answer (subtype error, error "recorder: refused").
+//
+// elicitation: {respond(req, ctx) -> {holdMs?, payload}}  the same for an elicitation control request. payload null sends no answer at all.
+//
+// pending: true  a scenario that is defined but not recorded yet. verify.mjs reports it as pending instead of failing on its missing manifest entry.
+//
 // done: {results, controlResponses, quietMs, maxMs}
 //   When the results/controlResponses counts are met and quietMs of silence follows, stdin is closed and the run ends.
 //   maxMs is a hard cap.
 //
-// permission: {holdMs, respond(req)->payload}  the answer to can_use_tool (allow by default).
+// permission: {holdMs, respond(req, ctx)->payload}  the answer to can_use_tool (allow by default). ctx is {index, cwd}: index counts the can_use_tool
+//   requests of the scenario from 0 (as for hook_callback).
 //
 // resume: {steps, done}  when present, after the CLI of steps and done is closed, the stored transcript of the cwd is kept as the transcript,
 //   and a second CLI is started with --resume on the same session id to run resume.steps (see the top of record.mjs).
@@ -55,6 +74,8 @@
 //   resume.flags: [flag]  added only to the second CLI's flags, after the scenario flags (kept in the manifest's resume_flags).
 
 import { deflateSync } from 'node:zlib';
+import { appendFileSync } from 'node:fs';
+import path from 'node:path';
 
 // The attachment data put into captures is only a small fake image and PDF (no recorded values, no user files).
 function crc32(buf) {
@@ -124,6 +145,33 @@ const ISOLATED = [
   '--strict-mcp-config',
   '--model', 'claude-sonnet-4-6',
 ];
+
+// Declaration of the file-tool hooks (the same shape as the plugin's initialize sends).
+const fileHooks = (timeout) => ({
+  PreToolUse: [{ matcher: 'Edit|Write|NotebookEdit|Read', hookCallbackIds: ['closta-before-file-tool'], timeout }],
+  PostToolUse: [{ matcher: 'Edit|Write|NotebookEdit', hookCallbackIds: ['closta-after-edit'], timeout }],
+});
+
+const POST_EDIT_PAYLOAD = {
+  hookSpecificOutput: {
+    hookEventName: 'PostToolUse',
+    additionalContext: '<ide-diagnostics>\nrecorder: no new errors\n</ide-diagnostics>',
+  },
+};
+
+const isPostEdit = (req) => req.input?.hook_event_name === 'PostToolUse' || req.callback_id === 'closta-after-edit';
+
+// Counts calls per key within one recording (keyed by its cwd, which is unique to it).
+const callCounts = new Map();
+const countCall = (ctx, key) => {
+  const k = `${ctx.cwd}\0${key}`;
+  const n = (callCounts.get(k) ?? 0) + 1;
+  callCounts.set(k, n);
+  return n;
+};
+
+// Pre gets {}, Post gets diagnostics as additional context.
+const answerFileHook = (req) => ({ payload: isPostEdit(req) ? POST_EDIT_PAYLOAD : {} });
 
 export const scenarios = [
   {
@@ -921,6 +969,274 @@ export const scenarios = [
     ],
     permission: { holdMs: 0, respond: ALLOW },
     done: { results: 1, controlResponses: 1, quietMs: 3000, maxMs: 60000 },
+  },
+  // ---- Elicitation and hook callbacks. Defined, not recorded yet (pending). ----
+  {
+    id: '45-elicitation-form',
+    summary: 'an MCP tool asks for a form (elicitation, form mode): accept with values in the first turn, decline in the second',
+    flags: ISOLATED,
+    mcpServer: { name: 'fake-ask' },
+    steps: [
+      { kind: 'initialize' },
+      // The HTTP server still reports pending at 3 s.
+      { kind: 'wait', ms: 8000 },
+      { kind: 'user', text: 'Call the ask_form tool of the fake-ask MCP server once, then say in one line what it returned.' },
+      { kind: 'waitResults', n: 1 },
+      { kind: 'user', text: 'Call the ask_form tool of the fake-ask MCP server once more, then say in one line what it returned.' },
+    ],
+    permission: { holdMs: 0, respond: ALLOW },
+    elicitation: {
+      respond: (req, ctx) => ({
+        payload: ctx.index === 0
+          ? { action: 'accept', content: { name: 'Ada', color: 'blue', count: 2, agree: true } }
+          : { action: 'decline' },
+      }),
+    },
+    done: { results: 2, controlResponses: 1, quietMs: 3000, maxMs: 120000 },
+    pending: true,
+  },
+  {
+    id: '46-elicitation-url',
+    summary: 'an MCP tool asks to open a page (elicitation, url mode): accept, then the server sends the completion notification',
+    flags: ISOLATED,
+    mcpServer: { name: 'fake-ask' },
+    steps: [
+      { kind: 'initialize' },
+      { kind: 'wait', ms: 8000 },
+      { kind: 'user', text: 'Call the ask_url tool of the fake-ask MCP server once, then say in one line what it returned.' },
+    ],
+    permission: { holdMs: 0, respond: ALLOW },
+    elicitation: { respond: () => ({ payload: { action: 'accept' } }) },
+    done: { results: 1, controlResponses: 1, quietMs: 3000, maxMs: 120000 },
+    pending: true,
+  },
+  {
+    id: '47-elicitation-withdrawn',
+    summary: 'an elicitation nobody answers for 30 s, then interrupt: what the CLI sends for the withdrawn request',
+    flags: ISOLATED,
+    mcpServer: { name: 'fake-ask' },
+    steps: [
+      { kind: 'initialize' },
+      { kind: 'wait', ms: 8000 },
+      { kind: 'user', text: 'Call the ask_form tool of the fake-ask MCP server once, then say in one line what it returned.' },
+      { kind: 'waitFor', line: 'control_request/elicitation' },
+      { kind: 'wait', ms: 30000 },
+      { kind: 'interrupt' },
+    ],
+    permission: { holdMs: 0, respond: ALLOW },
+    elicitation: { respond: () => ({ payload: null }) },
+    done: { results: 1, controlResponses: 1, quietMs: 3000, maxMs: 180000 },
+    pending: true,
+  },
+  {
+    id: '48-hooks-pre-post',
+    summary: 'file-tool hooks over two turns (Read then Edit): Pre answers {}, Post adds diagnostics as additional context; before the second Edit the file changes behind the model',
+    flags: ISOLATED,
+    seed: { 'a.txt': 'alpha\nbeta\n' },
+    hooks: fileHooks(10),
+    steps: [
+      { kind: 'initialize' },
+      { kind: 'wait', ms: 500 },
+      { kind: 'user', text: 'Use the Read tool to read a.txt in the current directory, then use the Edit tool to replace the word beta with gamma.' },
+      { kind: 'waitResults', n: 1 },
+      { kind: 'user', text: 'Use the Read tool to read a.txt in the current directory again, then use the Edit tool to replace the word gamma with delta.' },
+    ],
+    permission: { holdMs: 2000, respond: ALLOW },
+    hookCallback: {
+      respond: (req, ctx) => {
+        if (!isPostEdit(req) && req.input?.tool_name === 'Edit' && countCall(ctx, 'pre-edit') === 2) {
+          appendFileSync(path.join(ctx.cwd, 'a.txt'), 'added behind the model\n');
+        }
+        return answerFileHook(req);
+      },
+    },
+    done: { results: 2, controlResponses: 1, quietMs: 3000, maxMs: 120000 },
+    pending: true,
+  },
+  {
+    id: '49-hooks-parallel-subagent',
+    summary: 'file-tool hooks when a subagent edits two files in parallel (how the callbacks attribute the calls)',
+    flags: ISOLATED,
+    seed: { 'a.txt': 'alpha\nbeta\n', 'b.txt': 'one\ntwo\n' },
+    hooks: fileHooks(10),
+    steps: [
+      { kind: 'initialize' },
+      { kind: 'wait', ms: 500 },
+      {
+        kind: 'user',
+        text:
+          'Use the Agent tool to spawn two subagents in parallel in a single message (both subagent_type "general-purpose", run_in_background false): '
+          + 'one reads a.txt and then edits it with the Edit tool, replacing beta with gamma, and the other reads b.txt and then edits it with the Edit tool, replacing two with three. '
+          + 'Then relay both results.',
+      },
+    ],
+    permission: { holdMs: 2000, respond: ALLOW },
+    hookCallback: { respond: answerFileHook },
+    done: { results: 1, controlResponses: 1, quietMs: 3500, maxMs: 180000 },
+    pending: true,
+  },
+  {
+    id: '50-hooks-timeout-error',
+    summary: 'a hook that outlives its 2 s timeout (Pre answers after 5 s) and a hook answered with an error: whether the tool still runs and what the CLI reports',
+    flags: ISOLATED,
+    seed: { 'a.txt': 'alpha\nbeta\n' },
+    hooks: fileHooks(2),
+    steps: [
+      { kind: 'initialize' },
+      { kind: 'wait', ms: 500 },
+      { kind: 'user', text: 'Use the Read tool to read a.txt in the current directory, then use the Edit tool to replace the word beta with gamma.' },
+    ],
+    permission: { holdMs: 0, respond: ALLOW },
+    hookCallback: {
+      respond: (req, ctx) => {
+        if (isPostEdit(req)) return { payload: {} };
+        return countCall(ctx, 'pre') === 1 ? { holdMs: 5000, payload: {} } : { payload: null };
+      },
+    },
+    done: { results: 1, controlResponses: 1, quietMs: 3000, maxMs: 120000 },
+    pending: true,
+  },
+  {
+    id: '52-rules-and-dirs',
+    summary: 'list_permission_rules with project and local settings (allow, ask and deny rules in both files) and an extra --add-dir folder: which rules the answer lists and where each comes from',
+    flags: [
+      '--permission-prompt-tool', 'stdio',
+      '--setting-sources', 'project,local',
+      '--strict-mcp-config',
+      '--model', 'claude-sonnet-4-6',
+      '--add-dir={EXTRA:other}',
+    ],
+    extraDirs: ['other'],
+    seed: {
+      '.claude/settings.json': JSON.stringify({
+        permissions: { allow: ['Bash(echo:*)', 'Bash(npm run build:*)'], ask: ['Bash(git push:*)'], deny: ['Read(./secret.txt)'] },
+      }),
+      '.claude/settings.local.json': JSON.stringify({ permissions: { allow: ['Bash(make:*)'] } }),
+    },
+    steps: [
+      { kind: 'initialize' },
+      { kind: 'wait', ms: 500 },
+      { kind: 'user', text: 'Respond with exactly one word: pong' },
+      { kind: 'waitResults', n: 1 },
+      { kind: 'control', request: { subtype: 'list_permission_rules' } },
+    ],
+    done: { results: 1, controlResponses: 2, quietMs: 3000, maxMs: 90000 },
+    pending: true,
+  },
+  {
+    id: '53-cancel-queued',
+    summary: 'two messages queued behind a running Bash turn: cancel the third while it waits, then cancel the second once it has started (too late)',
+    flags: ISOLATED,
+    steps: [
+      { kind: 'initialize' },
+      { kind: 'wait', ms: 500 },
+      { kind: 'user', text: 'Run this exact bash command: sleep 8 && echo one. Then say done.' },
+      { kind: 'wait', ms: 1000 },
+      { kind: 'user', text: 'Say two.' },
+      { kind: 'wait', ms: 1000 },
+      { kind: 'user', text: 'Say three.' },
+      { kind: 'wait', ms: 200 },
+      { kind: 'cancelQueued', userIndex: 3 },
+      { kind: 'waitFor', line: 'command_lifecycle/started', n: 2 },
+      { kind: 'cancelQueued', userIndex: 2 },
+    ],
+    permission: { holdMs: 0, respond: ALLOW },
+    done: { results: 1, controlResponses: 3, quietMs: 3000, maxMs: 90000 },
+    pending: true,
+  },
+  {
+    id: '54-background-and-output',
+    summary: 'a foreground Bash loop sent to the background by background_tasks, then get_task_output polled while it runs, after it ends, and for an unknown task id',
+    flags: ISOLATED,
+    steps: [
+      { kind: 'initialize' },
+      { kind: 'wait', ms: 500 },
+      { kind: 'user', text: 'Run this exact bash command in the foreground (not in the background): for i in $(seq 1 20); do echo line $i; sleep 1; done' },
+      { kind: 'wait', ms: 3000 },
+      { kind: 'backgroundTool', toolName: 'Bash' },
+      { kind: 'taskOutput', times: 3, everyMs: 2000 },
+      { kind: 'wait', ms: 20000 },
+      { kind: 'taskOutput', times: 1, everyMs: 0 },
+      { kind: 'control', request: { subtype: 'get_task_output', task_id: 'bogus' } },
+    ],
+    permission: { holdMs: 0, respond: ALLOW },
+    done: { results: 1, controlResponses: 7, quietMs: 3000, maxMs: 120000 },
+    pending: true,
+  },
+  {
+    id: '55-rename-session',
+    summary: 'rename_session for the live session, again for the previous session after /clear (stale), and whether a --resume shows the name',
+    flags: ISOLATED,
+    steps: [
+      { kind: 'initialize' },
+      { kind: 'wait', ms: 500 },
+      { kind: 'user', text: 'Respond with exactly one word: pong' },
+      { kind: 'waitResults', n: 1 },
+      { kind: 'renameSession', title: 'Closta rename test', previousSession: false },
+      { kind: 'user', text: '/clear' },
+      { kind: 'waitResults', n: 2 },
+      { kind: 'renameSession', title: 'Stale rename', previousSession: true },
+    ],
+    done: { results: 2, controlResponses: 3, quietMs: 3000, maxMs: 90000 },
+    resume: {
+      steps: [
+        { kind: 'initialize' },
+        { kind: 'wait', ms: 500 },
+        { kind: 'user', text: 'Respond with exactly one word: pong' },
+      ],
+      done: { results: 1, controlResponses: 1, quietMs: 3000, maxMs: 90000 },
+    },
+    pending: true,
+  },
+  {
+    id: '56-reload-plugins',
+    summary: 'reload_plugins with refuse_if_busy while idle, and again while a Bash command is running (whether the CLI refuses)',
+    flags: ISOLATED,
+    steps: [
+      { kind: 'initialize' },
+      { kind: 'wait', ms: 500 },
+      { kind: 'user', text: 'Respond with exactly one word: pong' },
+      { kind: 'waitResults', n: 1 },
+      { kind: 'control', request: { subtype: 'reload_plugins', refuse_if_busy: true } },
+      { kind: 'user', text: 'Run this exact bash command: sleep 6 && echo done' },
+      { kind: 'wait', ms: 2000 },
+      { kind: 'control', request: { subtype: 'reload_plugins', refuse_if_busy: true } },
+    ],
+    permission: { holdMs: 0, respond: ALLOW },
+    done: { results: 2, controlResponses: 3, quietMs: 3000, maxMs: 90000 },
+    pending: true,
+  },
+  {
+    id: '57-plan-comments',
+    summary: 'in Plan mode, the first ExitPlanMode is denied with a diff-shaped message, the second is allowed with an updatedInput.plan edited by one line: which plan the CLI goes on with',
+    flags: [...ISOLATED, '--permission-mode', 'plan'],
+    seed: { 'README.md': '# Prject\n\n## Usgae\n\nRun it.\n' },
+    steps: [
+      { kind: 'initialize' },
+      { kind: 'wait', ms: 500 },
+      {
+        kind: 'user',
+        text: 'Make a short plan to fix the spelling of the headings in README.md, then call ExitPlanMode with it. '
+          + 'Once it is approved, make the fix with the Edit tool and report done.',
+      },
+    ],
+    permission: {
+      holdMs: 0,
+      respond: (req, ctx) => {
+        if (req.tool_name !== 'ExitPlanMode') return ALLOW(req);
+        if (countCall(ctx, 'exit-plan-mode') === 1) {
+          return {
+            behavior: 'deny',
+            message: 'The user reviewed the plan in the editor and left comments. Lines starting with + were added by the user, lines starting with - were removed. '
+              + 'Revise the plan accordingly and present it again.\n@@ -1,3 +1,4 @@\n # Plan\n+Also add a short Usage section.\n',
+          };
+        }
+        const plan = String(req.input?.plan ?? '');
+        return { behavior: 'allow', updatedInput: { ...req.input, plan: `${plan}${plan.endsWith('\n') ? '' : '\n'}Also add a short Usage section.\n` } };
+      },
+    },
+    done: { results: 1, controlResponses: 1, quietMs: 3000, maxMs: 180000 },
+    pending: true,
   },
 ];
 

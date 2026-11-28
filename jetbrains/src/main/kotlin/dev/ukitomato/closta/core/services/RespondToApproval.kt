@@ -12,8 +12,8 @@ import java.time.Instant
  * Use case: return the host's decision about a pending approval to the agent, and drop the pending from
  * the conversation.
  *
- * The approval mouth is a *single* one — the [ApprovalDecision] (`Allow`/`Deny`/`Answered`/
- * `AfkTimeout`), not four methods. Allow, deny, a chosen option, a free-text answer and AFK all arrive as one
+ * The approval mouth is a *single* one — the [ApprovalDecision] (`Allow`/`Deny`/`Answered`),
+ * not three methods. Allow, deny, a chosen option and a free-text answer all arrive as one
  * of its variants; the raw answer body, when there is one, rides through as [payload] and core never
  * reads it.
  *
@@ -21,7 +21,7 @@ import java.time.Instant
  * current time only via [Clock] (core never reads a clock directly), and moves
  * the state solely by calling the pure fold-family `resolveApproval`.
  * [requestedAt] is when the pending was raised/presented; the caller tracks it (a `PendingApproval`
- * carries no timestamp), and the elapsed figure lets the no-answer/answered/afk cases be replayed
+ * carries no timestamp), and the elapsed figure lets the no-answer/answered cases be replayed
  * under a virtual clock.
  *
  * If the send throws, the exception reaches the caller unchanged and the state is not advanced — the

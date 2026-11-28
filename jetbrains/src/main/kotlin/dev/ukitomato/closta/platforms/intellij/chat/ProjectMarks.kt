@@ -23,4 +23,13 @@ fun Project.markStopped(
     mark: WasRunningMark,
 ) = saveWasRunningMarks(wasRunningMarks() + (sessionId to mark))
 
+/** This project's cleared tabs, by the tab's session id. */
+fun Project.clearedTabs(): Map<String, ClearedTab> = ClearedTabs.decode(service<AppSettingsStore>().get(clearedKey()))
+
+fun Project.saveClearedTabs(tabs: Map<String, ClearedTab>) {
+    if (tabs.toList() != clearedTabs().toList()) service<AppSettingsStore>().set(clearedKey(), ClearedTabs.encode(tabs))
+}
+
+private fun Project.clearedKey() = clearedTabsKey(locationHash)
+
 private fun Project.marksKey() = wasRunningKey(locationHash)

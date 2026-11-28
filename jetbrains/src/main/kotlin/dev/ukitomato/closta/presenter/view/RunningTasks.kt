@@ -1,6 +1,7 @@
 package dev.ukitomato.closta.presenter.view
 
 import dev.ukitomato.closta.core.models.AgentEvent
+import dev.ukitomato.closta.core.models.ConversationState
 import dev.ukitomato.closta.presenter.tree.JsonArray
 import dev.ukitomato.closta.presenter.tree.JsonBool
 import dev.ukitomato.closta.presenter.tree.JsonNumber
@@ -32,7 +33,12 @@ data class BackgroundTasks(
     val progress: Map<String, TaskProgressRecord> = emptyMap(),
     /** The `tool_use_id` of the call that started each task, from `task_started`. */
     val toolUseIds: Map<String, String> = emptyMap(),
+    /** The ids of the tasks a `task_updated` moved to the background, oldest first (the newest [MAX_BACKGROUNDED]). */
+    val backgrounded: Set<String> = emptySet(),
 )
+
+/** The most moved tasks kept. */
+const val MAX_BACKGROUNDED = 64
 
 /** A row of the running list. [kind] is `agent`, `shell`, or the CLI's own `task_type` for anything else. */
 data class RunningTask(
@@ -68,9 +74,21 @@ internal fun foldBackground(
                 now.copy(
                     toolUseIds = now.toolUseIds.plusEntry(event.taskId, event.toolUseId),
                 )
+            is AgentEvent.SystemTaskUpdated -> movedToBackground(now, event)
             else -> null
         }
     return if (next == null) transcript else transcript.copy(background = next)
+}
+
+/** A `task_updated` whose patch says the task is in the background now; any other patch changes nothing. */
+private fun movedToBackground(
+    now: BackgroundTasks,
+    event: AgentEvent.SystemTaskUpdated,
+): BackgroundTasks? {
+    val patch = JsonRead.parse(event.patch.text) as? JsonObject
+    if ((patch?.get("is_backgrounded") as? JsonBool)?.value != true) return null
+    val kept = (now.backgrounded - event.taskId) + event.taskId
+    return now.copy(backgrounded = kept.toList().takeLast(MAX_BACKGROUNDED).toCollection(LinkedHashSet()))
 }
 
 private fun tasksOf(text: String): List<BackgroundTaskRecord>? {
@@ -128,8 +146,9 @@ fun runningTasks(transcript: Transcript): List<RunningTask> {
 /** The rows of the subagent the call [toolUseId] started: its own messages, by the same rules as the main thread. */
 fun agentRows(
     transcript: Transcript,
+    conversation: ConversationState,
     toolUseId: String,
-): List<ThreadRow> = agentTranscript(transcript, toolUseId)?.let { ThreadRows().of(it) }.orEmpty()
+): List<ThreadRow> = agentTranscript(transcript, toolUseId)?.let { ThreadRows().of(it, conversation) }.orEmpty()
 
 /** The subagent's own conversation, for a tab that keeps its own [ThreadRows] (so unchanged rows stay the same). */
 fun agentTranscript(

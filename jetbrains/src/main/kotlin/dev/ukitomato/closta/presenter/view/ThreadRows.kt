@@ -1,5 +1,6 @@
 package dev.ukitomato.closta.presenter.view
 
+import dev.ukitomato.closta.core.models.ConversationState
 import dev.ukitomato.closta.presenter.tree.JsonArray
 import dev.ukitomato.closta.presenter.tree.JsonNumber
 import dev.ukitomato.closta.presenter.tree.JsonObject
@@ -24,6 +25,8 @@ data class AskRow(
     override val key: String,
     val text: String,
     val attachments: List<AttachmentRecord>,
+    /** What the row says of withdrawing the message before the CLI starts it; null when it says nothing. */
+    val cancel: AskCancel? = null,
 ) : ThreadRow {
     override val opens = true
 }
@@ -56,6 +59,8 @@ data class ToolRow(
     val detail: ToolDetail? = null,
     /** What a sub-agent's call shows on its card; null for any other tool. */
     val agent: AgentSummary? = null,
+    /** What the line offers or says of moving the call to the background; null when it offers nothing. */
+    val background: BackgroundOffer? = null,
 ) : ThreadRow
 
 /** Read-only tool calls that came one after another, shown as one line ("Explored 3 files"). */
@@ -151,33 +156,94 @@ private val TASK_TOOLS = setOf(TASK_CREATE, TASK_UPDATE)
 /** What a `TaskCreate` result says first: `Task #1 created successfully: write tests`. */
 private val TASK_CREATED = Regex("""Task #(\d+) created""")
 
-/** Turns transcripts into rows, keeping the rows of every message and part that is the same object as last time. */
-class ThreadRows {
-    private var messages = IdentityHashMap<MessageRecord, List<ThreadRow>>()
-    private var parts = IdentityHashMap<PartRecord, ThreadRow?>()
+private fun cardKey(
+    anchor: String?,
+    requestId: String,
+): String = if (anchor == null) "card:$requestId" else "$anchor/card:$requestId"
+
+/**
+ * What a reused row is keyed by: the record, as the same object, and [extra], the state besides the record that the
+ * row shows, as an equal value. A row is reused only while both are as they were.
+ */
+private class RowKey(
+    val record: Any,
+    val extra: Any?,
+) {
+    override fun equals(other: Any?): Boolean = other is RowKey && record === other.record && extra == other.extra
+
+    override fun hashCode(): Int = 31 * System.identityHashCode(record) + extra.hashCode()
+}
+
+/**
+ * Turns transcripts into rows, keeping the rows of every message and part that is the same object as last time and
+ * whose extra state ([messageExtra] for a message, [partExtra] for a part) is equal to what it was.
+ */
+class ThreadRows internal constructor(
+    private val messageExtra: (MessageRecord) -> Any? = { null },
+    private val partExtra: (PartRecord) -> Any? = { null },
+    /** Whether a running call is offered the move to the background (a subagent's own calls are not). */
+    private val offersBackground: Boolean = true,
+) {
+    private var messages = HashMap<RowKey, List<ThreadRow>>()
+    private var parts = HashMap<RowKey, ThreadRow?>()
     private var groups = HashMap<String, ExploredRow>()
     private var cards = IdentityHashMap<ApprovalRecord, CardRow>()
+    private var asks = HashMap<String, CardRow>()
     private var ends = HashMap<String, TurnEndRow>()
     private val tasks = TaskTodos()
+    private var cancels: Map<String, AskCancel> = emptyMap()
+    private var offers = BackgroundOffers(Transcript(), live = false)
 
-    fun of(transcript: Transcript): List<ThreadRow> {
-        val nextMessages = IdentityHashMap<MessageRecord, List<ThreadRow>>()
-        val nextParts = IdentityHashMap<PartRecord, ThreadRow?>()
+    /** A part's key: its record, and the state besides it that its row shows. */
+    private val partKey: (PartRecord) -> RowKey = { part ->
+        val offer = offers.of(part)
+        val extra = partExtra(part)
+        RowKey(part, if (offer == null) extra else extra to offer)
+    }
+
+    /**
+     * The rows of [transcript]. [conversation] says which requests for input core still holds as pending: a card that
+     * waits is answerable only while it does. [live] is whether the CLI runs: a message in its queue is withdrawn only
+     * while it does.
+     */
+    fun of(
+        transcript: Transcript,
+        conversation: ConversationState,
+        live: Boolean = true,
+    ): List<ThreadRow> {
+        cancels = askCancels(transcript, conversation, live)
+        offers = backgroundOffersOf(transcript, conversation, live, offersBackground)
+        // The state besides the record that a message's row shows: the withdrawal of a user message.
+        val extraOf = { message: MessageRecord ->
+            if (message.role == Role.USER) messageExtra(message) to cancels[message.key] else messageExtra(message)
+        }
+        val nextMessages = HashMap<RowKey, List<ThreadRow>>()
+        val nextParts = HashMap<RowKey, ThreadRow?>()
         val rows = ArrayList<ThreadRow>()
         val nextCards = IdentityHashMap<ApprovalRecord, CardRow>()
+        val nextAsks = HashMap<String, CardRow>()
+        val pending = conversation.pendingApprovals.mapTo(HashSet()) { it.requestId }
         val nextEnds = HashMap<String, TurnEndRow>()
         val go = planGoOf(transcript.operations)
         val byAnchor = transcript.approvals.values().groupBy { it.anchor }
+        val asksByAnchor = transcript.elicitations.values().groupBy { it.anchor }
         val messageKeys = transcript.messages.order.toHashSet()
         val followed = liveAsks(transcript).dropLast(1).toHashSet()
         for (message in transcript.messages.values()) {
-            val kept = messages[message]
+            val messageKey = RowKey(message, extraOf(message))
+            // A reply is kept only while every part still has its row (one whose extra state changed is made again).
+            val kept =
+                messages[messageKey]?.takeIf {
+                    message.role == Role.USER ||
+                        message.parts.values().all { parts.containsKey(partKey(it)) }
+                }
             if (kept != null) carryParts(message, nextParts)
             val made = kept ?: rowsOf(message, nextParts)
-            nextMessages[message] = made
+            nextMessages[messageKey] = made
             rows += made
             if (message.key == transcript.signIn) rows += SignInRow("${message.key}/sign-in")
             byAnchor[message.key]?.forEach { rows += cardRow(it, nextCards, go) }
+            asksByAnchor[message.key]?.forEach { rows += askRow(it, nextAsks, pending) }
             turnEndRow(transcript, message.key, followed)?.let {
                 nextEnds[it.key] = it
                 rows += it
@@ -188,9 +254,13 @@ class ThreadRows {
             rows +=
                 cardRow(it, nextCards, go)
         }
+        asksByAnchor.filterKeys { it == null || it !in messageKeys }.values.flatten().forEach {
+            rows += askRow(it, nextAsks, pending)
+        }
         messages = nextMessages
         parts = nextParts
         cards = nextCards
+        asks = nextAsks
         ends = nextEnds
         return tasks.folded(grouped(rows), transcript)
     }
@@ -213,43 +283,53 @@ class ThreadRows {
         go: PlanGo,
     ): CardRow {
         val kept = cards[approval]?.takeIf { (it.card as? PlanCard)?.go.let { held -> held == null || held == go } }
-        val made = kept ?: CardRow(cardKey(approval), cardOf(approval, go), opens = false)
+        val made = kept ?: CardRow(cardKey(approval.anchor, approval.requestId), cardOf(approval, go), opens = false)
         into[approval] = made
         return made
     }
 
-    private fun cardKey(approval: ApprovalRecord): String =
-        if (approval.anchor == null) "card:${approval.requestId}" else "${approval.anchor}/card:${approval.requestId}"
+    private fun askRow(
+        record: ElicitationRecord,
+        into: HashMap<String, CardRow>,
+        pending: Set<String>,
+    ): CardRow {
+        val card = elicitationCardOf(record, record.requestId in pending)
+        val kept = asks[record.requestId]?.takeIf { it.card == card }
+        val made = kept ?: CardRow(cardKey(record.anchor, record.requestId), card, opens = false)
+        into[record.requestId] = made
+        return made
+    }
 
     private fun carryParts(
         message: MessageRecord,
-        into: IdentityHashMap<PartRecord, ThreadRow?>,
+        into: HashMap<RowKey, ThreadRow?>,
     ) {
-        message.parts.values().forEach { part -> if (parts.containsKey(part)) into[part] = parts[part] }
+        message.parts.values().forEach { part ->
+            val key = partKey(part)
+            if (parts.containsKey(key)) into[key] = parts[key]
+        }
     }
 
     private fun rowsOf(
         message: MessageRecord,
-        into: IdentityHashMap<PartRecord, ThreadRow?>,
+        into: HashMap<RowKey, ThreadRow?>,
     ): List<ThreadRow> {
         val all = message.parts.values()
         if (message.role == Role.USER) {
             val words = all.filterIsInstance<TextRecord>().joinToString("\n") { it.text }
-            return listOf(AskRow(message.key, words, all.filterIsInstance<AttachmentRecord>()))
+            return listOf(AskRow(message.key, words, all.filterIsInstance<AttachmentRecord>(), cancels[message.key]))
         }
         val rows = ArrayList<ThreadRow>()
-        for (partKey in message.parts.order) {
-            val part = message.parts[partKey] ?: continue
+        for (partId in message.parts.order) {
+            val part = message.parts[partId] ?: continue
+            val key = partKey(part)
             val made =
-                if (parts.containsKey(
-                        part,
-                    )
-                ) {
-                    parts[part]
+                if (parts.containsKey(key)) {
+                    parts[key]
                 } else {
-                    rowOf("${message.key}/$partKey", part, rows.isEmpty())
+                    rowOf("${message.key}/$partId", part, rows.isEmpty())
                 }
-            into[part] = made
+            into[key] = made
             if (made != null) rows += made
         }
         return rows
@@ -262,15 +342,7 @@ class ThreadRows {
     ): ThreadRow? =
         when (part) {
             is TextRecord if part.reasoning ->
-                ThinkingRow(
-                    key,
-                    part.text,
-                    part.streaming,
-                    opens,
-                    part.estimate.takeIf {
-                        part.streaming
-                    },
-                )
+                ThinkingRow(key, part.text, part.streaming, opens, part.estimate.takeIf { part.streaming })
             is TextRecord ->
                 if (part.text.isBlank() &&
                     !part.streaming
@@ -298,6 +370,7 @@ class ThreadRows {
                     opens,
                     toolDetail(part),
                     agentSummary(part),
+                    offers.of(part),
                 )
             else -> null
         }
@@ -341,6 +414,7 @@ class ThreadRows {
  */
 private class TaskTodos {
     private var lists = HashMap<String, TodoRow>()
+    private var callsOf = IdentityHashMap<MessageRecord, List<ToolCallRecord>>()
 
     fun folded(
         rows: List<ThreadRow>,
@@ -348,6 +422,7 @@ private class TaskTodos {
     ): List<ThreadRow> {
         if (rows.none { it.isTask() }) {
             lists = HashMap()
+            callsOf = IdentityHashMap()
             return rows
         }
         val calls = taskCalls(transcript)
@@ -364,8 +439,9 @@ private class TaskTodos {
                 calls[row.toolUseId]?.let(board::apply)
                 val runGoesOn = rows.getOrNull(index + 1)?.isTask() == true
                 first = if (runGoesOn) opening else null
-                if (!runGoesOn) {
-                    val made = TodoRow(row.key, board.items(), opening.opens)
+                val items = if (runGoesOn) emptyList() else board.items()
+                if (items.isNotEmpty()) {
+                    val made = TodoRow(row.key, items, opening.opens)
                     val list = lists[made.key]?.takeIf { it == made } ?: made
                     nextLists[list.key] = list
                     out += list
@@ -379,13 +455,21 @@ private class TaskTodos {
     private fun ThreadRow.isTask() = this is ToolRow && toolName in TASK_TOOLS
 
     /** The task calls of the thread's own messages by their tool use id: a row kept from before holds no call. */
-    private fun taskCalls(transcript: Transcript): Map<String, ToolCallRecord> =
-        transcript.messages
-            .values()
-            .flatMap { it.parts.values() }
-            .filterIsInstance<ToolCallRecord>()
-            .filter { it.toolName in TASK_TOOLS }
-            .associateBy { it.toolUseId }
+    private fun taskCalls(transcript: Transcript): Map<String, ToolCallRecord> {
+        val nextCalls = IdentityHashMap<MessageRecord, List<ToolCallRecord>>()
+        val byId = HashMap<String, ToolCallRecord>()
+        for (message in transcript.messages.values()) {
+            val calls =
+                callsOf[message] ?: message.parts
+                    .values()
+                    .filterIsInstance<ToolCallRecord>()
+                    .filter { it.toolName in TASK_TOOLS }
+            nextCalls[message] = calls
+            for (call in calls) byId[call.toolUseId] = call
+        }
+        callsOf = nextCalls
+        return byId
+    }
 }
 
 /**

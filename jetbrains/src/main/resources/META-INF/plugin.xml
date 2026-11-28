@@ -28,8 +28,10 @@
         <notificationGroup id="Closta.Finished" displayType="BALLOON" key="notification.group.finished"/>
         <notificationGroup id="Closta.Running" displayType="BALLOON" key="notification.group.running"/>
         <notificationGroup id="Closta.Worktree" displayType="BALLOON" key="notification.group.worktree"/>
+        <notificationGroup id="Closta.Export" displayType="BALLOON" key="notification.group.export"/>
         <fileEditorProvider implementation="dev.ukitomato.closta.platforms.intellij.chat.ChatFileEditorProvider"/>
         <editorTabTitleProvider implementation="dev.ukitomato.closta.platforms.intellij.chat.ChatTabTitles"/>
+        <editorNotificationProvider implementation="dev.ukitomato.closta.platforms.intellij.thread.PlanNotifications"/>
         <fileIconProvider implementation="dev.ukitomato.closta.platforms.intellij.chat.ChatTabIcons"/>
     </extensions>
     <actions>
@@ -39,6 +41,14 @@
             <override-text place="ClostaSessions" use-text-of-place="MainMenu"/>
         </action>
         <action id="Closta.Sessions.OpenInSidebar" class="dev.ukitomato.closta.platforms.intellij.sessions.OpenInSidebarAction">
+            <override-text place="MainMenu"/>
+            <override-text place="ClostaSessions" use-text-of-place="MainMenu"/>
+        </action>
+        <action id="Closta.Sessions.Rename" class="dev.ukitomato.closta.platforms.intellij.sessions.RenameSessionAction">
+            <override-text place="MainMenu"/>
+            <override-text place="ClostaSessions" use-text-of-place="MainMenu"/>
+        </action>
+        <action id="Closta.Sessions.Export" class="dev.ukitomato.closta.platforms.intellij.chat.ExportChatAction">
             <override-text place="MainMenu"/>
             <override-text place="ClostaSessions" use-text-of-place="MainMenu"/>
         </action>
@@ -78,6 +88,8 @@
         <group id="Closta.Sessions.LiveMenu">
             <reference ref="Closta.Sessions.OpenInEditor"/>
             <reference ref="Closta.Sessions.OpenInSidebar"/>
+            <reference ref="Closta.Sessions.Rename"/>
+            <reference ref="Closta.Sessions.Export"/>
             <reference ref="Closta.Sessions.EndSession"/>
             <reference ref="Closta.Sessions.Archive"/>
         </group>
@@ -125,6 +137,14 @@
                 <synonym text="Resume"/>
                 <synonym text="Resume Chat"/>
             </action>
+            <action id="Closta.ReopenClosedChat" class="dev.ukitomato.closta.platforms.intellij.chat.ReopenClosedChatAction"
+                    icon="AllIcons.Actions.Undo">
+                <override-text place="MainMenu"/>
+                <add-to-group group-id="Closta.Sessions.Toolbar" anchor="after"
+                              relative-to-action="Closta.ResumeSidebarChat"/>
+                <synonym text="Claude"/>
+                <synonym text="Reopen Closed Chat"/>
+            </action>
             <action id="Closta.NextWaiting" class="dev.ukitomato.closta.platforms.intellij.sessions.NextWaitingAction"
                     icon="AllIcons.Actions.Forward">
                 <override-text place="MainMenu"/>
@@ -139,5 +159,7 @@
                 class="dev.ukitomato.closta.platforms.intellij.thread.JumpToWaitingCardAction">
             <keyboard-shortcut keymap="$default" first-keystroke="alt shift W"/>
         </action>
+        <action id="Closta.BackgroundAll"
+                class="dev.ukitomato.closta.platforms.intellij.thread.BackgroundAllAction"/>
     </actions>
 </idea-plugin>

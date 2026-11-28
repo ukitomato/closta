@@ -8,9 +8,9 @@ import java.awt.event.KeyEvent
 import javax.swing.JComponent
 
 /**
- * Writes one line to the IDE log for an Enter that comes soon after an input-method event, so an Enter that does not
- * send right after a conversion can be traced on the machine that has the input method. It logs what was decided and
- * the event's timing, never the text.
+ * Writes one line to the IDE log, at debug level, for an Enter that comes soon after an input-method event, so an
+ * Enter that does not send right after a conversion can be traced on the machine that has the input method (with
+ * debug logging turned on for this class). It logs what was decided and the event's timing, never the text.
  *
  * Three outcomes leave three different lines: the send action took the key ([taking]), the action stood aside for the
  * input method or a lookup ([sends]), or the key reached the editor without the action seeing it. No line at
@@ -18,7 +18,7 @@ import javax.swing.JComponent
  */
 internal class ImeEnterTrace(
     private val now: () -> Long = System::currentTimeMillis,
-    private val log: (String) -> Unit = { LOG.info(it) },
+    private val log: (String) -> Unit = { LOG.debug(it) },
 ) {
     private var lastAt = Long.MIN_VALUE
     private var committed = 0

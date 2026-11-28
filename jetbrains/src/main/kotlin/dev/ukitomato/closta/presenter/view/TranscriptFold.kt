@@ -1,3 +1,5 @@
+@file:Suppress("TooManyFunctions") // one fold per kind of input
+
 package dev.ukitomato.closta.presenter.view
 
 import dev.ukitomato.closta.core.models.AgentEvent
@@ -25,11 +27,26 @@ fun foldTranscript(
     after: ConversationState,
 ): Transcript =
     when (input) {
-        is PresenterInput.Event -> foldEvent(transcript, input.event, before, after)
-        is PresenterInput.UserSent -> foldSent(transcript, input)
+        is PresenterInput.Event -> foldEvent(transcript, input.event, before, after, input.seenAtMs)
+        is PresenterInput.UserSent -> foldSent(transcript, input, before)
         PresenterInput.StopRequested -> foldStop(transcript, after)
         is PresenterInput.Decided -> foldDecided(transcript, input, before)
         is PresenterInput.AnswerFailed -> foldAnswerFailed(transcript, input, before)
+        is PresenterInput.ElicitationDecided -> foldElicitationDecided(transcript, input, before)
+        PresenterInput.ProcessEnded ->
+            transcript
+                .withProcessEnded()
+                .withOperations(transcript.operations.processEnded())
+                .withoutTasks()
+                .queueEnded()
+        is PresenterInput.Launched ->
+            transcript
+                .withOperations(
+                    foldOperation(transcript.operations, input),
+                ).withoutTasks()
+                .queueEnded()
+        is PresenterInput.DiagnosticsReported ->
+            transcript.markReported(Keys.ofCliId(input.toolUseId), ReportedErrors(input.count, input.lines))
         is PresenterInput.FilesFound,
         is PresenterInput.SelectionCaptured,
         is PresenterInput.CodeApplied,
@@ -38,7 +55,6 @@ fun foldTranscript(
         is PresenterInput.ControlRequested,
         is PresenterInput.ControlSendFailed,
         is PresenterInput.EffortRefused,
-        is PresenterInput.Launched,
         is PresenterInput.SandboxRefused,
         is PresenterInput.SandboxNotStarted,
         is PresenterInput.RewindRequested,
@@ -46,13 +62,13 @@ fun foldTranscript(
         is PresenterInput.ResumeRefused,
         is PresenterInput.AttachmentRefused,
         is PresenterInput.RateLimitDismissed,
-        is PresenterInput.ResultSeenAt,
         -> transcript.withOperations(foldOperation(transcript.operations, input))
+        is PresenterInput.TitleRestored -> transcript.copy(customTitle = input.title)
         is PresenterInput.SessionsListed,
         is PresenterInput.Restored,
         is PresenterInput.HistoryRestored,
         PresenterInput.HistoryUnavailable,
-        -> transcript.foldHistory(input, before, after, ::foldEvent)
+        -> transcript.foldHistory(input, before, after, { t, e, b, a -> foldEvent(t, e, b, a) })
     }
 
 private const val STARTED = "started"
@@ -62,12 +78,13 @@ private fun foldEvent(
     event: AgentEvent,
     before: ConversationState,
     after: ConversationState,
+    seenAtMs: Long? = null,
 ): Transcript =
     when (event) {
-        is AgentEvent.CommandLifecycle -> foldLifecycle(transcript, event)
+        is AgentEvent.CommandLifecycle -> foldLifecycle(transcript, event, before)
         is AgentEvent.Result ->
             foldResult(transcript.compactFailureShown(), event, before, after)
-                .let { it.withOperations(it.operations.resulted(event).retryEnded()) }
+                .let { it.withOperations(it.operations.resulted(event, seenAtMs).retryEnded()) }
                 .let(::stopTaken)
         is AgentEvent.StreamEvent,
         is AgentEvent.SystemApiRetry,
@@ -76,9 +93,12 @@ private fun foldEvent(
         -> foldTurnSignals(transcript, event)
         is AgentEvent.Assistant -> foldSignIn(foldAssistant(transcript, event), event)
         is AgentEvent.User -> foldUser(transcript, event)
-        is AgentEvent.ControlRequest -> foldRequest(transcript, event, after)
-        is AgentEvent.ControlResponse ->
-            foldCommandsOfResponse(transcript.withOperations(transcript.operations.answered(event)), event)
+        is AgentEvent.ControlRequest,
+        is AgentEvent.ControlCancel,
+        is AgentEvent.Elicitation,
+        is AgentEvent.SystemElicitationComplete,
+        -> foldRequestLine(transcript, event, before, after)
+        is AgentEvent.ControlResponse -> foldResponse(transcript, event)
         is AgentEvent.SystemCommandsChanged -> foldCommandsOfChange(transcript, event)
         is AgentEvent.SystemCompactBoundary, is AgentEvent.SystemStatus -> foldCompaction(transcript, event)
         is AgentEvent.SystemInit,
@@ -89,6 +109,7 @@ private fun foldEvent(
         is AgentEvent.SystemBackgroundTasksChanged,
         is AgentEvent.SystemTaskProgress,
         is AgentEvent.SystemTaskStarted,
+        is AgentEvent.SystemTaskUpdated,
         -> foldBackground(transcript, event)
         // The rest carry no content: what they mean for the domain is core's to fold.
         else -> transcript
@@ -98,7 +119,10 @@ private fun foldEvent(
 private fun foldSent(
     transcript: Transcript,
     sent: PresenterInput.UserSent,
+    before: ConversationState,
 ): Transcript {
+    // Only a message sent while another turn runs waits in the CLI's queue, where it can be withdrawn.
+    val queued = threadIsRunning(before, transcript)
     val key = transcript.messages.claim(sent.messageId)
     // The files go ahead of the words, as they do to the CLI; their keys are a letter and a number, the words'
     // is 0.
@@ -112,6 +136,16 @@ private fun foldSent(
     return transcript.copy(
         messages = transcript.messages.put(key, message),
         routing = routing.copy(sends = routing.sends + 1),
+        sentWhileRunning =
+            if (queued) {
+                (transcript.sentWhileRunning + key)
+                    .toList()
+                    .takeLast(
+                        MAX_CANCELS,
+                    ).toSet()
+            } else {
+                transcript.sentWhileRunning
+            },
         userUuids = sent.uuid?.let { transcript.userUuids.plusEntry(key, it) } ?: transcript.userUuids,
     )
 }
@@ -121,6 +155,18 @@ private fun foldSent(
  * running, and the content that arrives meanwhile belongs to that one.
  */
 private fun foldLifecycle(
+    transcript: Transcript,
+    event: AgentEvent.CommandLifecycle,
+    before: ConversationState,
+): Transcript =
+    // Core closes the turn it held open; the row of its message says it was withdrawn.
+    if (cancelsOpenTurn(event, before)) {
+        transcript.withWithdrawn(event.commandUuid)
+    } else {
+        foldStarted(transcript, event)
+    }
+
+private fun foldStarted(
     transcript: Transcript,
     event: AgentEvent.CommandLifecycle,
 ): Transcript {
@@ -181,7 +227,7 @@ private fun foldResult(
  * Whether it is a question is core's kind for the request; when core holds no entry for it, the record keeps
  * what it had. The anchor is the assistant message the request belongs to, so a part made for it stays there.
  */
-private fun foldRequest(
+internal fun foldRequest(
     transcript: Transcript,
     event: AgentEvent.ControlRequest,
     after: ConversationState,
@@ -189,9 +235,6 @@ private fun foldRequest(
     if (event.requestId.isEmpty()) return transcript
     val existing = transcript.approvals[event.requestId]
     val held = after.pendingApprovals.firstOrNull { it.requestId == event.requestId }
-    val routing = transcript.routing
-    val messages = transcript.messages
-    val lastAssistant = messages.order.lastOrNull { messages[it]?.role == Role.ASSISTANT }
     val request = JsonRead.parse(event.request.text) as? JsonObject
     val record =
         ApprovalRecord(
@@ -202,7 +245,7 @@ private fun foldRequest(
             input = request?.get("input"),
             unreadable = if (request == null) event.request.text else null,
             ask = held?.let { it.kind == ApprovalKind.ASK } ?: existing?.ask ?: false,
-            anchor = routing.currentTurn ?: routing.openResume ?: lastAssistant,
+            anchor = transcript.anchor(),
             suggestions = suggestionsOf(request),
         )
     val same = existing == record
@@ -256,17 +299,20 @@ private fun foldAnswerFailed(
     input: PresenterInput.AnswerFailed,
     before: ConversationState,
 ): Transcript {
-    val record = transcript.approvals[input.approvalId]
+    val record = transcript.approvals[input.approvalId] ?: return foldElicitationFailed(transcript, input, before)
     val held = before.pendingApprovals.any { it.requestId == input.approvalId }
-    if (record == null || record.outcome != null || !held) return transcript
     val failed = record.copy(failure = input.message, failures = record.failures + 1)
-    return transcript.copy(approvals = transcript.approvals.put(record.requestId, failed))
+    return if (record.outcome != null || !held) {
+        transcript
+    } else {
+        transcript.copy(approvals = transcript.approvals.put(record.requestId, failed))
+    }
 }
 
 /**
  * The meaning of the host's answer. An `Allow` without answers leaves a question unanswered,
  * however long the host held it: the CLI settles it as "did not answer" at once, and only `updatedInput.answers`
- * (Answered) or `afkTimeoutMs` (AfkTimeout) say otherwise.
+ * (Answered) says otherwise.
  */
 internal fun outcomeOf(
     ask: Boolean,
@@ -275,6 +321,5 @@ internal fun outcomeOf(
     when (decision) {
         is ApprovalDecision.Answered -> ApprovalOutcome.APPROVED
         is ApprovalDecision.Deny -> ApprovalOutcome.DENIED
-        is ApprovalDecision.AfkTimeout -> ApprovalOutcome.EXPIRED
         is ApprovalDecision.Allow -> if (ask) ApprovalOutcome.CANCELLED else ApprovalOutcome.APPROVED
     }

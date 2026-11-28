@@ -19,6 +19,7 @@ import dev.ukitomato.closta.platforms.intellij.chat.bringAndShow
 import dev.ukitomato.closta.platforms.intellij.session.ClaudeSessionService
 import dev.ukitomato.closta.platforms.intellij.session.SystemClock
 import dev.ukitomato.closta.platforms.intellij.thread.CardAnswer
+import dev.ukitomato.closta.platforms.intellij.thread.ElicitationAnswer
 import dev.ukitomato.closta.platforms.intellij.thread.HtmlBlock
 import dev.ukitomato.closta.platforms.intellij.thread.MarkdownBlocks
 import dev.ukitomato.closta.presenter.view.PlanCard
@@ -55,6 +56,7 @@ import javax.swing.Timer
  * While it is in view, the shown session counts as seen (its lease): that marks it read and keeps its notifications
  * quiet, as an open conversation does.
  */
+@Suppress("TooManyFunctions") // one function per thing the pane draws or delivers
 class SessionDetailPanel(
     private val project: Project,
     private val toolWindow: ToolWindow,
@@ -203,12 +205,18 @@ class SessionDetailPanel(
     ): AnswerView {
         val source = entry.source
         val requestId = detail.card.requestId
-        val ask = gate.ask(requestId, { waitingIds(source) }) { answer, failed -> deliver(source, answer, failed) }
+        val ask =
+            gate.ask(
+                requestId,
+                { waitingIds(source) },
+                { answer, failed -> deliverElicitation(source, answer, failed) },
+            ) { answer, failed -> deliver(source, answer, failed) }
         val context =
             AnswerContext(
                 project,
                 ask,
                 { source.view.value.transcript.approvals[requestId] },
+                { source.view.value.transcript.elicitations[requestId] },
                 { bringAndShow(entry.project, entry.sessionId) },
                 markdown,
             )
@@ -230,6 +238,20 @@ class SessionDetailPanel(
         answering = view
         answeringCard = detail.card
         return view
+    }
+
+    private fun deliverElicitation(
+        source: ChatSource,
+        answer: ElicitationAnswer,
+        failed: () -> Unit,
+    ) {
+        scope.launch(failures) {
+            answerOrMarkFailed(
+                { source.answerElicitation(answer) },
+                { withContext(Dispatchers.EDT) { failed() } },
+                { thisLogger().warn(it) },
+            )
+        }
     }
 
     private fun deliver(

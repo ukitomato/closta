@@ -59,6 +59,7 @@ fun alertText(
                     AlertKind.PLAN -> ClostaBundle.message("chat.alert.plan", sessionTitle)
                     AlertKind.QUESTION -> ClostaBundle.message("chat.alert.question", sessionTitle)
                     AlertKind.EDIT -> ClostaBundle.message("chat.alert.edit", sessionTitle)
+                    AlertKind.ELICITATION -> ClostaBundle.message("chat.alert.elicitation", sessionTitle)
                 },
                 "",
                 answerable = false,

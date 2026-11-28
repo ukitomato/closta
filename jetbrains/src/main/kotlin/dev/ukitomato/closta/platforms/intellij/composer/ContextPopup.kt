@@ -2,6 +2,8 @@ package dev.ukitomato.closta.platforms.intellij.composer
 
 import com.intellij.openapi.ui.popup.JBPopup
 import com.intellij.openapi.ui.popup.JBPopupFactory
+import com.intellij.openapi.ui.popup.JBPopupListener
+import com.intellij.openapi.ui.popup.LightweightWindowEvent
 import com.intellij.ui.components.ActionLink
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.panels.VerticalLayout
@@ -19,6 +21,7 @@ import java.awt.FlowLayout
 import java.util.Locale
 import javax.swing.JComponent
 import javax.swing.JPanel
+import javax.swing.Timer
 
 /**
  * The popup of the context's breakdown. It keeps nothing of its own: each [show] draws the composer's state again, so
@@ -37,7 +40,15 @@ internal class ContextPopup(
         }
 
     // What the content was last drawn from, so that a state that changes nothing here (a streamed reply) draws nothing.
-    private var drawn: Pair<ContextRecord?, Boolean>? = null
+    private var drawn: Triple<ContextRecord?, Boolean, Boolean>? = null
+
+    private var forced = asked
+    private var latest = state
+    private val forcedTimer =
+        Timer(FORCED_MS) {
+            forced = false
+            show(latest)
+        }.apply { isRepeats = false }
 
     val popup: JBPopup =
         JBPopupFactory
@@ -49,11 +60,18 @@ internal class ContextPopup(
 
     init {
         // Opened as the whole answer is asked for: the request is not in [state] yet.
-        draw(if (asked) state.copy(contextWaiting = true) else state)
+        draw(state)
+        if (forced) forcedTimer.start()
+        popup.addListener(
+            object : JBPopupListener {
+                override fun onClosed(event: LightweightWindowEvent) = forcedTimer.stop()
+            },
+        )
     }
 
     /** Draws [state] again while the popup is open, and fits the popup to what it now says. */
     fun show(state: ComposerState) {
+        latest = state
         if (draw(state) && popup.isVisible) popup.pack(true, true)
     }
 
@@ -63,7 +81,11 @@ internal class ContextPopup(
      * the totals alone), it says they are being counted, or offers to count them again.
      */
     private fun draw(state: ComposerState): Boolean {
-        val from = state.context to state.contextWaiting
+        if (forced && state.contextWaiting) {
+            forced = false
+            forcedTimer.stop()
+        }
+        val from = Triple(state.context, state.contextWaiting, forced)
         if (from == drawn) return false
         drawn = from
         content.removeAll()
@@ -73,10 +95,13 @@ internal class ContextPopup(
             content.add(JBLabel(tokens))
         }
         val categories = context?.categories.orEmpty()
-        when {
-            categories.isNotEmpty() -> rows(categories, context?.maxTokens ?: 0)
-            state.contextWaiting -> content.add(quiet(ClostaBundle.message("composer.context.counting")))
-            else -> content.add(ActionLink(ClostaBundle.message("composer.context.recount")) { recount() })
+        when (breakdownBody(categories.size, state.contextWaiting, forced)) {
+            BreakdownBody.ROWS -> rows(categories, context?.maxTokens ?: 0)
+            BreakdownBody.COUNTING -> content.add(quiet(ClostaBundle.message("composer.context.counting")))
+            BreakdownBody.RECOUNT ->
+                content.add(
+                    ActionLink(ClostaBundle.message("composer.context.recount")) { recount() },
+                )
         }
         content.revalidate()
         content.repaint()
@@ -121,6 +146,7 @@ internal class ContextPopup(
 
     private companion object {
         const val GAP = 4
+        const val FORCED_MS = 2_000
         const val PERCENT = 100.0
 
         // The kinds drawn as rows, in this order; the deferred tools are one line after them.

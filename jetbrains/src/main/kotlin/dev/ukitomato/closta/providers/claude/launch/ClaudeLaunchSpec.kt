@@ -43,6 +43,12 @@ data class ClaudeLaunchSpec(
      * turns into the Linux path.
      */
     val cwd: String? = null,
+    /**
+     * Folders besides [cwd] the CLI may work in, as the CLI sees them (a WSL project's are Linux paths): one
+     * `--add-dir=<path>` each, after `--permission-prompt-tool`. Never logged: [toString] and [toLoggedArgv] say only
+     * how many.
+     */
+    val additionalDirectories: List<String> = emptyList(),
     /** Environment for the process, incl. auth. Never placed on argv; carried by the spawner. */
     val env: Map<String, String> = emptyMap(),
 ) {
@@ -97,8 +103,13 @@ data class ClaudeLaunchSpec(
                 add("--permission-prompt-tool")
                 add("stdio")
             }
+            additionalDirectories.forEach { add("$ADD_DIR_FLAG$it") }
         }
     }
+
+    /** [toArgv] with every `--add-dir=<path>` shown as `--add-dir=<redacted>`: the folders are the user's. */
+    fun toLoggedArgv(): List<String> =
+        toArgv().map { if (it.startsWith(ADD_DIR_FLAG)) "$ADD_DIR_FLAG<redacted>" else it }
 
     /**
      * The environment the conversation's child gets: file checkpointing is switched on, and [env] is laid
@@ -112,9 +123,11 @@ data class ClaudeLaunchSpec(
         "ClaudeLaunchSpec(sessionId=$sessionId, permissionMode=$permissionMode, model=$model, effort=$effort, " +
             "resume=$resume, forkSession=$forkSession, resumeSessionAt=$resumeSessionAt, sandbox=$sandbox, " +
             "permissionPromptToolStdio=$permissionPromptToolStdio, cwd=$cwd, " +
-            "env=<${env.size} redacted>)"
+            "addDirs=${additionalDirectories.size}, env=<${env.size} redacted>)"
 
     companion object {
+        private const val ADD_DIR_FLAG = "--add-dir="
+
         /** The CLI turns file checkpointing on when this is true (and the DISABLE name is absent). */
         const val CHECKPOINTING_ENV: String = "CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING"
 

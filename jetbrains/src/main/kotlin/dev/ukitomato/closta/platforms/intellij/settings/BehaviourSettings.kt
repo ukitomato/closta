@@ -33,4 +33,8 @@ data class BehaviourSettings(
     val respectGitIgnore: Boolean = true,
     /** The permission mode new sessions start in; null is the CLI's own. */
     val initialPermissionMode: InitialPermissionMode? = null,
+    /** Tell Claude about the IDE errors its edits introduce. */
+    val reportNewErrors: Boolean = true,
+    /** Give the IDE's content roots outside a session's folder to its CLI as working directories. */
+    val addContentRoots: Boolean = false,
 )

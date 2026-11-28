@@ -7,9 +7,13 @@ import com.google.gson.JsonObject
 import dev.ukitomato.closta.core.interfaces.Diagnostic
 import dev.ukitomato.closta.core.interfaces.DiagnosticSeverity
 import dev.ukitomato.closta.core.interfaces.Diagnostics
+import dev.ukitomato.closta.core.interfaces.EditorOpening
+import dev.ukitomato.closta.core.interfaces.EditorSelections
 import dev.ukitomato.closta.core.interfaces.IdeBridge
 import dev.ukitomato.closta.core.interfaces.IdeFailureKind
 import dev.ukitomato.closta.core.interfaces.IdeResult
+import dev.ukitomato.closta.core.interfaces.OpenEditors
+import dev.ukitomato.closta.core.interfaces.UnsavedDocuments
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -17,6 +21,18 @@ import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+
+/** A bridge with only the seams a test gives. */
+internal class FakeIde(
+    private val base: String? = "/work",
+    override val diagnostics: Diagnostics? = null,
+    override val editorSelections: EditorSelections? = null,
+    override val unsavedDocuments: UnsavedDocuments? = null,
+    override val openEditors: OpenEditors? = null,
+    override val editorOpening: EditorOpening? = null,
+) : IdeBridge {
+    override fun projectBasePath(): String? = base
+}
 
 /** What `ide-context` answers, and the name it is served under. */
 class IdeContextServerTest {
@@ -39,7 +55,7 @@ class IdeContextServerTest {
     ): JsonObject? = runBlocking { server.handle(json("""{"jsonrpc":"2.0",$body}""")) }
 
     private fun server(answer: (String?) -> IdeResult<List<Diagnostic>> = { IdeResult.Ok(listOf(one)) }) =
-        FakeDiagnostics(answer).let { it to IdeContextServer(it) }
+        FakeDiagnostics(answer).let { it to IdeContextServer(FakeIde(diagnostics = it)) }
 
     @Test
     fun `initialize answers with tools capability and the server's own name`() {

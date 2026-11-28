@@ -14,7 +14,8 @@ import org.junit.jupiter.api.Test
  *  - 13: immediate `Allow` at `elapsedMs == 0` — the no-answer path (the host replied before the 0.03 s
  *    window).
  *  - 14: `Answered` after 5000 ms — answers injected (`updatedInput.answers`).
- *  - 15: `AfkTimeout` after 5000 ms — AFK expiry (`updatedInput.afkTimeoutMs`).
+ *  - 15: `Allow` after 5000 ms carrying `updatedInput.afkTimeoutMs` — the away report, which the current CLI
+ *    answers with an error (it does not accept the report).
  */
 class AskResolutionTest {
     /** A virtual clock: elapsed time is computed from it, never from a real one. */
@@ -55,17 +56,29 @@ class AskResolutionTest {
     }
 
     @Test
-    fun `15 AfkTimeout after 5000ms resolves the question as AFK and removes it`() {
-        val held = heldAsk("15-ask-afktimeout-updatedinput.ndjson", REQUEST_15)
+    fun `15 an away report after 5000ms removes the question and the CLI answers it with an error`() {
+        val capture = "15-ask-afktimeout-updatedinput.ndjson"
+        val held = heldAsk(capture, REQUEST_15)
         val clock = VirtualClock(nowMs = 42)
         val arrivalMs = clock.nowMs
         clock.advance(5_000)
 
         val elapsedMs = clock.nowMs - arrivalMs
-        val resolved = resolveApproval(held, ApprovalDecision.AfkTimeout(REQUEST_15), elapsedMs)
+        val resolved = resolveApproval(held, ApprovalDecision.Allow(REQUEST_15), elapsedMs)
 
-        assertEquals(5_000L, elapsedMs, "15: the request expired on an AFK timeout after 5000 ms")
-        assertTrue(resolved.pendingApprovals.isEmpty(), "15: the AFK-expired question is removed from pending")
+        assertEquals(5_000L, elapsedMs, "15: the host reported the user away after 5000 ms")
+        assertTrue(resolved.pendingApprovals.isEmpty(), "15: the question is removed from pending")
+        val answer =
+            CaptureFixtures
+                .textOf(capture)
+                .lineSequence()
+                .filter { it.contains("tool_use_result") }
+                .single()
+        assertTrue(
+            answer.contains("\"is_error\":true"),
+            "15: the CLI answers the away report with an error",
+        )
+        assertTrue(answer.contains("did not accept the report"), "15: it says it did not accept the report")
     }
 
     @Test

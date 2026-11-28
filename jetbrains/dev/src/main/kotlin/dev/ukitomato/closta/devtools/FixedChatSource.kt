@@ -5,6 +5,7 @@ import dev.ukitomato.closta.platforms.intellij.chat.ChatSource
 import dev.ukitomato.closta.platforms.intellij.session.SessionNotice
 import dev.ukitomato.closta.platforms.intellij.session.SessionView
 import dev.ukitomato.closta.platforms.intellij.thread.CardAnswer
+import dev.ukitomato.closta.platforms.intellij.thread.ElicitationAnswer
 import dev.ukitomato.closta.presenter.view.RewindRecord
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -51,6 +52,8 @@ class FixedChatSource(
 
     override suspend fun respond(answer: CardAnswer) = answered(answer)
 
+    override suspend fun answerElicitation(answer: ElicitationAnswer) = Unit
+
     override suspend fun interrupt() = Unit
 
     override suspend fun stopTask(taskId: String) = Unit
@@ -59,7 +62,19 @@ class FixedChatSource(
 
     override suspend fun requestUsage() = Unit
 
+    override suspend fun requestPermissionRules() = Unit
+
     override suspend fun requestContextBreakdown() = Unit
+
+    override suspend fun reloadPlugins() = Unit
+
+    override suspend fun renameSession(title: String) = Unit
+
+    override suspend fun cancelQueued(askKey: String) = Unit
+
+    override suspend fun moveToBackground(toolUseId: String?) = Unit
+
+    override suspend fun requestTaskOutput(taskId: String) = Unit
 
     override suspend fun setMcpServerEnabled(
         name: String,

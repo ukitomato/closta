@@ -206,9 +206,10 @@ object CaptureReplay {
 
     /**
      * How the recorder answered each `can_use_tool`: 05 and 12 allowed (any wait), 13 allowed at once (the
-     * no-answer path), 14 answered after 5 s, 15 let the AFK timeout run after 5 s. 16 and 17 allowed,
-     * 18 answered both questions after 2 s. Only the decision comes back here: what else the recorder sent (16's
-     * suggestions and rewritten input) reaches the projection through stdout, not through these inputs.
+     * no-answer path), 14 answered after 5 s, 15 reported the user away after 5 s
+     * (an allow without answers), 16 and 17 allowed, 18 answered both questions after 2 s. Only the decision comes
+     * back here: what else the recorder sent (16's suggestions and rewritten input) reaches the projection
+     * through stdout, not through these inputs.
      */
     private val ANSWERS: Map<String, (String) -> PresenterInput.Decided> =
         mapOf(
@@ -216,9 +217,7 @@ object CaptureReplay {
             "12-subagent-permission" to { id -> PresenterInput.Decided(ApprovalDecision.Allow(id), 1_000) },
             "13-ask-timeout" to { id -> PresenterInput.Decided(ApprovalDecision.Allow(id), 0) },
             "14-ask-answers-updatedinput" to { id -> PresenterInput.Decided(ApprovalDecision.Answered(id), 5_000) },
-            "15-ask-afktimeout-updatedinput" to { id ->
-                PresenterInput.Decided(ApprovalDecision.AfkTimeout(id), 5_000)
-            },
+            "15-ask-afktimeout-updatedinput" to { id -> PresenterInput.Decided(ApprovalDecision.Allow(id), 5_000) },
             "16-permission-suggestion-accept" to { id -> PresenterInput.Decided(ApprovalDecision.Allow(id), 1_000) },
             "17-edit-approval" to { id -> PresenterInput.Decided(ApprovalDecision.Allow(id), 1_000) },
             "25-rewind-files" to { id -> PresenterInput.Decided(ApprovalDecision.Allow(id), 1_000) },

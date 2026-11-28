@@ -4,6 +4,7 @@ import dev.ukitomato.closta.core.interfaces.AgentSession
 import dev.ukitomato.closta.core.models.AgentEvent
 import dev.ukitomato.closta.core.models.ApprovalDecision
 import dev.ukitomato.closta.core.models.Attachment
+import dev.ukitomato.closta.core.models.ElicitationDecision
 import dev.ukitomato.closta.providers.claude.protocol.StdinEncoder
 import dev.ukitomato.closta.providers.claude.protocol.StreamJsonCodec
 import kotlinx.coroutines.CancellationException
@@ -115,15 +116,21 @@ class ClaudeSession(
     ) {
         val line =
             when (decision) {
-                // allow / answered / afk-timeout all reply with `allow`; the difference is in the opaque
-                // updatedInput (answers / afkTimeoutMs), which core passes through verbatim.
+                // allow / answered both reply with `allow`; the difference is in the opaque
+                // updatedInput (answers), which core passes through verbatim.
                 is ApprovalDecision.Allow,
                 is ApprovalDecision.Answered,
-                is ApprovalDecision.AfkTimeout,
                 -> StdinEncoder.allow(decision.requestId, payload ?: "{}", updatedPermissions)
                 is ApprovalDecision.Deny -> StdinEncoder.deny(decision.requestId, payload ?: "")
             }
         stdinChannel.send(line)
+    }
+
+    override suspend fun respondToElicitation(
+        decision: ElicitationDecision,
+        content: String?,
+    ) {
+        stdinChannel.send(StdinEncoder.elicitationResponse(decision.requestId, decision.action.wire, content))
     }
 
     // The ids of these three are the caller's: it has recorded the request under that id before it writes, so the
@@ -151,6 +158,46 @@ class ClaudeSession(
 
     override suspend fun requestUsage(requestId: String) {
         stdinChannel.send(StdinEncoder.getUsage(requestId))
+    }
+
+    override suspend fun reloadPlugins(
+        refuseIfBusy: Boolean,
+        requestId: String,
+    ) {
+        stdinChannel.send(StdinEncoder.reloadPlugins(requestId, refuseIfBusy))
+    }
+
+    override suspend fun backgroundTasks(
+        toolUseId: String?,
+        requestId: String,
+    ) {
+        stdinChannel.send(StdinEncoder.backgroundTasks(requestId, toolUseId))
+    }
+
+    override suspend fun requestTaskOutput(
+        taskId: String,
+        requestId: String,
+    ) {
+        stdinChannel.send(StdinEncoder.getTaskOutput(requestId, taskId))
+    }
+
+    override suspend fun cancelQueuedMessage(
+        messageUuid: String,
+        requestId: String,
+    ) {
+        stdinChannel.send(StdinEncoder.cancelAsyncMessage(requestId, messageUuid))
+    }
+
+    override suspend fun requestPermissionRules(requestId: String) {
+        stdinChannel.send(StdinEncoder.listPermissionRules(requestId))
+    }
+
+    override suspend fun renameSession(
+        title: String,
+        sessionId: String,
+        requestId: String,
+    ) {
+        stdinChannel.send(StdinEncoder.renameSession(requestId, title, sessionId))
     }
 
     // The ids are the caller's, as above.

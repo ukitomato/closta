@@ -3,7 +3,6 @@ package dev.ukitomato.closta.presenter.view
 import dev.ukitomato.closta.core.models.AgentEvent
 import org.junit.jupiter.api.Assertions.assertAll
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
 
@@ -16,9 +15,10 @@ import org.junit.jupiter.api.Test
 class CacheClockTest {
     private fun HostState.ops() = transcript.operations
 
-    private fun HostState.with(event: AgentEvent) = next(PresenterInput.Event(event))
-
-    private fun HostState.seenAt(epochMs: Long) = next(PresenterInput.ResultSeenAt(epochMs))
+    private fun HostState.with(
+        event: AgentEvent,
+        atMs: Long? = null,
+    ) = next(PresenterInput.Event(event, atMs))
 
     // A turn's own `usage`, with the session's `modelUsage` naming one model (its figures do not matter here).
     private fun turn(
@@ -33,19 +33,38 @@ class CacheClockTest {
                 """"cache_creation":{"ephemeral_1h_input_tokens":$hour,"ephemeral_5m_input_tokens":$fiveMinutes}}""",
     )
 
-    private val after43 =
-        CaptureReplay.inputs("43-usage-and-rules").fold(HostState()) { host, input -> host.next(input) }
+    private fun HostState.replay(
+        name: String,
+        uuids: Boolean = false,
+        onResult: (HostState, AgentEvent.Result) -> HostState = { host, _ -> host },
+    ): HostState {
+        var state = this
+        var seen = 0L
+        for (input in CaptureReplay.inputs(name, uuids)) {
+            val result = (input as? PresenterInput.Event)?.event as? AgentEvent.Result
+            state =
+                if (result == null) {
+                    state.next(input)
+                } else {
+                    seen += 1_000
+                    onResult(state.next(PresenterInput.Event(result, seen)), result)
+                }
+        }
+        return state
+    }
+
+    private val after43 = HostState().replay("43-usage-and-rules")
 
     @Test
     fun `43 the hour cache is kept from the time the result was seen`() {
-        val state = after43.seenAt(1_000)
+        val state = after43
 
         assertEquals(CacheRecord(1_000, 3_600_000), state.ops().cache)
     }
 
     @Test
     fun `43 the clock is warm until the hour is over, then expired with the context's tokens`() {
-        val state = after43.seenAt(1_000)
+        val state = after43
         val record = state.ops().cache
         val tokens = state.ops().context?.totalTokens
 
@@ -60,19 +79,15 @@ class CacheClockTest {
 
     @Test
     fun `the composer passes the cache on`() {
-        val state = after43.seenAt(1_000)
+        val state = after43
 
         assertEquals(CacheRecord(1_000, 3_600_000), composerState(state.conversation, state.transcript).cache)
     }
 
     @Test
     fun `42 a local command's result touches no cache and leaves the clock where the real turn put it`() {
-        var state = HostState()
         var results = 0
-        for (input in CaptureReplay.inputs("42-local-commands")) {
-            state = state.next(input)
-            if ((input as? PresenterInput.Event)?.event is AgentEvent.Result) state = state.seenAt(++results * 1_000L)
-        }
+        val state = HostState().replay("42-local-commands") { host, _ -> host.also { results++ } }
 
         assertAll(
             { assertEquals(2, results) },
@@ -82,24 +97,24 @@ class CacheClockTest {
 
     @Test
     fun `type only - a turn with no cache tokens leaves no clock where there was none`() {
-        val none = HostState().with(turn(0, 0, 0)).seenAt(1_000)
+        val none = HostState().with(turn(0, 0, 0), 1_000)
 
         assertNull(none.ops().cache)
     }
 
     @Test
     fun `type only - a turn that wrote only the five-minute cache makes it five minutes`() {
-        val hour = HostState().with(turn(0, 20, 0)).seenAt(1_000)
-        val fiveMinutes = hour.with(turn(10, 0, 20)).seenAt(2_000)
+        val hour = HostState().with(turn(0, 20, 0), 1_000)
+        val fiveMinutes = hour.with(turn(10, 0, 20), 2_000)
 
         assertEquals(CacheRecord(2_000, 300_000), fiveMinutes.ops().cache)
     }
 
     @Test
     fun `type only - a turn that only read the cache restarts the clock and keeps its time`() {
-        val hour = HostState().with(turn(0, 20, 0)).seenAt(1_000)
-        val read = hour.with(turn(10, 0, 0)).seenAt(2_000)
-        val readFirst = HostState().with(turn(10, 0, 0)).seenAt(2_000)
+        val hour = HostState().with(turn(0, 20, 0), 1_000)
+        val read = hour.with(turn(10, 0, 0), 2_000)
+        val readFirst = HostState().with(turn(10, 0, 0), 2_000)
 
         assertAll(
             { assertEquals(CacheRecord(2_000, 3_600_000), read.ops().cache) },
@@ -108,28 +123,30 @@ class CacheClockTest {
     }
 
     @Test
-    fun `a result that names no model ends the clock but keeps the tokens`() {
-        val warm = HostState().with(turn(10, 20, 0)).seenAt(1_000)
+    fun `type only - a result with no time leaves the clock as it was`() {
+        val warm = HostState().with(turn(10, 20, 0), 1_000)
+        val unseen = warm.with(turn(10, 20, 0))
+
+        assertEquals(warm.ops().cache, unseen.ops().cache)
+    }
+
+    @Test
+    fun `a result that names no model ends the clock and the tokens`() {
+        val warm = HostState().with(turn(10, 20, 0), 1_000)
         val bare = warm.with(Lines.result(null))
 
         assertAll(
             { assertEquals(CacheRecord(1_000, 3_600_000), warm.ops().cache) },
-            { assertNotNull(bare.ops().tokens) },
-            { assertNull(bare.seenAt(2_000).ops().cache) },
+            { assertNull(bare.ops().tokens) },
+            { assertNull(bare.ops().cache) },
         )
     }
 
     @Test
     fun `41 after the clear's result there is no clock, and the next turn's result brings it back`() {
-        var state = HostState()
         val caches = ArrayList<Pair<AgentEvent.Result, CacheRecord?>>()
-        var seen = 0L
-        for (input in CaptureReplay.inputs("41-clear-reset", uuids = true)) {
-            state = state.next(input)
-            val result = (input as? PresenterInput.Event)?.event as? AgentEvent.Result ?: continue
-            seen += 1_000
-            state = state.seenAt(seen)
-            caches += result to state.ops().cache
+        HostState().replay("41-clear-reset", uuids = true) { host, result ->
+            host.also { caches += result to it.ops().cache }
         }
         val clear =
             caches.single {

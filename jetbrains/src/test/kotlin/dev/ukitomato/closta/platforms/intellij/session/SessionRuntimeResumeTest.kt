@@ -228,8 +228,11 @@ class SessionRuntimeResumeTest {
 
             running.commands.sendMessage("send-1", "go on")
 
+            val initialize = checkNotNull(process.nextStdinLine(GUARD.inWholeMilliseconds))
+            assertTrue("\"subtype\":\"initialize\"" in initialize, initialize)
             val line = checkNotNull(process.nextStdinLine(GUARD.inWholeMilliseconds))
             assertTrue("\"session_id\":\"$resumed\"" in line, "the CLI's session id is the id of the session: $line")
+            assertEquals(1, process.stdinLines().count { "\"subtype\":\"initialize\"" in it })
             runtime.close()
             parent.cancel()
         }

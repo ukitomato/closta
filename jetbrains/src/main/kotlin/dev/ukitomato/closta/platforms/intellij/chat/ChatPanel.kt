@@ -6,6 +6,7 @@ import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
@@ -34,9 +35,12 @@ import dev.ukitomato.closta.platforms.intellij.composer.sendBlockOf
 import dev.ukitomato.closta.platforms.intellij.composer.tip
 import dev.ukitomato.closta.platforms.intellij.ide.htmlEscaped
 import dev.ukitomato.closta.platforms.intellij.session.ClaudeSessionService
+import dev.ukitomato.closta.platforms.intellij.session.ContentRoots
 import dev.ukitomato.closta.platforms.intellij.session.SessionNotice
+import dev.ukitomato.closta.platforms.intellij.session.SessionOpening
 import dev.ukitomato.closta.platforms.intellij.session.SessionRelaunch
 import dev.ukitomato.closta.platforms.intellij.session.SessionView
+import dev.ukitomato.closta.platforms.intellij.session.afterJob
 import dev.ukitomato.closta.platforms.intellij.settings.ProvidersConfigurable
 import dev.ukitomato.closta.platforms.intellij.thread.SwingThreadSurface
 import dev.ukitomato.closta.platforms.intellij.thread.ThreadStyle
@@ -45,6 +49,7 @@ import dev.ukitomato.closta.platforms.intellij.ui.noHtml
 import dev.ukitomato.closta.platforms.intellij.ui.plainTip
 import dev.ukitomato.closta.presenter.view.ThreadRows
 import dev.ukitomato.closta.presenter.view.askActions
+import dev.ukitomato.closta.presenter.view.canBackground
 import dev.ukitomato.closta.presenter.view.composerState
 import dev.ukitomato.closta.presenter.view.runningTasks
 import dev.ukitomato.closta.presenter.view.sessionTitle
@@ -149,16 +154,26 @@ class ChatPanel(
     private val changesBar = ChangesBar(changes)
 
     private val tabs = ChatTabs(project, surface.component, parent)
+    private val taskOutput =
+        TaskOutputPopup(
+            project,
+            view = { source.view.value },
+            ask = { taskId -> scope.launch(failures) { source.requestTaskOutput(taskId) } },
+        )
     private val running =
         RunningList(
             onOpen = { task -> task.toolUseId?.takeIf { task.kind == "agent" }?.let { tabs.open(it, task.title) } },
             onStop = { task -> scope.launch(failures) { source.stopTask(task.taskId) } },
+            onOutput = { task -> taskOutput.open(task) },
         )
     private val limitBanner = RateLimitBanner()
+    private val rootsBanner = RootsBanner()
 
     init {
+        surface.sessionId = source.sessionId
         Disposer.register(parent, surface)
         Disposer.register(parent) { running.stop() }
+        Disposer.register(parent, taskOutput)
         background = UIUtil.getPanelBackground()
         notice.isVisible = false
         tabs.onMainShown = { main -> composer.component.isVisible = main }
@@ -196,7 +211,14 @@ class ChatPanel(
                         add(
                             JPanel(BorderLayout()).apply {
                                 isOpaque = false
-                                add(limitBanner, BorderLayout.NORTH)
+                                add(
+                                    JPanel(BorderLayout()).apply {
+                                        isOpaque = false
+                                        add(rootsBanner, BorderLayout.NORTH)
+                                        add(limitBanner, BorderLayout.CENTER)
+                                    },
+                                    BorderLayout.NORTH,
+                                )
                                 add(running.component, BorderLayout.CENTER)
                             },
                             BorderLayout.NORTH,
@@ -211,6 +233,7 @@ class ChatPanel(
             BorderLayout.SOUTH,
         )
         wire()
+        wireElicitation()
         draw()
         watchVisibility(parent)
     }
@@ -278,6 +301,17 @@ class ChatPanel(
 
     /** The thread's own component (the benchmark scrolls it). */
     fun surfaceComponent(): JComponent = surface.component
+
+    /** Whether a call of this conversation runs in front and can be moved to the background. */
+    fun canMoveToBackground(): Boolean {
+        val view = source.view.value
+        return canBackground(view.transcript, view.conversation, source.canSend.value)
+    }
+
+    /** Asks the CLI to move every call that runs in front to the background. */
+    fun moveAllToBackground() {
+        scope.launch(failures) { source.moveToBackground(null) }
+    }
 
     /** Whether some card waits for an answer. */
     fun hasWaitingCard(): Boolean = surface.hasWaitingCard
@@ -371,19 +405,25 @@ class ChatPanel(
 
     private fun showMore(under: JComponent) {
         val other = if (place.placement == Placement.EDITOR_TAB) Placement.SIDEBAR else Placement.EDITOR_TAB
-        val label =
+        val move =
             if (other == Placement.SIDEBAR) {
                 ClostaBundle.message("chat.move.toSidebar")
             } else {
                 ClostaBundle.message("chat.move.toEditorTab")
             }
+        val export = ClostaBundle.message("chat.export")
         JBPopupFactory
             .getInstance()
-            .createPopupChooserBuilder(listOf(label))
+            .createPopupChooserBuilder(listOf(move, export))
             .setRenderer(textListCellRenderer { it.orEmpty() })
-            .setItemChosenCallback { moveToOtherPlace() }
-            .createPopup()
+            .setItemChosenCallback { chosen ->
+                if (chosen == export) exportConversation(project, source) else moveToOtherPlace()
+            }.createPopup()
             .show(RelativePoint(under, Point(0, under.height)))
+    }
+
+    private fun wireElicitation() {
+        surface.onElicitationAnswer = { answer -> scope.launch(failures) { source.answerElicitation(answer) } }
     }
 
     private fun wire() {
@@ -395,6 +435,7 @@ class ChatPanel(
             }
         }
         surface.onReview = { askKey -> changes.review(askKey) }
+        surface.onCancelQueued = { askKey -> scope.launch(failures) { source.cancelQueued(askKey) } }
         surface.onSignIn = { SignInTerminal.open(project, source.workingDirectory ?: project.basePath) }
         surface.askActions = { askKey, atEnd ->
             val view = source.view.value
@@ -442,9 +483,34 @@ class ChatPanel(
         composer.onEffort = { level -> scope.launch(failures) { source.switchEffort(level) } }
         composer.onMode = { mode -> scope.launch(failures) { source.switchMode(mode) } }
         composer.onSandbox = { on -> scope.launch(failures) { source.switchSandbox(on) } }
-        composer.onUsage = { scope.launch(failures) { source.requestUsage() } }
-        composer.onContext = { scope.launch(failures) { source.requestContextBreakdown() } }
+        wireRequests()
+        wireBanners()
+    }
+
+    /**
+     * The limit banner's close goes to the presenter; the banner for the IDE's folders changing is up while the
+     * watch says this session has the notice.
+     */
+    private fun wireBanners() {
         limitBanner.onDismiss = { seq -> scope.launch(failures) { source.dismissRateLimit(seq) } }
+        rootsBanner.onRestart = ::restartForRoots
+        scope.launch(Dispatchers.EDT) {
+            project.service<ContentRoots>().pending.collect { rootsBanner.showUp(source.sessionId in it) }
+        }
+    }
+
+    /** A running call's line and the stop button's menu ask the CLI to move work to the background. */
+    private fun wireBackground() {
+        surface.onMoveToBackground = { toolUseId -> scope.launch(failures) { source.moveToBackground(toolUseId) } }
+        composer.onBackgroundAll = { moveAllToBackground() }
+    }
+
+    /** The composer's popups ask the CLI for what they show. */
+    private fun wireRequests() {
+        composer.onUsage = { scope.launch(failures) { source.requestUsage() } }
+        composer.onRules = { scope.launch(failures) { source.requestPermissionRules() } }
+        composer.onContext = { scope.launch(failures) { source.requestContextBreakdown() } }
+        wireBackground()
     }
 
     private fun draw() {
@@ -457,11 +523,8 @@ class ChatPanel(
         scope.launch(Dispatchers.EDT) {
             source.canSend.collect { sendable ->
                 val view = source.view.value
-                composer.show(
-                    composerState(view.conversation, view.transcript),
-                    sendable,
-                    sendBlockOf(sendable, source.starting),
-                )
+                // A message in the CLI's queue is offered for withdrawal only while the CLI runs.
+                drawn(view)
             }
         }
         scope.launch(Dispatchers.EDT) {
@@ -522,21 +585,43 @@ class ChatPanel(
     }
 
     /** A new session where this one is: this place closes and the session's CLI is stopped, then the new one opens. */
-    private fun restart() {
+    private fun restart() = relaunch(SessionOpening.New)
+
+    /**
+     * Starts this conversation again so that it is given the IDE's folders as they are now: the same conversation put
+     * back (a new one while nothing was said), refused while a turn runs, which a restart would cut off.
+     */
+    private fun restartForRoots() {
+        val view = source.view.value
+        if (threadIsRunning(view.conversation, view.transcript)) {
+            composer.refused(ClostaBundle.message("chat.roots.busy"))
+            return
+        }
+        relaunch(if (view.transcript.messages.size > 0) SessionOpening.Resume(source.resumeId) else SessionOpening.New)
+    }
+
+    private fun relaunch(opening: SessionOpening) {
         val old = source.sessionId
         val placement = place.placement
         // Taken now: closing this place disposes the source, and the draft goes with it.
         val carried = drafts.snapshot(source)
         SessionRelaunch(
-            open = { _, opening, folder ->
-                openNewChat(project, placement, opening, workingDirectory = folder, carry = carried)
+            open = { _, opened, folder ->
+                openNewChat(project, placement, opened, workingDirectory = folder, carry = carried)
             },
             close = {
                 place.close()
                 project.service<ChatSessions>().stopFromScreen(old)
             },
             workingDirectory = source.workingDirectory,
-        ).restart()
+            current = { source.resumeId },
+            afterClosed = { open ->
+                // The record is the old CLI's until its process is gone; the new one opens on the EDT after that.
+                afterJob(project.service<ClaudeSessionService>().closing(old)) {
+                    ApplicationManager.getApplication().invokeLater(open)
+                }
+            },
+        ).relaunch(null, opening)
     }
 
     /** Says why a rewind or fork did not happen in a balloon where it was clicked, else on the composer's line. */
@@ -564,14 +649,14 @@ class ChatPanel(
             val start = System.nanoTime()
             val transcript = view.transcript
             drafts.seed(draft, source)
-            val shown = rows.of(transcript)
+            val shown = rows.of(transcript, view.conversation, source.canSend.value)
             val sendable = source.canSend.value
             // A resume reads its earlier conversation before the CLI is up: until then the thread is loading.
             val starting = sendBlockOf(sendable, source.starting) == SendBlock.STARTING
             surface.loading(source.opensWithContent && starting && transcript.messages.size == 0)
             surface.show(shown) { transcript.approvals[it] }
             changesBar.show(changesBar(shown, changes.settled))
-            val composerState = composerState(view.conversation, transcript)
+            val composerState = composerState(view.conversation, transcript, sendable)
             composer.show(composerState, sendable, sendBlockOf(sendable, source.starting))
             limitBanner.show(composerState.rateLimit)
             running.show(runningTasks(transcript))

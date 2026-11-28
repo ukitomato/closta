@@ -33,6 +33,8 @@ import java.awt.RenderingHints
 import java.awt.event.FocusAdapter
 import java.awt.event.FocusEvent
 import java.awt.event.KeyEvent
+import java.awt.event.MouseAdapter
+import java.awt.event.MouseEvent
 import javax.swing.AbstractAction
 import javax.swing.Icon
 import javax.swing.JComponent
@@ -110,6 +112,21 @@ class ToolbarButton(
 
     /** Presses it as a click would, when it can be pressed. */
     fun click() = button.click()
+
+    /** Calls [show] with the button and the point of a press that asks for a context menu. */
+    fun onContextMenu(show: (JComponent, Int, Int) -> Unit) {
+        button.addMouseListener(
+            object : MouseAdapter() {
+                override fun mousePressed(e: MouseEvent) = menu(e)
+
+                override fun mouseReleased(e: MouseEvent) = menu(e)
+
+                private fun menu(e: MouseEvent) {
+                    if (e.isPopupTrigger) show(button, e.x, e.y)
+                }
+            },
+        )
+    }
 
     override fun setToolTipText(text: String?) {
         tip = text

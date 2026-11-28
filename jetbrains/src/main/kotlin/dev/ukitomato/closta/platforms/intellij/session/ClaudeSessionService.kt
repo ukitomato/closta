@@ -11,15 +11,21 @@ import com.intellij.openapi.util.SystemInfo
 import com.intellij.platform.util.coroutines.childScope
 import dev.ukitomato.closta.core.interfaces.SavedSessions
 import dev.ukitomato.closta.core.models.SavedSessionSummary
+import dev.ukitomato.closta.core.services.FileToolHooks
 import dev.ukitomato.closta.platforms.intellij.auth.BedrockSignInService
 import dev.ukitomato.closta.platforms.intellij.ide.IdeBridgeService
 import dev.ukitomato.closta.platforms.intellij.launch.IdeWsl
 import dev.ukitomato.closta.platforms.intellij.settings.BehaviourRecords
+import dev.ukitomato.closta.platforms.intellij.settings.BehaviourSettings
 import dev.ukitomato.closta.platforms.intellij.settings.ProviderPick
 import dev.ukitomato.closta.platforms.intellij.settings.ProviderSettings
 import dev.ukitomato.closta.platforms.intellij.settings.launchFor
 import dev.ukitomato.closta.platforms.intellij.store.AppSettingsStore
 import dev.ukitomato.closta.providers.claude.history.ProjectTranscripts
+import dev.ukitomato.closta.providers.claude.host.AFTER_EDIT
+import dev.ukitomato.closta.providers.claude.host.BEFORE_FILE_TOOL
+import dev.ukitomato.closta.providers.claude.host.ClaudeFileHooks
+import dev.ukitomato.closta.providers.claude.host.HostHooks
 import dev.ukitomato.closta.providers.claude.launch.WslLocation
 import dev.ukitomato.closta.providers.claude.launch.WslSpawner
 import dev.ukitomato.closta.providers.claude.mcp.ideContextServers
@@ -42,16 +48,19 @@ import java.util.concurrent.ConcurrentHashMap
  * Settings | Tools | Closta; an Amazon Bedrock provider signs in first, over this project's window.
  *
  * What the IDE can tell Claude: the project's [IdeBridgeService] is asked for the in-process MCP servers it
- * can back, and each session is given them. A bridge without diagnostics gives none, and the session is not wrapped.
+ * can back, and each session is given them. A bridge without diagnostics gives none; the process is wrapped all the
+ * same, so the host can answer even when there is nothing to answer for.
  *
  * A light project service: registered by the annotation, not in plugin.xml.
  */
 @Service(Service.Level.PROJECT)
+@Suppress("TooManyFunctions") // the project's sessions: open, close, list, and what each needs
 class ClaudeSessionService(
     private val project: Project,
     private val scope: CoroutineScope,
 ) : Disposable {
     private val sessions = ConcurrentHashMap<String, SessionRuntime>()
+    private val closing = ConcurrentHashMap<String, Job>()
 
     /**
      * Opens a new session and starts it; returns at once (spawning and the version check run off the calling thread).
@@ -84,15 +93,23 @@ class ClaudeSessionService(
                 { WslSpawner(it, ideWsl::runnerFor) },
                 IdeSessionLog,
             )
-        val gated = TrustGatedPlanner({ TrustedProjects.isProjectTrusted(project) }, wslAware)
+        val withRoots =
+            project.service<ContentRoots>().planner(
+                wslAware,
+                { behaviour().addContentRoots },
+                IdeSessionLog,
+            )
+        val gated = TrustGatedPlanner({ TrustedProjects.isProjectTrusted(project) }, withRoots)
+        val runtimeScope = scope.childScope("Claude session $id")
         val runtime =
             SessionRuntime(
                 id,
-                scope.childScope("Claude session $id"),
+                runtimeScope,
                 gated,
                 directory,
                 IdeSessionLog,
                 sdkServers = ideContextServers(ide, ide.cliPaths),
+                hostHooks = { fileHooks(ide, runtimeScope, IdeSessionLog::warn) { behaviour() } },
                 effort = effort,
                 opening = opening,
                 saved = projectTranscripts(directory, wsl, ideWsl),
@@ -109,7 +126,14 @@ class ClaudeSessionService(
      * Closes the session [id]; its process ends with its scope. The [Job] is complete when the process has ended or the
      * wait for it ran out; null for an unknown id, which is not touched.
      */
-    fun close(id: String): Job? = sessions.remove(id)?.closeJob()
+    fun close(id: String): Job? =
+        sessions.remove(id)?.closeJob()?.also { job ->
+            closing[id] = job
+            job.invokeOnCompletion { closing.remove(id, job) }
+        }
+
+    /** The close of the session [id] that has not finished: its process may still be writing its record. */
+    fun closing(id: String): Job? = closing[id]
 
     /**
      * The project's saved sessions, read from the CLI's record without starting a CLI (the sessions list names the
@@ -183,4 +207,35 @@ class ClaudeSessionService(
 
         override fun warn(message: String) = LOG.warn(message)
     }
+}
+
+// Read when a process starts: a hook is declared only while a setting that needs it is on, and each setting is read
+// again at every call, so turning one off in the middle of a process stops its work at once.
+private fun fileHooks(
+    ide: IdeBridgeService,
+    sessionScope: CoroutineScope,
+    log: (String) -> Unit,
+    settings: () -> BehaviourSettings,
+): HostHooks {
+    val hooks =
+        FileToolHooks(
+            sessionScope,
+            ide.unsavedDocuments,
+            { settings().saveBeforeSend },
+            log,
+            diagnostics = ide.diagnostics,
+            analysis = ide.analysisWait,
+            reportEnabled = { settings().reportNewErrors },
+        )
+    val now = settings()
+    return HostHooks(
+        declarations =
+            listOfNotNull(
+                BEFORE_FILE_TOOL.takeIf { now.saveBeforeSend || now.reportNewErrors },
+                AFTER_EDIT.takeIf { now.reportNewErrors },
+            ),
+        answerer = ClaudeFileHooks(hooks, ide.cliPaths),
+        turnEnded = hooks::turnEnded,
+        reports = hooks.reports,
+    )
 }

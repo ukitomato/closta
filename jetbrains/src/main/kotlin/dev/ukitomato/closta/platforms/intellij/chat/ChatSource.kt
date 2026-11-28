@@ -1,10 +1,12 @@
 package dev.ukitomato.closta.platforms.intellij.chat
 
+import com.intellij.ide.BrowserUtil
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
 import dev.ukitomato.closta.core.models.Attachment
+import dev.ukitomato.closta.core.models.ElicitationDecision
 import dev.ukitomato.closta.platforms.intellij.session.ClaudeSessionService
 import dev.ukitomato.closta.platforms.intellij.session.SandboxMemory
 import dev.ukitomato.closta.platforms.intellij.session.SessionNotice
@@ -14,6 +16,7 @@ import dev.ukitomato.closta.platforms.intellij.session.SessionView
 import dev.ukitomato.closta.platforms.intellij.session.resumeIdOf
 import dev.ukitomato.closta.platforms.intellij.store.AppSettingsStore
 import dev.ukitomato.closta.platforms.intellij.thread.CardAnswer
+import dev.ukitomato.closta.platforms.intellij.thread.ElicitationAnswer
 import dev.ukitomato.closta.presenter.view.RewindOutcome
 import dev.ukitomato.closta.presenter.view.RewindRecord
 import dev.ukitomato.closta.presenter.view.appliedSandbox
@@ -77,6 +80,9 @@ interface ChatSource : Disposable {
 
     suspend fun respond(answer: CardAnswer)
 
+    /** Answers an MCP server's request for input; a write that fails is written on the request, not thrown. */
+    suspend fun answerElicitation(answer: ElicitationAnswer)
+
     suspend fun interrupt()
 
     suspend fun stopTask(taskId: String)
@@ -87,8 +93,26 @@ interface ChatSource : Disposable {
     /** Asks the CLI for the session's cost and the plan's limits; the answer is the composer's usage. */
     suspend fun requestUsage()
 
+    /** Asks the CLI for the permission rules and working directories; the answer is the composer's rules. */
+    suspend fun requestPermissionRules()
+
     /** Asks the CLI for the context's whole breakdown; the answer is the composer's context. */
     suspend fun requestContextBreakdown()
+
+    /** Asks the CLI to reload the plugins; the answer is the view's plugins, and a refusal is the view's sentence. */
+    suspend fun reloadPlugins()
+
+    /** Names the running session [title]; the view takes the name when the CLI says it took it. */
+    suspend fun renameSession(title: String)
+
+    /** Withdraws the queued message the ask [askKey] sent, before the CLI starts it; the row says how it ended. */
+    suspend fun cancelQueued(askKey: String)
+
+    /** Moves the running call [toolUseId] to the background, or with null every one; its line says how it went. */
+    suspend fun moveToBackground(toolUseId: String?)
+
+    /** Asks the CLI for the end of the output of the shell task [taskId]; the answer is the view's output. */
+    suspend fun requestTaskOutput(taskId: String)
 
     suspend fun setMcpServerEnabled(
         name: String,
@@ -228,6 +252,27 @@ interface ChatSource : Disposable {
             )
         }
 
+        override suspend fun answerElicitation(answer: ElicitationAnswer) {
+            val commands = commands()
+            if (commands == null) {
+                runtime.elicitationNotSent(answer.requestId)
+                return
+            }
+            val sent =
+                answerOrMarkFailed(
+                    {
+                        commands.respondToElicitation(
+                            ElicitationDecision(answer.requestId, answer.action),
+                            answer.content,
+                        )
+                    },
+                    { commands.answerFailed(answer.requestId) },
+                    { thisLogger().warn(it) },
+                )
+            // The user goes on in the browser only once the CLI has the answer; a failed one is tried again.
+            if (sent) answer.openUrl?.let(BrowserUtil::browse)
+        }
+
         override suspend fun interrupt() {
             commands()?.interrupt()
         }
@@ -244,8 +289,36 @@ interface ChatSource : Disposable {
             commands()?.requestUsage()
         }
 
+        override suspend fun requestPermissionRules() {
+            commands()?.requestPermissionRules()
+        }
+
+        override suspend fun reloadPlugins() {
+            commands()?.reloadPlugins()
+        }
+
         override suspend fun requestContextBreakdown() {
             commands()?.requestContextUsage(full = true)
+        }
+
+        override suspend fun renameSession(title: String) {
+            val cliId =
+                view.value.conversation.session
+                    ?.sessionId ?: return
+            commands()?.renameSession(title, cliId)
+        }
+
+        override suspend fun cancelQueued(askKey: String) {
+            val uuid = view.value.transcript.userUuids[askKey] ?: return
+            commands()?.cancelQueuedMessage(uuid)
+        }
+
+        override suspend fun moveToBackground(toolUseId: String?) {
+            commands()?.backgroundTasks(toolUseId)
+        }
+
+        override suspend fun requestTaskOutput(taskId: String) {
+            commands()?.requestTaskOutput(taskId)
         }
 
         override suspend fun dismissRateLimit(seq: Int) {

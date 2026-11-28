@@ -17,6 +17,8 @@ data class ToolLine(
     val removed: Int? = null,
     /** Why the call was refused, when [state] is [ToolLineState.DENIED]. */
     val denial: Denial? = null,
+    /** The new IDE errors Claude was told this call introduced. */
+    val reported: ReportedErrors? = null,
 )
 
 private const val SUMMARY_MAX = 60
@@ -30,9 +32,17 @@ fun toolLine(call: ToolCallRecord): ToolLine {
     val label = if (summary == null) call.toolName else "${call.toolName}($summary)"
     val state = stateOf(call)
     return when (call.toolName) {
-        "Edit" -> ToolLine(state, label, input.lineCount("new_string"), input.lineCount("old_string"), call.denied)
-        "Write" -> ToolLine(state, label, input.lineCount("content"), null, call.denied)
-        else -> ToolLine(state, label, denial = call.denied)
+        "Edit" ->
+            ToolLine(
+                state,
+                label,
+                input.lineCount("new_string"),
+                input.lineCount("old_string"),
+                call.denied,
+                call.reportedErrors,
+            )
+        "Write" -> ToolLine(state, label, input.lineCount("content"), null, call.denied, call.reportedErrors)
+        else -> ToolLine(state, label, denial = call.denied, reported = call.reportedErrors)
     }
 }
 

@@ -4,9 +4,11 @@ import com.intellij.codeInsight.AutoPopupController
 import com.intellij.codeInsight.lookup.LookupManager
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CustomShortcutSet
+import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.editor.EditorModificationUtil
@@ -90,7 +92,6 @@ import java.nio.charset.CharacterCodingException
 import java.nio.charset.CodingErrorAction
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
-import java.util.Locale
 import javax.imageio.ImageIO
 import javax.swing.JComponent
 import javax.swing.JPanel
@@ -116,6 +117,9 @@ class ComposerPanel(
 ) {
     var onSend: (String, List<Attachment>, Outgoing) -> Unit = { _, _, _ -> }
     var onStop: () -> Unit = {}
+
+    /** The stop button's menu chose to move every running call to the background. */
+    var onBackgroundAll: () -> Unit = {}
     var onModel: (String) -> Unit = {}
     var onEffort: (String) -> Unit = {}
     var onMode: (String) -> Unit = {}
@@ -125,6 +129,9 @@ class ComposerPanel(
 
     /** The cost button was pressed: the CLI is asked for the session's cost and the plan's limits. */
     var onUsage: () -> Unit = {}
+
+    /** The permission rules were asked for from the mode menu: the CLI is asked for the rules and folders. */
+    var onRules: () -> Unit = {}
 
     /** The context ring was pressed, or its breakdown asked to count again: the CLI is asked for the whole one. */
     var onContext: () -> Unit = {}
@@ -181,6 +188,30 @@ class ComposerPanel(
             openContext(button)
         }
 
+    /** The stop button's context menu: send every running call to the background, grey while none runs in front. */
+    private fun stopMenu(
+        at: JComponent,
+        x: Int,
+        y: Int,
+    ) {
+        val movable = state?.canBackground == true
+        val action =
+            object : DumbAwareAction(ClostaBundle.message("composer.stop.backgroundAll")) {
+                override fun getActionUpdateThread() = ActionUpdateThread.EDT
+
+                override fun update(e: AnActionEvent) {
+                    e.presentation.isEnabled = movable
+                }
+
+                override fun actionPerformed(e: AnActionEvent) = onBackgroundAll()
+            }
+        ActionManager
+            .getInstance()
+            .createActionPopupMenu("ClostaComposerStop", DefaultActionGroup(action))
+            .component
+            .show(at, x, y)
+    }
+
     /** The composer popup that is open, one at a time (opened through [openPopup]); nothing else of it is kept. */
     private var openPopup: JBPopup? = null
 
@@ -192,6 +223,7 @@ class ComposerPanel(
     private val stop =
         ToolbarButton(null, AllIcons.Actions.Suspend, false) { onStop() }
             .tip(ClostaBundle.message("composer.stop.tooltip"))
+            .also { it.onContextMenu(::stopMenu) }
     private val status = StatusLine()
     private val confirm = JPanel(BorderLayout()).apply { isVisible = false }
     private val box = ComposerBox()
@@ -345,13 +377,10 @@ class ComposerPanel(
         val whole = listOfNotNull(next.model.label, effort?.let(::effortText)).joinToString(" · ")
         model.accessibleLabel = ClostaBundle.message("composer.model.accessible", whole)
         model.toolTipText = listOfNotNull(whole, next.model.resolved?.takeIf { it != whole }).joinToString(" — ")
-        val spent = next.costUsd
-        cost.isVisible = spent != null
-        if (spent != null) {
-            val amount = "%.2f".format(Locale.ROOT, spent)
-            cost.text = ClostaBundle.message("composer.usage.button", amount)
-            cost.accessibleLabel = ClostaBundle.message("composer.usage.accessible", amount)
-        }
+        cost.isVisible = sendable || next.costUsd != null
+        val amount = costLabel(next.costUsd)
+        cost.text = ClostaBundle.message("composer.usage.button", amount)
+        cost.accessibleLabel = ClostaBundle.message("composer.usage.accessible", amount)
         showCache(next)
         val used = next.context
         context.isVisible = used != null
@@ -540,6 +569,14 @@ class ComposerPanel(
         openPopup(usage.popup, under, usage::show)
     }
 
+    /** Opens the rules popup above [under], just asked for: it shows the composer's state until it is closed. */
+    private fun openRules(under: JComponent) {
+        val next = state ?: return
+        val rules = RulesPopup(project, next)
+        openPopup(rules.popup, under, rules::show)
+        onRules()
+    }
+
     /**
      * Opens the context's breakdown above [under], just asked for: it shows the composer's state until it is closed,
      * and, when the session runs (so the request was sent), says it is counting from the first frame, before the
@@ -581,7 +618,10 @@ class ComposerPanel(
         next: ComposerState,
         under: JComponent,
     ) {
-        ComposerPopups.showAbove(ComposerPopups.modes(next) { chosen -> chooseMode(chosen) }, under)
+        ComposerPopups.showAbove(
+            ComposerPopups.modes(next, live = sendable, rules = { openRules(under) }) { chosen -> chooseMode(chosen) },
+            under,
+        )
     }
 
     private fun showModels(

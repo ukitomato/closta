@@ -1,7 +1,12 @@
+// JSON wire lines are written whole, so that what is measured can be read as sent.
+@file:Suppress("MaxLineLength")
+
 package dev.ukitomato.closta.providers.claude.protocol
 
 import com.google.gson.JsonParser
 import dev.ukitomato.closta.providers.claude.fixtures.CaptureFixtures
+import dev.ukitomato.closta.providers.claude.host.AFTER_EDIT
+import dev.ukitomato.closta.providers.claude.host.BEFORE_FILE_TOOL
 import org.junit.jupiter.api.Assertions.assertAll
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -86,12 +91,75 @@ class CodecEncodeTest {
     }
 
     @Test
+    fun `initialize declares each hook with its matcher, callback id and timeout, and none as an empty object`() {
+        val line = StdinEncoder.initialize("r", emptyList(), listOf(BEFORE_FILE_TOOL, AFTER_EDIT))
+        val hooks = json(line).asJsonObject.getAsJsonObject("request").getAsJsonObject("hooks")
+        assertAll(
+            {
+                assertEquals(
+                    """{"matcher":"Edit|Write|NotebookEdit|Read","hookCallbackIds":["closta-before-file-tool"],"timeout":10}""",
+                    hooks.getAsJsonArray("PreToolUse")[0].toString(),
+                )
+            },
+            {
+                assertEquals(
+                    """{"matcher":"Edit|Write|NotebookEdit","hookCallbackIds":["closta-after-edit"],"timeout":10}""",
+                    hooks.getAsJsonArray("PostToolUse")[0].toString(),
+                )
+            },
+            {
+                assertEquals(
+                    "{}",
+                    json(StdinEncoder.initialize("r"))
+                        .asJsonObject
+                        .getAsJsonObject("request")
+                        .get("hooks")
+                        .toString(),
+                )
+            },
+        )
+    }
+
+    @Test
+    fun `a hook answer is a success carrying the answer and an error carries its words`() {
+        assertAll(
+            {
+                assertEquals(
+                    """{"type":"control_response","response":{"subtype":"success","request_id":"h","response":{"continue":true}}}""",
+                    StdinEncoder.hookResponse("h", """{"continue":true}"""),
+                )
+            },
+            {
+                assertEquals(
+                    """{"type":"control_response","response":{"subtype":"error","request_id":"h","error":"unknown hook callback"}}""",
+                    StdinEncoder.controlError("h", "unknown hook callback"),
+                )
+            },
+        )
+    }
+
+    @Test
     fun `an mcp answer is a success control_response carrying the JSON-RPC answer as mcp_response`() {
         val line = StdinEncoder.mcpResponse("Q", """{"jsonrpc":"2.0","id":3,"result":{"tools":[]}}""")
         val expected =
             """{"type":"control_response","response":{"subtype":"success","request_id":"Q",""" +
                 """"response":{"mcp_response":{"jsonrpc":"2.0","id":3,"result":{"tools":[]}}}}}"""
         assertEquals(expected, line)
+    }
+
+    @Test
+    fun `an elicitation answer carries the action, and the content only when there is one`() {
+        val accepted = json(StdinEncoder.elicitationResponse("r", "accept", """{"name":"Ada"}""")).asJsonObject
+        val declined = json(StdinEncoder.elicitationResponse("r", "decline", null)).asJsonObject
+        val acceptedBody = accepted.getAsJsonObject("response").getAsJsonObject("response")
+        val declinedBody = declined.getAsJsonObject("response").getAsJsonObject("response")
+
+        assertAll(
+            { assertEquals("""{"action":"accept","content":{"name":"Ada"}}""", acceptedBody.toString()) },
+            { assertEquals("""{"action":"decline"}""", declinedBody.toString()) },
+            { assertEquals("success", accepted.getAsJsonObject("response")["subtype"].asString) },
+            { assertEquals("r", accepted.getAsJsonObject("response")["request_id"].asString) },
+        )
     }
 
     @Test
@@ -155,6 +223,39 @@ class CodecEncodeTest {
                     """"request":{"subtype":"get_usage","skip_behaviors":true}}""",
             ),
             json(StdinEncoder.getUsage("r1")),
+        )
+    }
+
+    @Test
+    fun `type only - cancel_async_message carries the message uuid`() {
+        assertEquals(
+            json(
+                """{"type":"control_request","request_id":"r1",""" +
+                    """"request":{"subtype":"cancel_async_message","message_uuid":"m-1"}}""",
+            ),
+            json(StdinEncoder.cancelAsyncMessage("r1", "m-1")),
+        )
+    }
+
+    @Test
+    fun `type only - list_permission_rules is a bare control request`() {
+        assertEquals(
+            json(
+                """{"type":"control_request","request_id":"r8","request":{"subtype":"list_permission_rules"}}""",
+            ),
+            json(StdinEncoder.listPermissionRules("r8")),
+        )
+    }
+
+    @Test
+    fun `type only - rename_session carries the title, host as its source and the session id`() {
+        assertEquals(
+            json(
+                """{"type":"control_request","request_id":"r7",""" +
+                    """"request":{"subtype":"rename_session","title":"Fix the \"login\" bug","source":"host",""" +
+                    """"session_id":"336ed47b-2675-4317-b3f5-a3b48abb03a2"}}""",
+            ),
+            json(StdinEncoder.renameSession("r7", "Fix the \"login\" bug", "336ed47b-2675-4317-b3f5-a3b48abb03a2")),
         )
     }
 
@@ -299,6 +400,47 @@ class CodecEncodeTest {
                     StdinEncoder.allow("R", """{"a":1}"""),
                 )
             },
+        )
+    }
+
+    @Test
+    fun `type only - reload_plugins asks to be refused when busy, and has no field when false`() {
+        assertEquals(
+            json(
+                """{"type":"control_request","request_id":"r9",""" +
+                    """"request":{"subtype":"reload_plugins","refuse_if_busy":true}}""",
+            ),
+            json(StdinEncoder.reloadPlugins("r9", refuseIfBusy = true)),
+        )
+        assertEquals(
+            json("""{"type":"control_request","request_id":"r9","request":{"subtype":"reload_plugins"}}"""),
+            json(StdinEncoder.reloadPlugins("r9", refuseIfBusy = false)),
+        )
+    }
+
+    @Test
+    fun `type only - background_tasks names the tool use, or none for all`() {
+        assertEquals(
+            json(
+                """{"type":"control_request","request_id":"b1",""" +
+                    """"request":{"subtype":"background_tasks","tool_use_id":"toolu_1"}}""",
+            ),
+            json(StdinEncoder.backgroundTasks("b1", "toolu_1")),
+        )
+        assertEquals(
+            json("""{"type":"control_request","request_id":"b2","request":{"subtype":"background_tasks"}}"""),
+            json(StdinEncoder.backgroundTasks("b2", null)),
+        )
+    }
+
+    @Test
+    fun `type only - get_task_output names the task`() {
+        assertEquals(
+            json(
+                """{"type":"control_request","request_id":"o1",""" +
+                    """"request":{"subtype":"get_task_output","task_id":"bxyz"}}""",
+            ),
+            json(StdinEncoder.getTaskOutput("o1", "bxyz")),
         )
     }
 }

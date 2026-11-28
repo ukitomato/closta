@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Timeout
 /**
  * Runs the shared [AgentSessionContract] against [FakeAgentSession], and adds fake-specific checks that the
  * double records over the interface what the shared suite (which only observes `events`) cannot see — the
- * `sent` decisions, the AFK payload, and the model switch.
+ * `sent` decisions and the model switch.
  *
  * Scripts are built from the recorded captures via [CaptureFixtures.readCapture] (which decodes each line
  * with the production `StreamJsonCodec` — no second decoder) and the shared beat
@@ -20,8 +20,6 @@ import org.junit.jupiter.api.Timeout
  */
 class FakeAgentSessionContractTest : AgentSessionContract() {
     override fun sessionFor(scenario: Scenario): AgentSession = FakeAgentSession(scriptFor(scenario))
-
-    override fun afkPayload(): String = AFK_PAYLOAD
 
     override fun updatedPermissionsGiven(session: AgentSession): List<String?> =
         (session as FakeAgentSession).sent.filterIsInstance<Sent.Approval>().map { it.updatedPermissions }
@@ -41,6 +39,11 @@ class FakeAgentSessionContractTest : AgentSessionContract() {
             }
         }
 
+    override fun elicitationsGiven(session: AgentSession): List<Triple<String, String, String?>> =
+        (session as FakeAgentSession).sent.filterIsInstance<Sent.Elicitation>().map {
+            Triple(it.decision.requestId, it.decision.action.wire, it.content)
+        }
+
     override fun uuidsGiven(session: AgentSession): List<String?> =
         (session as FakeAgentSession).sent.filterIsInstance<Sent.UserMessage>().map { it.uuid }
 
@@ -54,7 +57,6 @@ class FakeAgentSessionContractTest : AgentSessionContract() {
             Scenario.SEND_TURN -> FakeScript(beatsEmitting(capture(BASELINE)))
             Scenario.APPROVAL_ALLOW, Scenario.APPROVAL_DENY, Scenario.INTERRUPT, Scenario.UNANSWERED ->
                 FakeScript(beatsAwaitingAfterControlRequests(capture(PERMISSION)))
-            Scenario.AFK_TIMEOUT -> FakeScript(beatsAwaitingAfterControlRequests(capture(ASK_AFK)))
             Scenario.DROPPED_CONNECTION ->
                 FakeScript(
                     beatsEmitting(capture(BASELINE)),
@@ -78,19 +80,6 @@ class FakeAgentSessionContractTest : AgentSessionContract() {
             }
             assertTrue(session.sent.any { it is Sent.Approval && it.decision is ApprovalDecision.Deny }) {
                 "the fake should record the deny it received (both must be recorded)"
-            }
-        }
-
-    @Test
-    @Timeout(TIMEOUT_SECONDS)
-    fun `the fake records the afk timeout payload verbatim`() =
-        runBlocking {
-            val session = FakeAgentSession(FakeScript(emptyList()))
-            session.respondToApproval(ApprovalDecision.AfkTimeout("req-afk"), AFK_PAYLOAD)
-            val approval = session.sent.filterIsInstance<Sent.Approval>().single()
-            assertTrue(approval.decision is ApprovalDecision.AfkTimeout) { "the decision is an afk timeout" }
-            assertTrue(approval.payload?.contains("afkTimeoutMs") == true) {
-                "the afk window is carried in the payload"
             }
         }
 
@@ -123,8 +112,6 @@ class FakeAgentSessionContractTest : AgentSessionContract() {
     private companion object {
         const val BASELINE = "01-baseline-text.ndjson"
         const val PERMISSION = "05-permission-can-use-tool.ndjson"
-        const val ASK_AFK = "15-ask-afktimeout-updatedinput.ndjson"
-        const val AFK_PAYLOAD = """{"afkTimeoutMs":5000}"""
         const val TIMEOUT_SECONDS = 30L
     }
 }

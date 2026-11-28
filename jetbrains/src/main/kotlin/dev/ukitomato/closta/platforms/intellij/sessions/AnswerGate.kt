@@ -2,6 +2,7 @@ package dev.ukitomato.closta.platforms.intellij.sessions
 
 import dev.ukitomato.closta.core.interfaces.Clock
 import dev.ukitomato.closta.platforms.intellij.thread.CardAnswer
+import dev.ukitomato.closta.platforms.intellij.thread.ElicitationAnswer
 import dev.ukitomato.closta.presenter.view.ANSWER_DELAY_MS
 import dev.ukitomato.closta.presenter.view.ShownAsk
 import dev.ukitomato.closta.presenter.view.acceptsAnswer
@@ -70,6 +71,7 @@ internal class AnswerGate(
     fun ask(
         requestId: String,
         waitingNow: () -> Set<String>,
+        deliverElicitation: (ElicitationAnswer, failed: () -> Unit) -> Unit = { _, _ -> },
         deliver: (CardAnswer, failed: () -> Unit) -> Unit,
     ): Ask {
         val before =
@@ -78,7 +80,7 @@ internal class AnswerGate(
             }
         shown = before.copy(since = clock.now())
         arm()
-        return Ask(requestId, waitingNow, deliver).also { current = it }
+        return Ask(requestId, waitingNow, deliver, deliverElicitation).also { current = it }
     }
 
     fun dispose() = reset()
@@ -110,6 +112,7 @@ internal class AnswerGate(
         val requestId: String,
         private val waitingNow: () -> Set<String>,
         private val deliver: (CardAnswer, failed: () -> Unit) -> Unit,
+        private val deliverElicitation: (ElicitationAnswer, failed: () -> Unit) -> Unit = { _, _ -> },
     ) {
         private var sent = false
         private val guarded = ArrayList<Pair<JComponent, () -> Boolean>>()
@@ -145,6 +148,17 @@ internal class AnswerGate(
                 sent = true
                 refresh()
                 deliver(answer) { onFailed() }
+            }
+            return answer != null
+        }
+
+        /** [send] for the answer to an MCP server's request for input. */
+        fun sendElicitation(make: () -> ElicitationAnswer?): Boolean {
+            val answer = if (accepts()) make() else null
+            if (answer != null) {
+                sent = true
+                refresh()
+                deliverElicitation(answer) { onFailed() }
             }
             return answer != null
         }

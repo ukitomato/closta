@@ -21,7 +21,7 @@ class AgentTab(
     parent: Disposable,
 ) {
     private val surface: ThreadSurface = SwingThreadSurface(project)
-    private val rows = ThreadRows()
+    private val rows = ThreadRows(offersBackground = false)
 
     val component: JComponent get() = surface.component
 
@@ -32,7 +32,7 @@ class AgentTab(
     /** Draws the subagent's part of [view] (on the EDT). */
     fun show(view: SessionView) {
         val transcript = agentTranscript(view.transcript, toolUseId) ?: return
-        surface.show(rows.of(transcript)) { view.transcript.approvals[it] }
+        surface.show(rows.of(transcript, view.conversation)) { view.transcript.approvals[it] }
     }
 
     /** Whether the call that started the subagent has its result, and whether that result is an error. */

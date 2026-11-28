@@ -57,7 +57,7 @@ class IdeContextServerPathsTest {
     @Test
     fun `a file URI and a Linux path reach the IDE as the UNC path, and the uri told back is the Linux one`() {
         val fake = Fake(listOf(found))
-        val server = IdeContextServer(fake, wsl)
+        val server = IdeContextServer(FakeIde(diagnostics = fake), wsl)
         val first = call(server, """{"uri":"file:///home/u/proj/a.kt"}""")
         val second = call(server, """{"uri":"/home/u/proj/a.kt"}""")
         assertEquals(listOf<String?>(ideFile, ideFile), fake.asked)
@@ -68,7 +68,7 @@ class IdeContextServerPathsTest {
     @Test
     fun `with no mouth given the argument and the uri are as before`() {
         val fake = Fake(listOf(Diagnostic("/work/A.kt", 3, 5, DiagnosticSeverity.ERROR, "m", null)))
-        val server = IdeContextServer(fake)
+        val server = IdeContextServer(FakeIde(diagnostics = fake))
         val answer = call(server, """{"uri":"file:///work/A.kt"}""")
         assertEquals(listOf<String?>("/work/A.kt"), fake.asked)
         assertEquals(listOf("file:///work/A.kt"), uris(answer))
@@ -77,7 +77,7 @@ class IdeContextServerPathsTest {
     @Test
     fun `an argument that is not a file path of the project is refused as before`() {
         val fake = Fake(emptyList())
-        val server = IdeContextServer(fake, wsl)
+        val server = IdeContextServer(FakeIde(diagnostics = fake), wsl)
         listOf("file://host/home/u/a.kt", "file:foo", "src/a.kt", "file:///home/u/a.kt?x=1").forEach {
             val answer = call(server, """{"uri":"$it"}""")
             assertEquals(true, answer.getAsJsonObject("result").get("isError").asBoolean, it)

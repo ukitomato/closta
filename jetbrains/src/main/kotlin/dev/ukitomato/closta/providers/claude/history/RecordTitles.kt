@@ -122,7 +122,8 @@ internal object RecordTitles {
         }
     }
 
-    private fun takeName(
+    /** Folds [line] into [names] when it is one of the lines that name a session. */
+    fun takeName(
         line: String,
         names: Names,
     ) {

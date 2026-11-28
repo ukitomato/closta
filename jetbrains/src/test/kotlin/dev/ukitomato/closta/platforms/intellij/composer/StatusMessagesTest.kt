@@ -98,4 +98,20 @@ class StatusMessagesTest {
         assertFalse(answersLate(SwitchKind.SANDBOX))
         assertTrue(listOf(SwitchKind.MODEL, SwitchKind.MODE, SwitchKind.EFFORT).all(::answersLate))
     }
+
+    @Test
+    fun theCostReadsAsZeroBeforeAnyIsKnown() {
+        assertEquals("0.00", costLabel(null))
+        assertEquals("0.00", costLabel(0.0))
+        assertEquals("0.12", costLabel(0.123))
+    }
+
+    @Test
+    fun theBreakdownCountsOnlyWhileARequestIsOrWasJustMade() {
+        assertEquals(BreakdownBody.ROWS, breakdownBody(2, waiting = false, forced = false))
+        assertEquals(BreakdownBody.ROWS, breakdownBody(2, waiting = true, forced = true))
+        assertEquals(BreakdownBody.COUNTING, breakdownBody(0, waiting = true, forced = false))
+        assertEquals(BreakdownBody.COUNTING, breakdownBody(0, waiting = false, forced = true))
+        assertEquals(BreakdownBody.RECOUNT, breakdownBody(0, waiting = false, forced = false))
+    }
 }

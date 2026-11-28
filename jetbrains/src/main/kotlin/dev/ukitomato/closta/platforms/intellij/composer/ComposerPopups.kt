@@ -4,6 +4,7 @@ import com.intellij.icons.AllIcons
 import com.intellij.openapi.ui.popup.JBPopup
 import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.ui.ColoredListCellRenderer
+import com.intellij.ui.JBColor
 import com.intellij.ui.ScreenUtil
 import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.awt.RelativePoint
@@ -34,13 +35,23 @@ object ComposerPopups {
     private fun modeHint(mode: String): String? =
         if (mode in MODE_HINTS) ClostaBundle.message("composer.mode.hint.$mode") else null
 
+    // The last row of the mode menu is no mode: it opens the permission rules.
+    private const val RULES_ROW = "\u0000rules"
+
+    /**
+     * The permission modes, and under them, apart, the row that opens the permission rules ([rules]); it is greyed and
+     * does nothing while no session is [live] to answer.
+     */
     fun modes(
         state: ComposerState,
+        live: Boolean,
+        rules: () -> Unit,
         chosen: (String) -> Unit,
-    ): JBPopup =
-        JBPopupFactory
+    ): JBPopup {
+        lateinit var popupOf: JBPopup
+        return JBPopupFactory
             .getInstance()
-            .createPopupChooserBuilder(state.modes)
+            .createPopupChooserBuilder(state.modes + RULES_ROW)
             .setTitle(ClostaBundle.message("composer.modes.title"))
             .setAdText(ClostaBundle.message("composer.modes.ad"))
             .setRenderer(
@@ -52,6 +63,15 @@ object ComposerPopups {
                         selected: Boolean,
                         hasFocus: Boolean,
                     ) {
+                        border = null
+                        if (value == RULES_ROW) {
+                            border = JBUI.Borders.customLine(JBColor.border(), 1, 0, 0, 0)
+                            append(ClostaBundle.message("composer.modes.rules"), if (live) REGULAR else GRAYED)
+                            icon =
+                                com.intellij.util.ui.EmptyIcon
+                                    .create(JBUI.scale(ICON))
+                            return
+                        }
                         val warn = value == BYPASS
                         append(modeText(value), SimpleTextAttributes.REGULAR_ATTRIBUTES)
                         modeHint(value)?.let { append("  $it", SimpleTextAttributes.GRAYED_ATTRIBUTES) }
@@ -67,8 +87,15 @@ object ComposerPopups {
                     }
                 },
             ).setSelectedValue(state.mode, true)
-            .setItemChosenCallback(chosen)
-            .createPopup()
+            // A greyed row is not chosen: the popup stays as it is. Any other choice closes it, as it did before.
+            .setCloseOnEnter(false)
+            .setItemChosenCallback { value ->
+                if (value == RULES_ROW && !live) return@setItemChosenCallback
+                popupOf.cancel()
+                if (value == RULES_ROW) rules() else chosen(value)
+            }.createPopup()
+            .also { popupOf = it }
+    }
 
     /**
      * The models the CLI offers, a model the list does not name first and disabled, then the Effort levels of the model

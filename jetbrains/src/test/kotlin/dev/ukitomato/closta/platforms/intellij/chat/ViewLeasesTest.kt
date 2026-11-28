@@ -2,13 +2,20 @@ package dev.ukitomato.closta.platforms.intellij.chat
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class ViewLeasesTest {
     private val changed = mutableListOf<String>()
     private val unheld = mutableListOf<String>()
-    private val leases = ViewLeases(onChange = { changed += it }, onUnheld = { unheld += it })
+    private val lefts = mutableListOf<LeftView?>()
+    private val leases =
+        ViewLeases(onChange = { changed += it }, onUnheld = { id, left ->
+            unheld += id
+            lefts += left
+        })
+    private val left = LeftView("p1", Placement.SIDEBAR, "a title", "/work")
 
     @Test
     fun returningTheLastLeaseTellsItOnce() {
@@ -22,13 +29,40 @@ class ViewLeasesTest {
     }
 
     @Test
+    fun leavingBeforeTheReleaseTellsWhatWasLeft() {
+        val a = leases.lease("s1")
+        a.leaving(left)
+        a.release()
+        assertEquals(listOf<LeftView?>(left), lefts)
+    }
+
+    @Test
+    fun aReleaseWithoutLeavingTellsNothingWasLeft() {
+        leases.lease("s1").release()
+        assertEquals(listOf<LeftView?>(null), lefts)
+    }
+
+    @Test
+    fun theLastLeavingIsTheOneTold() {
+        val a = leases.lease("s1")
+        val b = leases.lease("s1")
+        a.leaving(LeftView("p1", Placement.EDITOR_TAB, "first", null))
+        b.leaving(left)
+        a.release()
+        b.release()
+        assertEquals(listOf<LeftView?>(left), lefts)
+    }
+
+    @Test
     fun aMoveIsNeverTold() {
         val old = leases.lease("s1")
+        old.leaving(left)
         moveChat(leases, "s1", openNew = {
             leases.lease("s1")
             true
         }, closeOld = old::release, later = { it() })
         assertEquals(emptyList<String>(), unheld, "the bridge and the new place hold it")
+        assertEquals(emptyList<LeftView?>(), lefts)
     }
 
     @Test
@@ -79,6 +113,47 @@ class ViewLeasesTest {
         leases.lease("s1").visible(true)
         assertTrue(leases.isVisible("s1"))
         assertFalse(leases.isVisible("s2"))
+    }
+}
+
+class ClosedOnUnholdTest {
+    private class Sink(
+        override val closing: Boolean = false,
+    ) : ClosedSink {
+        var stack = ClosedChatStack()
+
+        override fun closed(chat: ClosedChat) {
+            stack = stack.closed(chat)
+        }
+    }
+
+    private val left = LeftView("p1", Placement.SIDEBAR, "a title", "/work")
+
+    private fun leasesInto(sinks: Map<String, Sink>) =
+        ViewLeases(onUnheld = { id, gone -> rememberClosedIn(id, gone) { sinks[it] } })
+
+    @Test
+    fun aConversationTheUserClosedIsStackedInItsProject() {
+        val sink = Sink()
+        val lease = leasesInto(mapOf("p1" to sink)).lease("s1")
+        lease.leaving(left)
+        lease.release()
+        assertEquals(ClosedChat("s1", Placement.SIDEBAR, "a title", "/work"), sink.stack.latest())
+    }
+
+    @Test
+    fun nothingIsStackedWithoutLeavingForAClosingProjectOrAnUnknownOne() {
+        val sink = Sink()
+        leasesInto(mapOf("p1" to sink)).lease("s1").release()
+        val closing = Sink(closing = true)
+        val lease = leasesInto(mapOf("p1" to closing)).lease("s2")
+        lease.leaving(left)
+        lease.release()
+        val other = leasesInto(emptyMap()).lease("s3")
+        other.leaving(left)
+        other.release()
+        assertNull(sink.stack.latest())
+        assertNull(closing.stack.latest())
     }
 }
 

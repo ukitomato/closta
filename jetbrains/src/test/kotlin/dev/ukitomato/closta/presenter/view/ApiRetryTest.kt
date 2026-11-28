@@ -3,6 +3,7 @@ package dev.ukitomato.closta.presenter.view
 import dev.ukitomato.closta.core.models.AgentEvent
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Test
 
 /** `system/api_retry`, which no capture carries: the lines are made by hand. */
@@ -43,6 +44,12 @@ class ApiRetryTest {
     @Test
     fun `type only - a stream event with nothing to end returns the same records`() {
         val before = openTurn.transcript.operations
-        assertEquals(true, before === openTurn.feed(Lines.messageStart("m")).transcript.operations)
+        assertSame(before, openTurn.feed(Lines.messageStart("m")).transcript.operations)
+    }
+
+    @Test
+    fun `type only - a second retry replaces the first`() {
+        val again = AgentEvent.SystemApiRetry("u2", "s-1", 3, 10, 5000, 529, "overloaded")
+        assertEquals(RetryRecord(3, 10, 5000, 529), openTurn.feed(retrying, again).retry())
     }
 }

@@ -22,6 +22,7 @@ import dev.ukitomato.closta.platforms.intellij.ui.noHtml
 import dev.ukitomato.closta.platforms.intellij.ui.plainTip
 import dev.ukitomato.closta.presenter.view.ApprovalOutcome
 import dev.ukitomato.closta.presenter.view.ApprovalRecord
+import dev.ukitomato.closta.presenter.view.ElicitationCard
 import dev.ukitomato.closta.presenter.view.PassedOn
 import dev.ukitomato.closta.presenter.view.PermissionCard
 import dev.ukitomato.closta.presenter.view.PermissionChoice
@@ -79,7 +80,11 @@ class CardViews(
     private val resized: (JComponent) -> Unit = {},
     /** The card that had the keyboard was answered, or its key to go back pressed: the keyboard goes back. */
     private val letGo: () -> Unit = {},
+    private val answerElicitation: (ElicitationAnswer) -> Unit = {},
 ) {
+    // What was typed in the forms that wait: a row made again (scrolled away and back) is given it back.
+    private val drafts = ElicitationDrafts()
+
     // The card that had the keyboard when it was made again (its answer failed, or it was answered), by request, and
     // the part of it that had it ([focusRole]): the card made next for that request takes it back, or lets it go.
     private var refocus: Pair<String, String>? = null
@@ -91,6 +96,7 @@ class CardViews(
         val made =
             when {
                 card is PlanCard -> plan(card)
+                card is ElicitationCard -> elicitation(card)
                 outcome != null -> answeredLine(outcome, outcomeText(card, outcome), about(card))
                 card is PermissionCard -> PermissionView(card)
                 card is QuestionCard -> QuestionCardView(card)
@@ -105,6 +111,11 @@ class CardViews(
         return made
     }
 
+    private fun elicitation(card: ElicitationCard): JComponent =
+        ElicitationCardView(card, {
+            answerElicitation(it)
+        }, resized, letGo, drafts, focusScope)
+
     private fun about(card: ThreadCard): String? =
         when (card) {
             is PermissionCard ->
@@ -114,6 +125,7 @@ class CardViews(
                 } ?: card.subject
             is QuestionCard -> card.questions.firstOrNull()?.text
             is PlanCard -> null
+            is ElicitationCard -> card.heading
         }
 
     /**
@@ -126,6 +138,10 @@ class CardViews(
         component: JComponent,
         card: ThreadCard,
     ): Boolean {
+        if (card is ElicitationCard && component is ElicitationCardView) {
+            component.show(card)
+            return true
+        }
         focusRole(KeyboardFocusManager.getCurrentKeyboardFocusManager().focusOwner, component)?.let { role ->
             refocus = card.requestId to role
         }
@@ -138,6 +154,7 @@ class CardViews(
         // same row a second time inside this one.
         SwingUtilities.invokeLater { tabs.openOnce(card) }
         val outcome = card.answered
+        if (outcome != null) SwingUtilities.invokeLater { tabs.answered(card) }
         return if (outcome != null) {
             answeredLine(outcome, planOutcomeText(outcome), planTitle(card.plan))
         } else {
@@ -155,7 +172,7 @@ class CardViews(
             ApprovalOutcome.DENIED ->
                 ClostaBundle.message(if (card is QuestionCard) "thread.card.notAnswered" else "thread.card.denied")
             ApprovalOutcome.CANCELLED -> ClostaBundle.message("thread.card.cancelled")
-            ApprovalOutcome.EXPIRED -> ClostaBundle.message("thread.card.expired")
+            ApprovalOutcome.WITHDRAWN -> ClostaBundle.message("thread.card.withdrawn")
         }
 
     private fun takeFocusIfHere(target: JComponent) {

@@ -19,6 +19,7 @@ import dev.ukitomato.closta.presenter.view.AskAction
 import dev.ukitomato.closta.presenter.view.AskActions
 import dev.ukitomato.closta.presenter.view.CardRow
 import dev.ukitomato.closta.presenter.view.ThreadRow
+import dev.ukitomato.closta.presenter.view.waits
 import dev.ukitomato.closta.providers.claude.launch.CliPaths
 import java.awt.Point
 import java.awt.Rectangle
@@ -43,6 +44,9 @@ import javax.swing.ScrollPaneConstants
 interface ThreadSurface : Disposable {
     val component: JComponent
 
+    /** The host's id of the session the surface shows: what a plan's tab finds the session by. */
+    var sessionId: String
+
     /** Draws [rows] (on the EDT). [approval] finds the request a card answers. */
     fun show(
         rows: List<ThreadRow>,
@@ -50,6 +54,9 @@ interface ThreadSurface : Disposable {
     )
 
     var onAnswer: (CardAnswer) -> Unit
+
+    /** The user answered an MCP server's request for input. */
+    var onElicitationAnswer: (ElicitationAnswer) -> Unit
 
     /**
      * The keyboard leaves the thread for the composer: the card that had it was answered and went, or its key to go
@@ -71,6 +78,12 @@ interface ThreadSurface : Disposable {
 
     var onOpenAgent: (toolUseId: String) -> Unit
     var onReview: (askKey: String) -> Unit
+
+    /** The user chose to withdraw the message the ask [askKey] sent. */
+    var onCancelQueued: (askKey: String) -> Unit
+
+    /** The user chose to move the running call [toolUseId] to the background. */
+    var onMoveToBackground: (toolUseId: String) -> Unit
 
     /** The CLI said it is not signed in, and the user chose to sign in. */
     var onSignIn: () -> Unit
@@ -131,12 +144,16 @@ class SwingThreadSurface(
     /** An editor tab's conversation: wider room at its sides. */
     roomy: Boolean = false,
 ) : ThreadSurface {
+    override var sessionId: String = ""
     override var onAnswer: (CardAnswer) -> Unit = {}
+    override var onElicitationAnswer: (ElicitationAnswer) -> Unit = {}
     override var onLetGo: () -> Unit = {}
     override var onWaitingOffScreen: (Int) -> Unit = {}
     private var offScreenTold = -1
     override var onOpenAgent: (String) -> Unit = {}
     override var onReview: (String) -> Unit = {}
+    override var onCancelQueued: (String) -> Unit = {}
+    override var onMoveToBackground: (String) -> Unit = {}
     override var onSignIn: () -> Unit = {}
     override var askActions: (String, Boolean) -> AskActions = { _, _ -> AskActions(null, null, null, null) }
     override var onAskAction: (String, Boolean, AskAction) -> Unit = { _, _, _ -> }
@@ -144,6 +161,8 @@ class SwingThreadSurface(
 
     private val markdown = MarkdownBlocks(project)
     private val shown = ShownRows(markdown::of)
+
+    @Suppress("TooManyFunctions") // one function per thing a row can ask of the surface
     private val actions =
         object : RowActions {
             override fun answer(answer: CardAnswer) = onAnswer(answer)
@@ -151,6 +170,10 @@ class SwingThreadSurface(
             override fun openAgent(toolUseId: String) = onOpenAgent(toolUseId)
 
             override fun review(askKey: String) = onReview(askKey)
+
+            override fun cancelQueued(askKey: String) = onCancelQueued(askKey)
+
+            override fun moveToBackground(toolUseId: String) = onMoveToBackground(toolUseId)
 
             override fun signIn() = onSignIn()
 
@@ -190,10 +213,11 @@ class SwingThreadSurface(
                     { onAnswer(it) },
                     { scroll },
                     { openEditDiff(project, it) },
-                    PlanTabs(project),
+                    PlanTabs(project) { sessionId },
                     { path -> openCliPath(project, path) },
                     { column.remeasureHolding(it) },
                     { onLetGo() },
+                    { onElicitationAnswer(it) },
                 ),
             ),
             roomy,
@@ -330,7 +354,7 @@ class SwingThreadSurface(
         approval: (String) -> ApprovalRecord?,
     ) {
         approvals = approval
-        waiting = rows.filter { it is CardRow && it.card.answered == null }.map { it.key }
+        waiting = rows.filter { it is CardRow && it.card.waits }.map { it.key }
         val following = atBottom()
         column.setRows(shown.of(rows))
         // Twice: the first move brings the last rows in sight and they are measured, which can change the height.

@@ -8,6 +8,7 @@ import dev.ukitomato.closta.presenter.view.threadIsRunning
 import dev.ukitomato.closta.providers.claude.FakeSavedSessions
 import dev.ukitomato.closta.providers.claude.fixtures.CaptureFixtures
 import dev.ukitomato.closta.providers.claude.history.CapturedTranscript
+import dev.ukitomato.closta.providers.claude.host.HostHooks
 import dev.ukitomato.closta.providers.claude.launch.ClaudeLaunchSpec
 import dev.ukitomato.closta.providers.claude.protocol.StdinEncoder
 import kotlinx.coroutines.CoroutineScope
@@ -68,12 +69,14 @@ class SessionRuntimeSandboxTest {
     private fun childOf(parent: CoroutineScope) =
         CoroutineScope(parent.coroutineContext + SupervisorJob(parent.coroutineContext.job))
 
+    @Suppress("LongParameterList") // the test runtime's knobs, each with a default
     private fun runtime(
         processes: Processes,
         parent: CoroutineScope,
         sandbox: Boolean = false,
         opening: SessionOpening = SessionOpening.New,
         saved: FakeSavedSessions? = null,
+        hostHooks: () -> HostHooks = { HostHooks() },
     ) = SessionRuntime(
         opening.savedId ?: ID,
         childOf(parent),
@@ -90,6 +93,7 @@ class SessionRuntimeSandboxTest {
         saved = saved,
         closeWait = GUARD,
         sandbox = sandbox,
+        hostHooks = hostHooks,
     )
 
     private fun <T> withParent(block: suspend (CoroutineScope) -> T): T =
@@ -158,7 +162,9 @@ class SessionRuntimeSandboxTest {
             assertEquals(ClaudeLaunchSpec.SANDBOX_SETTINGS, processes.argvs().single().flagValue("--settings"))
             assertTrue(runtime.view.value.transcript.operations.launchSandbox)
             val first = withContext(Dispatchers.IO) { processes.spawned[0].nextStdinLine(GUARD.inWholeMilliseconds) }
-            assertTrue(checkNotNull(first).contains("\"subtype\":\"get_settings\""), "the settings are asked at once")
+            assertTrue(checkNotNull(first).contains("\"subtype\":\"initialize\""), "initialize comes first")
+            val second = withContext(Dispatchers.IO) { processes.spawned[0].nextStdinLine(GUARD.inWholeMilliseconds) }
+            assertTrue(checkNotNull(second).contains("\"subtype\":\"get_settings\""), "the settings are asked at once")
             runtime.close()
         }
 
@@ -188,6 +194,33 @@ class SessionRuntimeSandboxTest {
             assertEquals(ClaudeLaunchSpec.SANDBOX_SETTINGS, processes.argvs()[1].flagValue("--settings"))
             assertEquals(before.transcript.messages.size, runtime.view.value.transcript.messages.size)
             assertTrue(processes.spawned[0].destroyed)
+            runtime.close()
+        }
+
+    @Test
+    @Timeout(TIMEOUT_SECONDS)
+    fun theHostHooksAreReadOncePerProcess() =
+        withParent { parent ->
+            val reads =
+                java.util.concurrent.atomic
+                    .AtomicInteger()
+            val processes = Processes()
+            val runtime =
+                runtime(
+                    processes,
+                    parent,
+                    hostHooks = {
+                        reads.incrementAndGet()
+                        HostHooks()
+                    },
+                )
+            runtime.start()
+            val running = runtime.runningOn(processes, 1)
+            assertEquals(1, reads.get())
+            runtime.oneTurn(running.commands, processes.spawned[0])
+            assertTrue(runtime.turnSandboxOn())
+            runtime.runningOn(processes, 2)
+            assertEquals(2, reads.get())
             runtime.close()
         }
 
@@ -443,7 +476,8 @@ class SessionRuntimeSandboxTest {
             val process = processes.spawned[0]
             commands.turnSandboxOff()
             val id = runtime.sandboxSwitches().single().id
-            val line = withContext(Dispatchers.IO) { process.nextStdinLine(GUARD.inWholeMilliseconds) }
+            val written = generateSequence { process.nextStdinLine(GUARD.inWholeMilliseconds) }
+            val line = written.first { !it.contains("\"subtype\":\"initialize\"") }
             assertEquals(StdinEncoder.sandboxOff(id), line)
             process.emit(success(id))
             val next = withContext(Dispatchers.IO) { process.nextStdinLine(GUARD.inWholeMilliseconds) }

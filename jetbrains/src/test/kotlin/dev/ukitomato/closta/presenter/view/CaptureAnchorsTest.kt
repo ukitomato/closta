@@ -463,9 +463,9 @@ class CaptureAnchorsTest {
     }
 
     @Test
-    fun `15 the question expired while the user was away`() {
+    fun `15 the away report is no answer, and the CLI answers it with an error`() {
         val ask = question("15-ask-afktimeout-updatedinput")
-        assertEquals("expired", ask.at("approval").str("resolution"))
+        assertEquals("cancelled", ask.at("approval").str("resolution"))
         assertNull(ask.at("approval")["approved"])
         // 2.1.325 answers the away report with this error rather than with the expiry.
         assertTrue(
@@ -474,20 +474,6 @@ class CaptureAnchorsTest {
             ),
             ask.str("result"),
         )
-    }
-
-    @Test
-    fun `15 under an older CLI, the away report came back as the expiry`() {
-        // Lines an older CLI (2.1.282) sent; the current version does not accept the report.
-        val scenario = "15-ask-afktimeout-updatedinput"
-        val tree = CaptureReplay.replay(scenario, file = CaptureFixtures.legacyExcerpt(scenario)).last().tree
-        val ask =
-            toolCalls(tree.at("threads", "byId", CaptureReplay.THREAD)).values.single {
-                it.str("toolName") == "AskUserQuestion"
-            }
-        assertEquals("expired", ask.at("approval").str("resolution"))
-        assertNull(ask.at("approval")["approved"])
-        assertTrue(ask.str("result")!!.startsWith("No response after 5s"))
     }
 
     @Test

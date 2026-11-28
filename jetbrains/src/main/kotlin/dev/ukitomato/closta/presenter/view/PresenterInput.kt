@@ -2,6 +2,7 @@ package dev.ukitomato.closta.presenter.view
 
 import dev.ukitomato.closta.core.models.AgentEvent
 import dev.ukitomato.closta.core.models.ApprovalDecision
+import dev.ukitomato.closta.core.models.ElicitationAction
 import dev.ukitomato.closta.core.models.SavedSessionSummary
 import dev.ukitomato.closta.presenter.tree.JsonObject
 import dev.ukitomato.closta.presenter.tree.TreeRules
@@ -17,9 +18,13 @@ sealed interface PresenterInput {
      */
     data object StopRequested : PresenterInput
 
-    /** One stdout line. */
+    /**
+     * One stdout line. [seenAtMs] is when the host saw the line (the host's clock); for now only a `Result` carries it.
+     * Core does not use it.
+     */
     data class Event(
         val event: AgentEvent,
+        val seenAtMs: Long? = null,
     ) : PresenterInput
 
     /**
@@ -100,6 +105,23 @@ sealed interface PresenterInput {
     }
 
     /**
+     * The host answered the pending elicitation [requestId]: [action], with [content] (the form's values as JSON) for
+     * an accept of a form. The first two are the arguments the caller gives core's `resolveElicitation`. A link
+     * accepted goes on in the browser; any other answer is sent.
+     */
+    data class ElicitationDecided(
+        val requestId: String,
+        val action: ElicitationAction,
+        val content: String?,
+    ) : PresenterInput {
+        // The form's values are the user's: never in a log.
+        override fun toString(): String = "ElicitationDecided($requestId, ${action.wire})"
+    }
+
+    /** The CLI process ended: what it asked can no longer be answered. The next [Launched] says it runs again. */
+    data object ProcessEnded : PresenterInput
+
+    /**
      * The host could not pass its answer for [approvalId] on to the CLI. [message] is the host's own fixed sentence,
      * never the text of an exception. An approval that is already settled is left as it is.
      */
@@ -135,7 +157,17 @@ sealed interface PresenterInput {
         val requestId: String,
         val kind: ControlKind,
         val value: String? = null,
-    ) : PresenterInput
+    ) : PresenterInput {
+        // The value may be a session's name or an MCP server's: the user's own words, never written to a log.
+        override fun toString(): String = "ControlRequested(kind=$kind, requestId=$requestId)"
+    }
+
+    /** The name the user gave the session in an earlier run, read from its saved record when it was resumed. */
+    data class TitleRestored(
+        val title: String,
+    ) : PresenterInput {
+        override fun toString(): String = "TitleRestored"
+    }
 
     /** The request [requestId] could not be written to the CLI, as when the session is already closed. */
     data class ControlSendFailed(
@@ -220,17 +252,22 @@ sealed interface PresenterInput {
         val reason: ResumeRefusal = ResumeRefusal.TURN,
     ) : PresenterInput
 
+    /**
+     * The host told Claude about the new IDE errors an edit introduced: [count] of them, and the first of them as
+     * [lines] (`12:5 message`), for the tool call [toolUseId]. Core does not change.
+     */
+    data class DiagnosticsReported(
+        val toolUseId: String,
+        val count: Int,
+        val lines: List<String>,
+    ) : PresenterInput {
+        // The messages are the IDE's findings about the user's code: never in a log.
+        override fun toString(): String = "DiagnosticsReported($count errors)"
+    }
+
     /** The user closed the banner of the limit [seq] ([RateLimitRecord.seq]). Core does not change. */
     data class RateLimitDismissed(
         val seq: Int,
-    ) : PresenterInput
-
-    /**
-     * The host saw a `result` at [epochMs] (its own clock): the prompt cache that `result` wrote is counted from then.
-     * Core does not change.
-     */
-    data class ResultSeenAt(
-        val epochMs: Long,
     ) : PresenterInput
 }
 

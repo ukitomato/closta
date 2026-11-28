@@ -22,6 +22,7 @@ import com.intellij.util.ui.JBUI
 import dev.ukitomato.closta.platforms.intellij.ClostaBundle
 import dev.ukitomato.closta.platforms.intellij.ClostaIcons
 import dev.ukitomato.closta.platforms.intellij.session.SessionOpening
+import dev.ukitomato.closta.presenter.view.TITLE_MAX
 import java.awt.GridBagLayout
 import java.beans.PropertyChangeListener
 import javax.swing.Icon
@@ -71,7 +72,7 @@ class ChatTabTitles :
     override fun getEditorTabTooltipText(
         project: Project,
         virtualFile: VirtualFile,
-    ): String? = (virtualFile as? ChatVirtualFile)?.let { HtmlChunk.text(it.shownTitle).toString() }
+    ): String? = (virtualFile as? ChatVirtualFile)?.let { HtmlChunk.text(it.shownTitle.take(TITLE_MAX)).toString() }
 }
 
 /** Opens a [ChatVirtualFile] as a conversation in an editor tab. The tab leases its session while it is open. */
@@ -105,6 +106,9 @@ private class ChatFileEditor(
     private val panel: JComponent
     private val focus: JComponent?
 
+    // What the tab leaves when the user closes it; none for the screen of an ended session.
+    private var leftView: (() -> LeftView)? = null
+
     init {
         val source = sessions.source(chat.sessionId)
         if (source == null) {
@@ -117,14 +121,11 @@ private class ChatFileEditor(
                     // The conversation now on the tab: after a `/clear`, the CLI's new id, also after the IDE
                     // restarted. A worktree's conversation left a mark under it with its folder: it is resumed there,
                     // as the list resumes it. With no mark, in the project's folder.
-                    val resumed = tabResume(chat.sessionId, sessions.stoppedResumeIds, project.wasRunningMarks())
-                    openNewChat(
-                        project,
-                        Placement.EDITOR_TAB,
-                        SessionOpening.Resume(resumed.savedId),
-                        chat.name,
-                        resumed.workingDirectory,
-                    )
+                    val resumed = tabResume(chat.sessionId, project.clearedTabs(), project.wasRunningMarks())
+                    val opening = resumed.savedId?.let { SessionOpening.Resume(it) } ?: SessionOpening.New
+                    openNewChat(project, Placement.EDITOR_TAB, opening, chat.name, resumed.workingDirectory)
+                    // Dropped only once the chat opened: a failed open keeps what the tab showed.
+                    project.saveClearedTabs(project.clearedTabs() - chat.sessionId)
                 }
             panel =
                 JPanel(GridBagLayout()).apply {
@@ -141,6 +142,7 @@ private class ChatFileEditor(
             val chatPanel =
                 ChatPanel(project, source, EditorTabPlace(project, chat), lease, this)
             panel = chatPanel
+            leftView = { leftViewOf(project, source, Placement.EDITOR_TAB) }
             focus = chatPanel.preferredFocus()
         }
     }
@@ -163,7 +165,10 @@ private class ChatFileEditor(
 
     override fun removePropertyChangeListener(listener: PropertyChangeListener) = Unit
 
-    override fun dispose() = lease.release()
+    override fun dispose() {
+        leftView?.let { lease.leaving(it()) }
+        lease.release()
+    }
 }
 
 private class EditorTabPlace(

@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 import { EventEmitter } from 'node:events';
 import { removeFileHistory, removeOnSignal } from './cleanup.mjs';
+import { initializeRequest, sceneAnswer } from './protocol.mjs';
 import { scenarios, rewindDefinitionProblem, readShowsRewind, resumeAtUuid, resumeFlagsFor } from './scenarios.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -135,6 +136,158 @@ await check('removeOnSignal: SIGINT or SIGTERM removes the directory and exits a
   } finally {
     await fsp.rm(kept, { recursive: true, force: true });
   }
+});
+
+await check('scenes 45 to 50 and 52 to 57 are pending and the other scenes are not', () => {
+  const pending = scenarios.filter((s) => s.pending).map((s) => s.id.slice(0, 2));
+  assert.deepEqual(pending, ['45', '46', '47', '48', '49', '50', '52', '53', '54', '55', '56', '57']);
+});
+
+const sceneOf = (n) => scenarios.find((s) => s.id.startsWith(`${n}-`));
+
+await check('scene 52: --add-dir names the extra folder, project and local settings are read, the seed holds the rules', () => {
+  const s = sceneOf('52');
+  assert.deepEqual(s.extraDirs, ['other']);
+  assert.ok(s.flags.some((f) => f.startsWith('--add-dir=') && f.includes('{EXTRA:other}')));
+  assert.ok(s.flags.includes('project,local'));
+  assert.ok(!s.flags.includes('project'));
+  assert.deepEqual(JSON.parse(s.seed['.claude/settings.local.json']).permissions.allow, ['Bash(make:*)']);
+  assert.deepEqual(JSON.parse(s.seed['.claude/settings.json']).permissions.deny, ['Read(./secret.txt)']);
+  assert.deepEqual(s.steps.at(-1), { kind: 'control', request: { subtype: 'list_permission_rules' } });
+});
+
+await check('scene 53: two cancelQueued steps, the second after waiting for the second command_lifecycle/started', () => {
+  const s = sceneOf('53');
+  const kinds = s.steps.map((st) => st.kind);
+  assert.equal(kinds.filter((k) => k === 'cancelQueued').length, 2);
+  const waitAt = s.steps.findIndex((st) => st.kind === 'waitFor');
+  assert.deepEqual(s.steps[waitAt], { kind: 'waitFor', line: 'command_lifecycle/started', n: 2 });
+  assert.deepEqual(s.steps.filter((st) => st.kind === 'cancelQueued').map((st) => st.userIndex), [3, 2]);
+  assert.equal(s.steps[waitAt + 1].kind, 'cancelQueued');
+  assert.equal(s.done.results, 1);
+  assert.equal(s.done.maxMs, 90000);
+});
+
+await check('scene 54: backgroundTool for Bash, then taskOutput three times and once, then a bogus task id', () => {
+  const s = sceneOf('54');
+  assert.ok(s.steps.some((st) => st.kind === 'backgroundTool' && st.toolName === 'Bash'));
+  assert.ok(s.steps.some((st) => st.kind === 'taskOutput' && st.times === 3 && st.everyMs === 2000));
+  assert.ok(s.steps.some((st) => st.kind === 'taskOutput' && st.times === 1 && st.everyMs === 0));
+  assert.deepEqual(s.steps.at(-1), { kind: 'control', request: { subtype: 'get_task_output', task_id: 'bogus' } });
+});
+
+await check('scene 55: renameSession before and after /clear (the second for the previous session), with a resume', () => {
+  const s = sceneOf('55');
+  const renames = s.steps.filter((st) => st.kind === 'renameSession');
+  assert.deepEqual(renames.map((st) => st.previousSession), [false, true]);
+  assert.ok(s.steps.some((st) => st.kind === 'user' && st.text === '/clear'));
+  assert.equal(s.resume.done.results, 1);
+  assert.ok(s.resume.steps.some((st) => st.kind === 'initialize'));
+});
+
+await check('scene 56: reload_plugins with refuse_if_busy while idle and while a Bash runs', () => {
+  const s = sceneOf('56');
+  const reloads = s.steps.filter((st) => st.kind === 'control' && st.request.subtype === 'reload_plugins');
+  assert.equal(reloads.length, 2);
+  for (const r of reloads) assert.equal(r.request.refuse_if_busy, true);
+});
+
+await check('scene 57: ExitPlanMode is denied with a diff message the first time and allowed with an edited plan the second; other tools are allowed', () => {
+  const s = sceneOf('57');
+  assert.ok(s.flags.includes('plan'));
+  const { respond } = s.permission;
+  const cwd = '/nowhere-57';
+  const exit = { tool_name: 'ExitPlanMode', input: { plan: '# Plan\nfix it' } };
+  const first = respond(exit, { index: 3, cwd });
+  assert.equal(first.behavior, 'deny');
+  assert.ok(first.message.length > 0);
+  assert.match(first.message, /@@ /);
+  const bash = { tool_name: 'Bash', input: { command: 'ls' } };
+  assert.deepEqual(respond(bash, { index: 4, cwd }), { behavior: 'allow', updatedInput: bash.input });
+  const second = respond(exit, { index: 5, cwd });
+  assert.equal(second.behavior, 'allow');
+  assert.ok(second.updatedInput.plan.startsWith(exit.input.plan));
+  assert.ok(second.updatedInput.plan.length > exit.input.plan.length);
+  assert.equal(s.done.maxMs, 180000);
+});
+
+const fileHooksOf = (timeout) => ({
+  PreToolUse: [{ matcher: 'Edit|Write|NotebookEdit|Read', hookCallbackIds: ['closta-before-file-tool'], timeout }],
+  PostToolUse: [{ matcher: 'Edit|Write|NotebookEdit', hookCallbackIds: ['closta-after-edit'], timeout }],
+});
+
+await check('scene 48: Pre answers {} and Post answers with additionalContext', () => {
+  const { respond } = sceneOf('48').hookCallback;
+  const pre = { subtype: 'hook_callback', callback_id: 'closta-before-file-tool', input: { hook_event_name: 'PreToolUse', tool_name: 'Read' } };
+  const post = { subtype: 'hook_callback', callback_id: 'closta-after-edit', input: { hook_event_name: 'PostToolUse', tool_name: 'Edit' } };
+  assert.deepEqual(respond(pre, { index: 0, cwd: '/nowhere' }).payload, {});
+  const answer = respond(post, { index: 1, cwd: '/nowhere' }).payload;
+  assert.equal(answer.hookSpecificOutput.hookEventName, 'PostToolUse');
+  assert.match(answer.hookSpecificOutput.additionalContext, /<ide-diagnostics>/);
+});
+
+await check('scene 48: the second Edit Pre appends a line to the seeded file, the first does not', async () => {
+  const cwd = await fsp.mkdtemp(path.join(os.tmpdir(), 'closta-hook-'));
+  try {
+    const s = sceneOf('48');
+    const file = path.join(cwd, 'a.txt');
+    await fsp.writeFile(file, s.seed['a.txt']);
+    const editPre = { subtype: 'hook_callback', callback_id: 'closta-before-file-tool', input: { hook_event_name: 'PreToolUse', tool_name: 'Edit' } };
+    const readPre = { ...editPre, input: { hook_event_name: 'PreToolUse', tool_name: 'Read' } };
+    assert.deepEqual(s.hookCallback.respond(editPre, { index: 1, cwd }).payload, {});
+    assert.equal(await fsp.readFile(file, 'utf8'), s.seed['a.txt']);
+    assert.deepEqual(s.hookCallback.respond(readPre, { index: 2, cwd }).payload, {});
+    assert.equal(await fsp.readFile(file, 'utf8'), s.seed['a.txt']);
+    assert.deepEqual(s.hookCallback.respond(editPre, { index: 3, cwd }).payload, {});
+    assert.ok((await fsp.readFile(file, 'utf8')).startsWith(s.seed['a.txt']));
+    assert.ok((await fsp.readFile(file, 'utf8')).length > s.seed['a.txt'].length);
+  } finally {
+    await fsp.rm(cwd, { recursive: true, force: true });
+  }
+});
+
+await check('scene 50: the first Pre holds 5 s and answers {}, the second is an error answer; timeout is 2', () => {
+  const s = sceneOf('50');
+  assert.equal(s.hooks.PreToolUse[0].timeout, 2);
+  const pre = { subtype: 'hook_callback', callback_id: 'closta-before-file-tool', input: { hook_event_name: 'PreToolUse', tool_name: 'Read' } };
+  const cwd = '/nowhere-50';
+  assert.deepEqual(s.hookCallback.respond(pre, { index: 0, cwd }), { holdMs: 5000, payload: {} });
+  assert.equal(s.hookCallback.respond(pre, { index: 1, cwd }).payload, null);
+});
+
+await check('scenes 45 to 47: elicitation answers, accept then decline, accept, and none', () => {
+  assert.deepEqual(sceneOf('45').elicitation.respond({}, { index: 0, cwd: '' }).payload,
+    { action: 'accept', content: { name: 'Ada', color: 'blue', count: 2, agree: true } });
+  assert.deepEqual(sceneOf('45').elicitation.respond({}, { index: 1, cwd: '' }).payload, { action: 'decline' });
+  assert.deepEqual(sceneOf('46').elicitation.respond({}, { index: 0, cwd: '' }).payload, { action: 'accept' });
+  assert.equal(sceneOf('47').elicitation.respond({}, { index: 0, cwd: '' }).payload, null);
+  assert.equal(sceneOf('47').done.maxMs, 180000);
+});
+
+await check('initializeRequest(s.hooks): the file-tool declaration for 48 only, {} for every other scene', () => {
+  for (const s of scenarios) {
+    const hooks = initializeRequest(s.hooks).hooks;
+    if (s.id.startsWith('48-')) {
+      assert.deepEqual(hooks.PreToolUse[0].hookCallbackIds, ['closta-before-file-tool']);
+      assert.deepEqual(hooks.PostToolUse[0].hookCallbackIds, ['closta-after-edit']);
+      assert.equal(hooks.PreToolUse[0].timeout, 10);
+    } else if (s.id.startsWith('49-')) {
+      assert.deepEqual(hooks, fileHooksOf(10));
+    } else if (s.id.startsWith('50-')) {
+      assert.deepEqual(hooks, fileHooksOf(2));
+    } else {
+      assert.deepEqual(hooks, {}, s.id);
+    }
+  }
+});
+
+await check('sceneAnswer: passes holdMs and payload through, and turns a throw into an Error naming the request', () => {
+  assert.deepEqual(sceneAnswer({ respond: () => ({ payload: {} }) }, { subtype: 'hook_callback' }, {}), { holdMs: 0, payload: {} });
+  assert.deepEqual(sceneAnswer({ respond: () => ({ holdMs: 5, payload: null }) }, { subtype: 'elicitation' }, {}), { holdMs: 5, payload: null });
+  assert.throws(
+    () => sceneAnswer({ respond: () => { throw new Error('ENOENT'); } }, { subtype: 'hook_callback' }, {}),
+    /answer to hook_callback failed: ENOENT/,
+  );
 });
 
 process.stdout.write(failures === 0 ? 'OK\n' : `${failures} failed\n`);

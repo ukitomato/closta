@@ -187,6 +187,86 @@ class ThreadRowsTest {
         assertTrue(after.size > before.size)
     }
 
+    @Test
+    fun anAskRowIsReusedWhileItsExtraStateIsTheSameAndRemadeWhenItChanges() {
+        val view = fold("one", StreamScript().apply { assistant("a1", listOf(StreamScript.text("返事"))) })
+        var extra: Any? = "idle"
+        val rows = ThreadRows(messageExtra = { if (it.role == Role.USER) extra else null })
+        val first = rows.of(view.transcript).filterIsInstance<AskRow>().single()
+        assertSame(first, rows.of(view.transcript).filterIsInstance<AskRow>().single(), "same extra, same row")
+        extra = "idle"
+        assertSame(first, rows.of(view.transcript).filterIsInstance<AskRow>().single(), "an equal extra, same row")
+        extra = "cancellable"
+        val remade = rows.of(view.transcript).filterIsInstance<AskRow>().single()
+        assertTrue(first !== remade, "another extra, a new row")
+        assertEquals(first, remade)
+    }
+
+    @Test
+    fun aToolRowIsReusedWhileItsExtraStateIsTheSameAndRemadeWhenItChanges() {
+        val view = fold("one", tools("Bash" to input("command" to "sleep 9")))
+        var extra: Any? = "none"
+        val rows = ThreadRows(partExtra = { if (it is ToolCallRecord) extra else null })
+        val first = rows.of(view.transcript).filterIsInstance<ToolRow>().single()
+        assertSame(first, rows.of(view.transcript).filterIsInstance<ToolRow>().single(), "same extra, same row")
+        extra = "none"
+        assertSame(first, rows.of(view.transcript).filterIsInstance<ToolRow>().single(), "an equal extra, same row")
+        extra = "offered"
+        val remade = rows.of(view.transcript).filterIsInstance<ToolRow>().single()
+        assertTrue(first !== remade, "another extra, a new row")
+        assertEquals(first, remade)
+        assertSame(remade, rows.of(view.transcript).filterIsInstance<ToolRow>().single())
+    }
+
+    @Test
+    fun anAskRowIsTheSameObjectWhileItsWithdrawalIsUnchangedAndRemadeWhenItChanges() {
+        val queued =
+            HostState()
+                .next(PresenterInput.UserSent("ka", "one", uuid = "a"))
+                .next(PresenterInput.Event(Lines.queued("a")))
+                .next(PresenterInput.Event(Lines.started("a")))
+                .next(PresenterInput.UserSent("kb", "two", uuid = "b"))
+                .next(PresenterInput.Event(Lines.queued("b")))
+        val rows = ThreadRows()
+
+        fun asks(state: HostState) = rows.of(state.transcript, state.conversation).filterIsInstance<AskRow>()
+        val first = asks(queued)
+        assertEquals(AskCancel(CancelPhase.OFFER), first[1].cancel)
+        val again = asks(queued.next(PresenterInput.Event(Lines.queued("zz"))))
+        assertSame(first[0], again[0])
+        assertSame(first[1], again[1], "the same withdrawal state, the same row")
+        val waiting = asks(queued.next(PresenterInput.ControlRequested("r1", ControlKind.CANCEL_QUEUED, "b")))
+        assertSame(first[0], waiting[0])
+        assertTrue(first[1] !== waiting[1], "another withdrawal state, a new row")
+        assertEquals(AskCancel(CancelPhase.WAITING), waiting[1].cancel)
+    }
+
+    private fun turn() =
+        HostState()
+            .next(PresenterInput.UserSent("u1", "go", uuid = "c1"))
+            .next(PresenterInput.Event(Lines.queued("c1")))
+            .next(PresenterInput.Event(Lines.started("c1")))
+
+    @Test
+    fun aToolRowIsTheSameObjectWhileItsBackgroundOfferIsTheSameAndRemadeWhenItChanges() {
+        val call =
+            StreamScript().apply {
+                assistant("m0", listOf(StreamScript.toolUse("t0", "Bash", input("command" to "sleep 9"))))
+            }
+        val running =
+            call.lines.fold(turn()) { state, line -> state.next(PresenterInput.Event(StreamJsonCodec.decode(line))) }
+        val rows = ThreadRows()
+        val first = rows.of(running.transcript, running.conversation).filterIsInstance<ToolRow>().single()
+        assertEquals(BackgroundOffer(BackgroundPhase.OFFER), first.background)
+        // An unrelated change of the transcript leaves the row alone.
+        val other = running.next(PresenterInput.ControlRequested("r0", ControlKind.RELOAD_PLUGINS))
+        assertSame(first, rows.of(other.transcript, other.conversation).filterIsInstance<ToolRow>().single())
+        val asked = running.next(PresenterInput.ControlRequested("r1", ControlKind.BACKGROUND, "t0"))
+        val waiting = rows.of(asked.transcript, asked.conversation).filterIsInstance<ToolRow>().single()
+        assertEquals(BackgroundOffer(BackgroundPhase.WAITING), waiting.background)
+        assertSame(waiting, rows.of(asked.transcript, asked.conversation).filterIsInstance<ToolRow>().single())
+    }
+
     private companion object {
         const val NOT_LOGGED_IN = "Not logged in · Please run /login"
     }

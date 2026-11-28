@@ -14,5 +14,8 @@ object NoticeGroups {
     /** A worktree's failure, and a worktree made by the IDE bridge. */
     const val WORKTREE = "Closta.Worktree"
 
-    val ALL: List<String> = listOf(WAITING, FINISHED, RUNNING, WORKTREE)
+    /** A conversation written to a file. */
+    const val EXPORT = "Closta.Export"
+
+    val ALL: List<String> = listOf(WAITING, FINISHED, RUNNING, WORKTREE, EXPORT)
 }

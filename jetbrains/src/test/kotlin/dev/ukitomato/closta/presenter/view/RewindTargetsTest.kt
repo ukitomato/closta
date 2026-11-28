@@ -122,4 +122,15 @@ class RewindTargetsTest {
         none(turnEndActions(transcript, false, "send-3"), RewindRefusal.NOTHING_AFTER)
         none(turnEndActions(transcript, false, "no-such-ask"), RewindRefusal.UNKNOWN)
     }
+
+    @Test
+    fun aWithdrawnAskOffersNoRewindOrForkAndIsLeftOutOfTheOthers() {
+        val marked =
+            transcript.copy(withdrawn = setOf("send-2"))
+        none(askActions(marked, running = false, askKey = "send-2"), RewindRefusal.CANCELLED)
+        none(turnEndActions(marked, running = false, askKey = "send-2"), RewindRefusal.CANCELLED)
+        assertEquals(ForkFrom(sentUuids[2]), askActions(marked, false, "send-1").fork, "the next live ask")
+        assertEquals(listOf("send-1", "send-3"), liveAsks(marked))
+        assertEquals(true, RewindRefusal.CANCELLED.offersNothing)
+    }
 }

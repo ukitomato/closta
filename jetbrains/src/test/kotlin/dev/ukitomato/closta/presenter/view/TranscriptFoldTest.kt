@@ -49,13 +49,12 @@ class TranscriptFoldTest {
         for (event in broken) assertUnchanged(before, before.with(event), "$event")
     }
 
-    // task_started, task_progress and background_tasks_changed feed the running list (RunningTasksTest), so they are
-    // not here.
+    // task_started, task_progress, task_updated and background_tasks_changed feed the running list (RunningTasksTest),
+    // so they are not here.
     private val contentless =
         setOf(
             AgentEvent.SystemStatus::class,
             AgentEvent.SystemTaskNotification::class,
-            AgentEvent.SystemTaskUpdated::class,
             AgentEvent.SystemThinkingTokens::class,
         )
 
@@ -110,8 +109,13 @@ class TranscriptFoldTest {
             detailed.with(Lines.initialized("""{"commands":[{"name":"config","description":"d"}]}""")),
         )
         val empty = HostState()
-        assertUnchanged(empty, empty.with(Lines.init(slashCommands = "{}")))
-        assertUnchanged(empty, empty.with(Lines.init()), "an init with no commands")
+        // An init lists the plugins too, so it is no longer a line that changes nothing: its commands are what stay.
+        assertEquals(empty.transcript.commands, empty.with(Lines.init(slashCommands = "{}")).transcript.commands)
+        assertEquals(
+            empty.transcript.commands,
+            empty.with(Lines.init()).transcript.commands,
+            "an init with no commands",
+        )
     }
 
     @Test

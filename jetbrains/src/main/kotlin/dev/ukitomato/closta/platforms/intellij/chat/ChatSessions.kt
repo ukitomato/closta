@@ -4,10 +4,12 @@ import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
+import com.intellij.openapi.components.serviceIfCreated
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.ProjectCloseListener
 import com.intellij.openapi.util.Disposer
 import dev.ukitomato.closta.platforms.intellij.session.ClaudeSessionService
+import dev.ukitomato.closta.platforms.intellij.session.ContentRoots
 import dev.ukitomato.closta.platforms.intellij.session.SessionOpening
 import dev.ukitomato.closta.platforms.intellij.session.heldSessionOf
 import dev.ukitomato.closta.platforms.intellij.session.savedId
@@ -28,14 +30,6 @@ class ChatSessions(
     private val project: Project,
 ) : Disposable {
     private val sources = LinkedHashMap<String, ChatSource>()
-
-    private val stopped = HashMap<String, String>()
-
-    /**
-     * The id each stopped session's conversation was saved under when it stopped, by the session's id, where a `/clear`
-     * made it other than the session's own: a tab still showing it resumes that one.
-     */
-    val stoppedResumeIds: Map<String, String> get() = stopped
 
     /** Whether the project is closing: its screens close then, and a session that runs says nothing of it. */
     @Volatile
@@ -97,8 +91,9 @@ class ChatSessions(
     /** Stops the session's CLI and takes it out of the list; a screen still showing it shows it ended. */
     fun stop(sessionId: String) {
         directory().unregister(sessionId)
+        project.serviceIfCreated<ContentRoots>()?.forget(sessionId)
+        sources[sessionId]?.let { rememberClearedTabs(project, listOf(it)) }
         sources.remove(sessionId)?.let { source ->
-            if (source.resumeId != sessionId) stopped[sessionId] = source.resumeId
             Disposer.dispose(source)
         }
     }
@@ -187,6 +182,29 @@ private fun markWasRunning(
             )
         }
     project.saveWasRunningMarks(marksAtClose(project.wasRunningMarks(), open))
+    rememberClearedTabs(project, sources)
+}
+
+/** Keeps what each of [sources] that was cleared with `/clear` showed, so its tab resumes that after a restart. */
+private fun rememberClearedTabs(
+    project: Project,
+    sources: Collection<ChatSource>,
+) {
+    val stopped =
+        sources.map { source ->
+            val transcript = source.view.value.transcript
+            source.sessionId to
+                clearedTabOf(
+                    source.sessionId,
+                    source.resumeId,
+                    transcript.clearedAt,
+                    transcript.sentAfterClear(),
+                    source.workingDirectory,
+                    project.basePath,
+                )
+        }
+    val tabs = ClearedTabs.after(project.clearedTabs(), stopped)
+    project.saveClearedTabs(tabs)
 }
 
 /**

@@ -29,6 +29,9 @@ fun fold(
         is AgentEvent.SystemTaskNotification -> foldTaskNotification(state, event)
         is AgentEvent.ControlRequest -> foldControlRequest(state, event)
         is AgentEvent.ControlResponse -> foldControlResponse(state, event)
+        // The CLI stopped waiting on a request: it leaves the queue, and one nobody holds changes nothing.
+        is AgentEvent.ControlCancel -> state.withoutPending { it.requestId == event.requestId }
+        is AgentEvent.Elicitation -> foldElicitation(state, event)
         is AgentEvent.SystemStatus -> foldStatus(state, event)
         // The CLI goes on under a new session id that only the next init names: until then there is no session, so
         // nothing reads the old id as the current one. The cost is left for the next result, which counts from zero.
@@ -54,6 +57,8 @@ fun fold(
         is AgentEvent.SystemInformational,
         // The presenter says it on the composer's line until the reply goes on.
         is AgentEvent.SystemApiRetry,
+        // The end of a url elicitation: the card closes on the user's answer or on the result, not on this line.
+        is AgentEvent.SystemElicitationComplete,
         // The version-drift and transport alarms: never let them break the state.
         is AgentEvent.UnknownKind,
         is AgentEvent.BrokenLine,
@@ -121,7 +126,9 @@ private fun foldStatus(
 /**
  * `command_lifecycle{queued|started}` opens a turn keyed by `command_uuid`, once — a `queued` then a
  * `started` for the same uuid is still one turn. `completed` is not a terminator and opens nothing:
- * it only marks an open turn [Turn.lifecycleDone]. A turn closes on a `result` that names it, and a
+ * it only marks an open turn [Turn.lifecycleDone]. `cancelled` closes the open turn it names with `incompleteReason`
+ * `"cancelled"`: a message withdrawn before it ran, or the CLI's last word on one a `result` has already closed, which
+ * it leaves as the `result` set it. A turn closes on a `result` that names it, and a
  * marked turn also closes with the turn whose `result` comes after its mark: a message sent mid-turn that the CLI
  * took into the running turn gets no `result` of its own (see [foldResult]).
  */
@@ -142,6 +149,17 @@ private fun foldLifecycle(
                     state.turns.map {
                         if (it.phase == TurnPhase.OPEN && it.commandUuid == event.commandUuid) {
                             it.copy(lifecycleDone = true)
+                        } else {
+                            it
+                        }
+                    },
+            )
+        LIFECYCLE_CANCELLED ->
+            state.copy(
+                turns =
+                    state.turns.map {
+                        if (it.phase == TurnPhase.OPEN && it.commandUuid == event.commandUuid) {
+                            it.copy(phase = TurnPhase.CLOSED, incompleteReason = LIFECYCLE_CANCELLED)
                         } else {
                             it
                         }
@@ -206,11 +224,7 @@ private fun foldResult(
         }
 
     val discardsPending = closes || event.isError
-    return if (discardsPending && base.pendingApprovals.isNotEmpty()) {
-        base.copy(pendingApprovals = emptyList())
-    } else {
-        base
-    }
+    return if (discardsPending) base.withoutPending { true } else base
 }
 
 /**
@@ -307,6 +321,7 @@ private fun List<Task>.upsertById(
 private const val LIFECYCLE_QUEUED = "queued"
 private const val LIFECYCLE_STARTED = "started"
 private const val LIFECYCLE_COMPLETED = "completed"
+private const val LIFECYCLE_CANCELLED = "cancelled"
 private const val TASK_COMPLETED = "completed"
 private const val CONTROL_ERROR_SUBTYPE = "error"
 private const val ASK_USER_QUESTION = "AskUserQuestion"

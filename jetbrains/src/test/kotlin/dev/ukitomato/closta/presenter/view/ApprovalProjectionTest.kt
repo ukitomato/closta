@@ -289,6 +289,27 @@ class ApprovalProjectionTest {
     }
 
     @Test
+    fun `type only - an approval the CLI withdrew shows as withdrawn, and an answered one stays as answered`() {
+        val session = Session()
+        session.turn("c1")
+        session.events(
+            Lines.assistant("m1", Lines.toolUse("toolu_1", "Write"), Lines.toolUse("toolu_2", "Edit")),
+            Lines.request("r1", "Write", "toolu_1"),
+            Lines.request("r2", "Edit", "toolu_2"),
+        )
+        session.decide(ApprovalDecision.Deny("r2"))
+
+        session.events(AgentEvent.ControlCancel("r1"), AgentEvent.ControlCancel("r2"))
+
+        assertEquals(ApprovalOutcome.WITHDRAWN, session.transcript.approvals["r1"]!!.outcome)
+        assertEquals(ApprovalOutcome.DENIED, session.transcript.approvals["r2"]!!.outcome)
+        val withdrawn = approvalOf(session.thread.message("c1").part("toolu_1"))
+        assertEquals("withdrawn", withdrawn.str("resolution"))
+        assertNull(withdrawn["approved"])
+        assertEquals(JsonBool.FALSE, approvalOf(session.thread.message("c1").part("toolu_2"))["approved"])
+    }
+
+    @Test
     fun `an approval the turn's result discarded shows as cancelled`() {
         val session = Session()
         session.turn("c1")
@@ -405,12 +426,10 @@ class ApprovalProjectionTest {
         val allow = { id: String -> ApprovalDecision.Allow(id) }
         val deny = { id: String -> ApprovalDecision.Deny(id) }
         val answered = { id: String -> ApprovalDecision.Answered(id) }
-        val afk = { id: String -> ApprovalDecision.AfkTimeout(id) }
         assertEquals("true" to null, outcome("Write", allow, 0))
         assertEquals("true" to null, outcome("Write", allow, 5_000))
         assertEquals("false" to null, outcome("Write", deny, 5_000))
         assertEquals("true" to null, outcome("Write", answered, 5_000))
-        assertEquals("-" to "expired", outcome("Write", afk, 5_000))
         assertEquals("-" to "cancelled", outcome("AskUserQuestion", allow, 0))
         assertEquals(
             "-" to "cancelled",
@@ -419,7 +438,22 @@ class ApprovalProjectionTest {
         )
         assertEquals("false" to null, outcome("AskUserQuestion", deny, 0))
         assertEquals("true" to null, outcome("AskUserQuestion", answered, 0))
-        assertEquals("-" to "expired", outcome("AskUserQuestion", afk, 5_000))
+    }
+
+    @Test
+    fun `skipping a question denies it with an empty sentence and shows it as not answered`() {
+        val session = Session()
+        session.turn("c1")
+        session.events(
+            Lines.assistant("m1", Lines.toolUse("toolu_q", "AskUserQuestion")),
+            Lines.request("r1", "AskUserQuestion", "toolu_q"),
+        )
+        val skip = ApprovalDecision.Deny("r1")
+        assertEquals(ApprovalOutcome.DENIED, outcomeOf(ask = true, decision = skip))
+        session.decide(skip, 0)
+        val approval = approvalOf(session.thread.message("c1").part("toolu_q"))
+        assertEquals(JsonBool.FALSE, approval["approved"])
+        assertNull(approval.str("resolution"))
     }
 
     @Test

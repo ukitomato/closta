@@ -231,6 +231,82 @@ class CodecDecodeTest {
         )
     }
 
+    private fun elicitationLine(request: String) =
+        """{"type":"control_request","request_id":"e1","request":{"subtype":"elicitation",$request}}"""
+
+    @Test
+    fun `type only - a form, a url, a modeless and an unknown mode elicitation are all elicitations`() {
+        val form =
+            elicitationLine(
+                """"mcp_server_name":"files","message":"Name?","mode":"form",""" +
+                    """"requested_schema":{"type":"object","properties":{"b":{"type":"string"}}},""" +
+                    """"property_order":["b","a"]""",
+            )
+        val url =
+            elicitationLine(
+                """"mcp_server_name":"files","message":"Sign in","mode":"url","url":"https://example.test/x",""" +
+                    """"elicitation_id":"id-9"""",
+            )
+        val bare = elicitationLine(""""mcp_server_name":"files","message":"Hi"""")
+        val voice = elicitationLine(""""mcp_server_name":"files","message":"Hi","mode":"voice"""")
+
+        fun decoded(line: String) = assertInstanceOf(AgentEvent.Elicitation::class.java, StreamJsonCodec.decode(line))
+
+        assertAll(
+            {
+                assertEquals(
+                    listOf("form", "files", null),
+                    decoded(form).let { listOf(it.mode, it.serverName, it.elicitationId) },
+                )
+            },
+            { assertEquals("e1", decoded(form).requestId) },
+            { assertTrue(decoded(form).request.text.contains("property_order")) },
+            { assertEquals(listOf("url", "id-9"), decoded(url).let { listOf(it.mode, it.elicitationId) }) },
+            { assertNull(decoded(bare).mode) },
+            { assertEquals("voice", decoded(voice).mode) },
+        )
+    }
+
+    @Test
+    fun `type only - an elicitation without its server or its message is unknown`() {
+        val noServer = elicitationLine(""""message":"Hi"""")
+        val noMessage = elicitationLine(""""mcp_server_name":"files"""")
+
+        assertAll(
+            {
+                assertEquals(
+                    "control_request/elicitation",
+                    assertInstanceOf(AgentEvent.UnknownKind::class.java, StreamJsonCodec.decode(noServer)).wireType,
+                )
+            },
+            { assertInstanceOf(AgentEvent.UnknownKind::class.java, StreamJsonCodec.decode(noMessage)) },
+        )
+    }
+
+    @Test
+    fun `type only - the end of an elicitation is typed`() {
+        val line =
+            """{"type":"system","subtype":"elicitation_complete","mcp_server_name":"files",""" +
+                """"elicitation_id":"id-9","uuid":"u","session_id":"s"}"""
+
+        assertEquals(AgentEvent.SystemElicitationComplete("u", "s", "files", "id-9"), StreamJsonCodec.decode(line))
+    }
+
+    @Test
+    fun `type only - a withdrawal line carries the request id, and one without it is unknown`() {
+        val line = """{"type":"control_cancel_request","request_id":"r1"}"""
+
+        assertAll(
+            { assertEquals(AgentEvent.ControlCancel("r1"), StreamJsonCodec.decode(line)) },
+            {
+                assertInstanceOf(
+                    AgentEvent.UnknownKind::class.java,
+                    StreamJsonCodec.decode("""{"type":"control_cancel_request"}"""),
+                )
+            },
+        )
+    }
+
     @Test
     fun `type only - an informational line becomes a typed value with its level and flags`() {
         val line =
@@ -450,6 +526,29 @@ class CodecDecodeTest {
             { assertEquals("success", accepted.subtype) },
             { assertEquals("07-set-model-and-mode-req-6", accepted.requestId) },
             { assertNull(accepted.error) },
+        )
+    }
+
+    @Test
+    fun `type only - plugin_errors on init is kept raw, and an init without it has none`() {
+        val recorded = assertInstanceOf(AgentEvent.SystemInit::class.java, captureLine("43-usage-and-rules", 4))
+        val line = CaptureFixtures.nonBlankLines(CaptureFixtures.textOf("43-usage-and-rules.ndjson"))[3]
+        val withErrors =
+            line.replaceFirst(
+                "\"type\":\"system\"",
+                "\"type\":\"system\",\"plugin_errors\":" +
+                    "[{\"plugin\":\"a@m\",\"type\":\"path-not-found\",\"message\":\"gone\"}]",
+            )
+        val decoded = assertInstanceOf(AgentEvent.SystemInit::class.java, StreamJsonCodec.decode(withErrors))
+
+        assertAll(
+            { assertNull(recorded.pluginErrors) },
+            {
+                assertEquals(
+                    """[{"plugin":"a@m","type":"path-not-found","message":"gone"}]""",
+                    decoded.pluginErrors?.text,
+                )
+            },
         )
     }
 }

@@ -13,7 +13,7 @@ import dev.ukitomato.closta.platforms.intellij.ClostaBundle
 import dev.ukitomato.closta.platforms.intellij.chat.rewindRefusalText
 import dev.ukitomato.closta.platforms.intellij.composer.ToolbarButton
 import dev.ukitomato.closta.presenter.view.AskActions
-import dev.ukitomato.closta.presenter.view.RewindRefusal
+import dev.ukitomato.closta.presenter.view.offersNothing
 import java.awt.BorderLayout
 import java.awt.Container
 import java.awt.Dimension
@@ -84,7 +84,7 @@ internal object AskActionViews {
                 fork.disabledReason = why
             }
             // An ask from before a clear can never be rewound to or forked from: its buttons are not offered at all.
-            val offered = over && now?.refusal != RewindRefusal.BEFORE_CLEAR
+            val offered = over && now?.refusal?.offersNothing != true
             copy.isVisible = over
             rewind.isVisible = offered
             fork.isVisible = offered
@@ -105,7 +105,7 @@ internal object AskActionViews {
     ) {
         fun now() = actions.askActions(askKey, atEnd = false)
 
-        fun offered() = now().refusal != RewindRefusal.BEFORE_CLEAR
+        fun offered() = now().refusal?.offersNothing != true
         val group =
             DefaultActionGroup(
                 DumbAwareAction.create(ClostaBundle.message("thread.ask.copy")) {

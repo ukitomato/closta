@@ -3,12 +3,13 @@ package dev.ukitomato.closta.providers.claude
 import dev.ukitomato.closta.core.models.AgentEvent
 import dev.ukitomato.closta.core.models.ApprovalDecision
 import dev.ukitomato.closta.core.models.Attachment
+import dev.ukitomato.closta.core.models.ElicitationDecision
 
 /**
  * A recorded scenario for [FakeAgentSession]: the events to stream and how the stream ends. No CLI, no
  * process, no clock.
  *
- * An AFK timeout is modelled as a host *decision*, not a duration: a [Beat.AwaitResponse] blocks the
+ * A wait for the user is modelled as a host *decision*, not a duration: a [Beat.AwaitResponse] blocks the
  * stream on an outstanding request until the host answers it via [FakeAgentSession.respondToApproval],
  * and the answer arrives as a value — so a test crosses the "waiting" window without spending real or
  * virtual time.
@@ -75,6 +76,11 @@ sealed interface Sent {
         val updatedPermissions: String? = null,
     ) : Sent
 
+    data class Elicitation(
+        val decision: ElicitationDecision,
+        val content: String?,
+    ) : Sent
+
     data class SetModel(
         val model: String,
         val requestId: String,
@@ -91,6 +97,36 @@ sealed interface Sent {
     ) : Sent
 
     data class RequestUsage(
+        val requestId: String,
+    ) : Sent
+
+    data class ReloadPlugins(
+        val refuseIfBusy: Boolean,
+        val requestId: String,
+    ) : Sent
+
+    data class BackgroundTasks(
+        val toolUseId: String?,
+        val requestId: String,
+    ) : Sent
+
+    data class TaskOutput(
+        val taskId: String,
+        val requestId: String,
+    ) : Sent
+
+    data class CancelQueuedMessage(
+        val messageUuid: String,
+        val requestId: String,
+    ) : Sent
+
+    data class RequestPermissionRules(
+        val requestId: String,
+    ) : Sent
+
+    data class RenameSession(
+        val title: String,
+        val sessionId: String,
         val requestId: String,
     ) : Sent
 

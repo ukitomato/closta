@@ -11,6 +11,6 @@
     "record": "node record.mjs",
     "list": "node record.mjs --list",
     "verify": "node verify.mjs",
-    "test": "node scrub.test.mjs && node recorder.test.mjs && node replay.test.mjs"
+    "test": "node scrub.test.mjs && node recorder.test.mjs && node replay.test.mjs && node fake-mcp.test.mjs && node protocol.test.mjs"
   }
 }

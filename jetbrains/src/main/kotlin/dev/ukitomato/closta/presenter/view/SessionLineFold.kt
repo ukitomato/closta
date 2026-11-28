@@ -14,7 +14,7 @@ internal fun foldSessionLine(
     event: AgentEvent,
 ): Transcript =
     when (event) {
-        is AgentEvent.SystemInit -> foldCommandsOfInit(transcript, event)
+        is AgentEvent.SystemInit -> foldPluginsOfInit(foldCommandsOfInit(transcript, event), event)
         is AgentEvent.ConversationReset -> foldReset(transcript, event)
         is AgentEvent.SystemPermissionDenied ->
             transcript.markDenied(
@@ -35,7 +35,9 @@ private fun foldReset(
 ): Transcript {
     val (placed, messageKey) =
         transcript.withPart(event.uuid, CLEARED_PART) { key -> ClearedRecord(key, event.timestamp) }
-    return placed.copy(clearedAt = placed.messages.order.indexOf(messageKey), compactFailure = null)
+    return placed
+        .copy(clearedAt = placed.messages.order.indexOf(messageKey), compactFailure = null, customTitle = null)
+        .withOperations(placed.operations.contextReset())
 }
 
 /**

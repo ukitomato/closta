@@ -4,6 +4,7 @@ import dev.ukitomato.closta.core.interfaces.AgentSession
 import dev.ukitomato.closta.core.models.AgentEvent
 import dev.ukitomato.closta.core.models.ApprovalDecision
 import dev.ukitomato.closta.core.models.Attachment
+import dev.ukitomato.closta.core.models.ElicitationDecision
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -11,14 +12,14 @@ import kotlinx.coroutines.selects.select
 
 /**
  * An [AgentSession] fed by a [FakeScript] instead of a `claude` CLI — the test double that lets
- * send→turn-end, the approval round-trip, interrupt and the AFK timeout be measured without a
+ * send→turn-end, the approval round-trip, and interrupt be measured without a
  * process and without real or virtual time (a `javax.swing.Timer` could not be unit-tested).
  *
  * The same [AgentSessionContract] runs against this fake and against `ClaudeSession`; only
  * the factory hook differs. Nothing here decodes JSON: a script's [AgentEvent]s come from
  * the caller, who builds them with `CaptureFixtures`/`StreamJsonCodec` — one decoder.
  *
- * The AFK window is a host *decision*, not a timer. A [Beat.AwaitResponse] suspends the stream on a
+ * The wait for the user is a host *decision*, not a timer. A [Beat.AwaitResponse] suspends the stream on a
  * [CompletableDeferred] created **eagerly** below, so [respondToApproval] can complete it whether or not
  * the stream has reached the await yet. That removes the ordering hazard that would otherwise deadlock a
  * single-threaded `runBlocking` test — the answer can precede or follow the await.
@@ -78,6 +79,14 @@ class FakeAgentSession(
         responseGates[decision.requestId]?.complete(Unit)
     }
 
+    override suspend fun respondToElicitation(
+        decision: ElicitationDecision,
+        content: String?,
+    ) {
+        recorded += Sent.Elicitation(decision, content)
+        responseGates[decision.requestId]?.complete(Unit)
+    }
+
     override suspend fun setModel(
         model: String,
         requestId: String,
@@ -99,8 +108,48 @@ class FakeAgentSession(
         recorded += Sent.RequestContextUsage(requestId, full)
     }
 
+    override suspend fun renameSession(
+        title: String,
+        sessionId: String,
+        requestId: String,
+    ) {
+        recorded += Sent.RenameSession(title, sessionId, requestId)
+    }
+
     override suspend fun requestUsage(requestId: String) {
         recorded += Sent.RequestUsage(requestId)
+    }
+
+    override suspend fun reloadPlugins(
+        refuseIfBusy: Boolean,
+        requestId: String,
+    ) {
+        recorded += Sent.ReloadPlugins(refuseIfBusy, requestId)
+    }
+
+    override suspend fun backgroundTasks(
+        toolUseId: String?,
+        requestId: String,
+    ) {
+        recorded += Sent.BackgroundTasks(toolUseId, requestId)
+    }
+
+    override suspend fun requestTaskOutput(
+        taskId: String,
+        requestId: String,
+    ) {
+        recorded += Sent.TaskOutput(taskId, requestId)
+    }
+
+    override suspend fun cancelQueuedMessage(
+        messageUuid: String,
+        requestId: String,
+    ) {
+        recorded += Sent.CancelQueuedMessage(messageUuid, requestId)
+    }
+
+    override suspend fun requestPermissionRules(requestId: String) {
+        recorded += Sent.RequestPermissionRules(requestId)
     }
 
     /** The settings and effort requests, kept apart from [recorded] so the scripts' expectations stay as they were. */

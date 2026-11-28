@@ -1,6 +1,8 @@
 package dev.ukitomato.closta.platforms.intellij.session
 
+import dev.ukitomato.closta.core.models.ElicitationDecision
 import dev.ukitomato.closta.core.models.resolveApproval
+import dev.ukitomato.closta.core.models.resolveElicitation
 import dev.ukitomato.closta.presenter.view.PresenterInput
 
 /**
@@ -8,19 +10,25 @@ import dev.ukitomato.closta.presenter.view.PresenterInput
  * `resolveApproval`, and what only the host knows into the transcript. The tests that replay a capture through the
  * store use this one fold, so a new kind of input is one line here.
  */
+@Suppress("CyclomaticComplexMethod") // one branch per kind of input
 fun SessionView.fold(input: PresenterInput): SessionView =
     when (input) {
         is PresenterInput.Event -> event(input)
         is PresenterInput.UserSent -> sent(input)
-        PresenterInput.StopRequested -> requested(input)
+        PresenterInput.StopRequested,
+        PresenterInput.ProcessEnded,
+        -> requested(input)
         is PresenterInput.Decided ->
             decided(resolveApproval(conversation, input.decision, input.elapsedMs), input.decision, input.elapsedMs)
+        is PresenterInput.ElicitationDecided ->
+            folded(resolveElicitation(conversation, ElicitationDecision(input.requestId, input.action)), input)
         is PresenterInput.AnswerFailed -> answerFailed(input.approvalId, input.message)
         is PresenterInput.FilesFound -> filesFound(input.search)
         is PresenterInput.SelectionCaptured -> selectionCaptured(input.selection)
         is PresenterInput.CodeApplied -> codeApplied(input.applied)
         is PresenterInput.ControlRequested,
         is PresenterInput.ControlSendFailed,
+        is PresenterInput.TitleRestored,
         is PresenterInput.EffortRefused,
         is PresenterInput.Launched,
         is PresenterInput.SandboxRefused,
@@ -31,7 +39,7 @@ fun SessionView.fold(input: PresenterInput): SessionView =
         is PresenterInput.RewindNotSent,
         is PresenterInput.TurnChangesFound,
         is PresenterInput.RateLimitDismissed,
-        is PresenterInput.ResultSeenAt,
+        is PresenterInput.DiagnosticsReported,
         -> requested(input)
         is PresenterInput.SessionsListed -> listed(input)
         is PresenterInput.Restored -> restored(input.event)

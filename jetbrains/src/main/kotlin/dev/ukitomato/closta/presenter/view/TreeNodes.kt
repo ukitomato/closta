@@ -109,11 +109,11 @@ private val KNOWN_PART_TYPES = setOf("text", "reasoning", "tool-call", "attachme
 
 internal fun otherNode(record: OtherRecord): JsonObject {
     val type = record.type.takeUnless { it.isEmpty() || it in KNOWN_PART_TYPES } ?: "unknown"
-    return JsonObject.of("type" to JsonString(type))
+    return typedNode(type)
 }
 
-/** A [ClearedRecord] in the tree: a part of its own type, which a client that does not know it shows as unknown. */
-internal fun clearedNode(): JsonObject = JsonObject.of("type" to JsonString("cleared"))
+/** A part that is only its type, such as `cleared`, which a client that does not know it shows as unknown. */
+internal fun typedNode(type: String): JsonObject = JsonObject.of("type" to JsonString(type))
 
 internal fun toolCallNode(
     key: String,

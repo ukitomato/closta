@@ -43,8 +43,16 @@ data class ComposerState(
     val usageWaiting: Boolean,
     /** A `get_context_usage` request waits for the CLI's answer. */
     val contextWaiting: Boolean,
+    /** The last answer of `list_permission_rules`; null before the first. */
+    val rules: PermissionRulesRecord?,
+    /** A `list_permission_rules` request waits for the CLI's answer. */
+    val rulesWaiting: Boolean,
+    /** The CLI's sentence when it refused the last request for the rules. */
+    val rulesFailure: String?,
     /** The prompt cache of the last `result`; the screen reads it through [cacheClock]. */
     val cache: CacheRecord?,
+    /** A call in the thread runs in front and can be moved to the background (the stop button's menu offers it). */
+    val canBackground: Boolean,
 )
 
 /** The sandbox button: whether the sandbox is on, and why it cannot be pressed now, if it cannot. */
@@ -80,6 +88,7 @@ private val SWITCHES_SHOWN = setOf(SwitchKind.MODEL, SwitchKind.MODE, SwitchKind
 fun composerState(
     conversation: ConversationState,
     transcript: Transcript,
+    live: Boolean = true,
 ): ComposerState {
     val operations = transcript.operations
     val records = operations.models
@@ -115,7 +124,11 @@ fun composerState(
         usage = operations.usage,
         usageWaiting = operations.usageWaiting.isNotEmpty(),
         contextWaiting = operations.waiting.isNotEmpty(),
+        rules = operations.rules,
+        rulesWaiting = operations.rulesWaiting.isNotEmpty(),
+        rulesFailure = operations.rulesFailure,
         cache = operations.cache,
+        canBackground = canBackground(transcript, conversation, live),
     )
 }
 

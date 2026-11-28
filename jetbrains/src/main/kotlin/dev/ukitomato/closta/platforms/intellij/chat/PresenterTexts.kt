@@ -60,6 +60,7 @@ fun waitReasonText(reason: WaitReason): String =
         is WaitReason.Permission ->
             reason.subject?.let { ClostaBundle.message("wait.permission.subject", reason.toolName, it) }
                 ?: ClostaBundle.message("wait.permission", reason.toolName)
+        is WaitReason.Elicitation -> ClostaBundle.message("sessions.wait.elicitation", reason.heading)
         WaitReason.Other -> ClostaBundle.message("wait.other")
     }
 
@@ -70,4 +71,5 @@ fun rewindRefusalText(refusal: RewindRefusal): String =
         RewindRefusal.UNKNOWN -> ClostaBundle.message("rewind.refused.unknown")
         RewindRefusal.NOTHING_AFTER -> ClostaBundle.message("rewind.refused.nothingAfter")
         RewindRefusal.BEFORE_CLEAR -> ClostaBundle.message("rewind.refused.beforeClear")
+        RewindRefusal.CANCELLED -> ClostaBundle.message("rewind.refused.cancelled")
     }

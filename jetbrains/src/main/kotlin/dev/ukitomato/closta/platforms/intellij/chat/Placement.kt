@@ -102,7 +102,10 @@ private fun openInSidebar(
             parent,
         )
     // Returns the lease when the sidebar tab goes (the order among the parent's children does not matter: EDT only).
-    Disposer.register(parent) { lease.release() }
+    Disposer.register(parent) {
+        lease.leaving(leftViewOf(project, source, Placement.SIDEBAR))
+        lease.release()
+    }
     content.component = panel
     content.setDisposer(parent)
     content.preferredFocusableComponent = panel.preferredFocus()

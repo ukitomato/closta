@@ -31,26 +31,29 @@ fun marksAtClose(
                 WasRunningMark(it.workingDirectory, it.title, it.hostId)
         }
 
-/** The conversation a tab resumes, and the folder it ran in (null: the project's). */
+/**
+ * The conversation a tab resumes (null: a new one, nothing was said after its `/clear`), and the folder it ran in
+ * (null: the project's).
+ */
 data class TabResume(
-    val savedId: String,
+    val savedId: String?,
     val workingDirectory: String?,
 )
 
 /**
  * What the tab of the session [hostId], no longer open, resumes: the conversation it last showed, which a `/clear` made
- * other than [hostId]. That is the one it stopped with ([stopped], by the session's id, kept until the IDE closes),
- * else the one marked for it when its project last closed, else [hostId]. The folder is its mark's.
+ * other than [hostId]. That is the one in [cleared] (kept when the session stopped or its project closed), else the one
+ * marked for it when its project last closed, else [hostId]. The folder is the table's, else its mark's.
  */
 fun tabResume(
     hostId: String,
-    stopped: Map<String, String>,
+    cleared: Map<String, ClearedTab>,
     marks: Map<String, WasRunningMark>,
 ): TabResume {
-    val saved =
-        stopped[hostId]
-            ?: marks.entries.firstOrNull { it.value.hostId == hostId }?.key
-            ?: hostId
+    cleared[hostId]?.let { tab ->
+        return TabResume(tab.resumeId, tab.workingDirectory ?: tab.resumeId?.let { marks[it]?.workingDirectory })
+    }
+    val saved = marks.entries.firstOrNull { it.value.hostId == hostId }?.key ?: hostId
     return TabResume(saved, marks[saved]?.workingDirectory)
 }
 
@@ -62,3 +65,6 @@ fun wasRunningKey(locationHash: String): String = "closta.sessions.wasRunning.$l
  * own. A session the IDE has already closed (its scope is cancelled as the project closes) was alive until then.
  */
 fun aliveAtClose(status: SessionStatus): Boolean = status !is SessionStatus.Ended && status !is SessionStatus.Failed
+
+/** The settings key of the cleared tabs of the project whose location hash is [locationHash]. */
+fun clearedTabsKey(locationHash: String): String = "closta.sessions.clearedTabs.$locationHash"

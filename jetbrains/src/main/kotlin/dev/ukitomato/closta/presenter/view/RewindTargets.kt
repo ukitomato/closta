@@ -44,7 +44,13 @@ enum class RewindRefusal {
 
     /** The ask came before the conversation was cleared: the CLI's conversation now has no record of it. */
     BEFORE_CLEAR,
+
+    /** The message was withdrawn before the CLI started it: the CLI has nothing of it. */
+    CANCELLED,
 }
+
+/** Whether the screen shows no rewind or fork at all for a refusal: the ask can never be one. */
+val RewindRefusal.offersNothing: Boolean get() = this == RewindRefusal.BEFORE_CLEAR || this == RewindRefusal.CANCELLED
 
 private fun refused(why: RewindRefusal) = AskActions(null, null, null, why)
 
@@ -57,6 +63,7 @@ fun askActions(
     val asks = liveAsks(transcript)
     val at = asks.indexOf(askKey)
     return when {
+        askKey in transcript.withdrawn -> refused(RewindRefusal.CANCELLED)
         // Before a clear nothing is ever offered, running or not: the screen does not show the buttons at all.
         at < 0 && askKey in sentAsks(transcript) -> refused(RewindRefusal.BEFORE_CLEAR)
         running -> refused(RewindRefusal.RUNNING)
@@ -87,6 +94,7 @@ fun turnEndActions(
     val at = asks.indexOf(askKey)
     val next = asks.getOrNull(at + 1)
     return when {
+        askKey in transcript.withdrawn -> refused(RewindRefusal.CANCELLED)
         // Before a clear nothing is ever offered, running or not: the screen does not show the buttons at all.
         at < 0 && askKey in sentAsks(transcript) -> refused(RewindRefusal.BEFORE_CLEAR)
         running -> refused(RewindRefusal.RUNNING)
@@ -99,7 +107,7 @@ fun turnEndActions(
 /** The keys of the thread's user messages the CLI knows by a uuid, in order. */
 internal fun sentAsks(transcript: Transcript): List<String> =
     transcript.messages.order.filter { key ->
-        key in transcript.userUuids && transcript.messages[key]?.role == Role.USER
+        key in transcript.userUuids && transcript.messages[key]?.role == Role.USER && key !in transcript.withdrawn
     }
 
 /** [sentAsks] after the last clear: the asks of the conversation the CLI has now. */

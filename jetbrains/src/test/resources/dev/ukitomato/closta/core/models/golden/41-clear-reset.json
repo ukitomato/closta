@@ -33,5 +33,6 @@
   "thinkingEstimate": 135,
   "notices": [],
   "spontaneousResumeCount": 0,
-  "pendingApprovals": []
+  "pendingApprovals": [],
+  "settledElicitations": []
 }

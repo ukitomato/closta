@@ -7,6 +7,7 @@ import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import dev.ukitomato.closta.core.models.Attachment
 import dev.ukitomato.closta.core.models.AttachmentKind
+import dev.ukitomato.closta.providers.claude.host.HookDeclaration
 import java.nio.ByteBuffer
 import java.nio.charset.CharacterCodingException
 import java.nio.charset.CodingErrorAction
@@ -130,20 +131,73 @@ object StdinEncoder {
      * "sdkMcpServers and webSearchIsolationExemptMcpServers must be arrays of strings".
      *
      * [sdkMcpServers] names the in-process MCP servers the host answers for; the default is the empty array,
-     * so a call without it writes the same line as before the parameter existed.
+     * so a call without it writes the same line as before the parameter existed. [hooks] are the hooks the host
+     * answers for, as `{event: [{matcher, hookCallbackIds, timeout}]}`; none is `{}`.
      */
     fun initialize(
         requestId: String,
         sdkMcpServers: List<String> = emptyList(),
+        hooks: List<HookDeclaration> = emptyList(),
     ): String =
         controlRequest(requestId) {
             addProperty("subtype", "initialize")
-            add("hooks", JsonObject())
+            add("hooks", hooksObject(hooks))
             add("sdkMcpServers", JsonArray().apply { sdkMcpServers.forEach(::add) })
             add("webSearchIsolationExemptMcpServers", JsonArray())
             // The host shows a stop control per task, so an interrupt leaves background tasks running
             // (sdk.d.ts 0.3.317).
             addProperty("perTaskStopAffordance", true)
+        }
+
+    /** Answering a `hook_callback`: [payload] (the caller's JSON object, embedded as-is) is what the hook returns. */
+    fun hookResponse(
+        requestId: String,
+        payload: String,
+    ): String =
+        controlResponse(requestId) {
+            JsonParser
+                .parseString(payload)
+                .asJsonObject
+                .entrySet()
+                .forEach { (key, value) -> add(key, value) }
+        }
+
+    /** An error `control_response` (sdk.d.ts `ControlErrorResponse`): the request failed, in the words of [message]. */
+    fun controlError(
+        requestId: String,
+        message: String,
+    ): String =
+        JsonObject()
+            .apply {
+                addProperty("type", "control_response")
+                add(
+                    "response",
+                    JsonObject().apply {
+                        addProperty("subtype", "error")
+                        addProperty("request_id", requestId)
+                        addProperty("error", message)
+                    },
+                )
+            }.toString()
+
+    private fun hooksObject(hooks: List<HookDeclaration>): JsonObject =
+        JsonObject().apply {
+            hooks.groupBy { it.event }.forEach { (event, declared) ->
+                add(
+                    event,
+                    JsonArray().apply {
+                        declared.forEach { hook ->
+                            add(
+                                JsonObject().apply {
+                                    addProperty("matcher", hook.matcher)
+                                    add("hookCallbackIds", JsonArray().apply { add(hook.callbackId) })
+                                    addProperty("timeout", hook.timeoutSeconds)
+                                },
+                            )
+                        }
+                    },
+                )
+            }
         }
 
     /** `interrupt` as a control_request. See also [cancelRequest] for the top-level form. */
@@ -212,6 +266,23 @@ object StdinEncoder {
         }
 
     /**
+     * Names the session, as the user chose in the host (`source: "host"`, which the CLI counts as the user's own
+     * rename); [sessionId] makes the CLI refuse the request when its process has moved on to another session
+     * (`SDKControlRenameSessionRequest` in sdk.d.ts 0.3.325).
+     */
+    fun renameSession(
+        requestId: String,
+        title: String,
+        sessionId: String,
+    ): String =
+        controlRequest(requestId) {
+            addProperty("subtype", "rename_session")
+            addProperty("title", title)
+            addProperty("source", "host")
+            addProperty("session_id", sessionId)
+        }
+
+    /**
      * `get_usage`: the session's cost and the plan's limits. [skipBehaviors] spares the CLI the scan of the last seven
      * days' transcripts, whose section the host does not read (capture 43 line 16 holds the answer to it;
      * `SDKControlGetUsageRequest` in sdk.d.ts 0.3.325, which calls the shape experimental).
@@ -223,6 +294,70 @@ object StdinEncoder {
         controlRequest(requestId) {
             addProperty("subtype", "get_usage")
             addProperty("skip_behaviors", skipBehaviors)
+        }
+
+    /**
+     * `reload_plugins`: reloads plugins from disk. [refuseIfBusy] is sent only when true (the CLI honors it when its
+     * init lists `reload_plugins_refuse_if_busy_v1`, and may ignore it otherwise); `hold_on_cache_impact` is never
+     * sent (`SDKControlReloadPluginsRequest` in sdk.d.ts 0.3.325). No capture holds the request.
+     */
+    fun reloadPlugins(
+        requestId: String,
+        refuseIfBusy: Boolean,
+    ): String =
+        controlRequest(requestId) {
+            addProperty("subtype", "reload_plugins")
+            if (refuseIfBusy) addProperty("refuse_if_busy", true)
+        }
+
+    /**
+     * `background_tasks`: moves running foreground work to the background. With [toolUseId] only the task that tool
+     * use started; null leaves the field out and moves all of them (`SDKControlBackgroundTasksRequest` in sdk.d.ts
+     * 0.3.325). No capture holds the request.
+     */
+    fun backgroundTasks(
+        requestId: String,
+        toolUseId: String?,
+    ): String =
+        controlRequest(requestId) {
+            addProperty("subtype", "background_tasks")
+            if (toolUseId != null) addProperty("tool_use_id", toolUseId)
+        }
+
+    /**
+     * `get_task_output`: reads the end (at most 8 KiB) of the output of the shell or Monitor task [taskId]
+     * (`SDKControlGetTaskOutputRequest` in sdk.d.ts 0.3.325). No capture holds the request.
+     */
+    fun getTaskOutput(
+        requestId: String,
+        taskId: String,
+    ): String =
+        controlRequest(requestId) {
+            addProperty("subtype", "get_task_output")
+            addProperty("task_id", taskId)
+        }
+
+    /**
+     * `cancel_async_message`: withdraws the queued message [messageUuid]. The CLI answers whether it was still queued
+     * (`SDKControlCancelAsyncMessageRequest` in sdk.d.ts 0.3.325); no capture holds the request.
+     */
+    fun cancelAsyncMessage(
+        requestId: String,
+        messageUuid: String,
+    ): String =
+        controlRequest(requestId) {
+            addProperty("subtype", "cancel_async_message")
+            addProperty("message_uuid", messageUuid)
+        }
+
+    /**
+     * `list_permission_rules`: the rules the session applies, each with its source (a settings file, a session grant
+     * or a CLI flag), and the directories it works in. The request has no fields
+     * (`SDKControlListPermissionRulesRequest` in sdk.d.ts 0.3.325); no capture holds it.
+     */
+    fun listPermissionRules(requestId: String): String =
+        controlRequest(requestId) {
+            addProperty("subtype", "list_permission_rules")
         }
 
     /**
@@ -336,6 +471,20 @@ object StdinEncoder {
             if (updatedPermissions != null) {
                 add("updatedPermissions", JsonParser.parseString(updatedPermissions))
             }
+        }
+
+    /**
+     * Answering an `elicitation` request: [action] (`accept`, `decline` or `cancel`) and, when there are form values,
+     * [content] (the caller's JSON object, embedded as-is). A null [content] leaves the field out.
+     */
+    fun elicitationResponse(
+        requestId: String,
+        action: String,
+        content: String?,
+    ): String =
+        controlResponse(requestId) {
+            addProperty("action", action)
+            if (content != null) add("content", JsonParser.parseString(content))
         }
 
     /**

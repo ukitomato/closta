@@ -1,6 +1,7 @@
 package dev.ukitomato.closta.presenter.view
 
 import dev.ukitomato.closta.core.models.AgentEvent
+import dev.ukitomato.closta.core.models.RawJson
 import dev.ukitomato.closta.platforms.intellij.session.SessionView
 import dev.ukitomato.closta.providers.claude.protocol.StreamJsonCodec
 import dev.ukitomato.closta.providers.claude.synthetic.SyntheticSession
@@ -23,11 +24,24 @@ class TranscriptFoldBudgetTest {
         val event: AgentEvent,
     ) : Step
 
+    // One MCP server's request for input, which the first turn's result takes away.
+    private val asked =
+        Line(
+            AgentEvent.Elicitation(
+                requestId = "ask1",
+                serverName = "files",
+                mode = "form",
+                elicitationId = null,
+                request = RawJson("""{"subtype":"elicitation","mcp_server_name":"files","message":"Name?"}"""),
+            ),
+        )
+
     private fun steps(shape: SyntheticSession.Shape): List<Step> =
-        SyntheticSession.turns(shape).flatMapIndexed { index, turn ->
-            listOf(Send(PresenterInput.UserSent("u$index", turn.prompt))) +
-                turn.lines.map { Line(StreamJsonCodec.decode(it)) }
-        }
+        listOf(asked) +
+            SyntheticSession.turns(shape).flatMapIndexed { index, turn ->
+                listOf(Send(PresenterInput.UserSent("u$index", turn.prompt))) +
+                    turn.lines.map { Line(StreamJsonCodec.decode(it)) }
+            }
 
     private fun SessionView.take(step: Step): SessionView =
         when (step) {

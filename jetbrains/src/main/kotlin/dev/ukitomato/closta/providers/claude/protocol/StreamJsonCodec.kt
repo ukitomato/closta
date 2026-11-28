@@ -21,7 +21,7 @@ import dev.ukitomato.closta.core.models.RawJson
  *
  * [decode] never throws: a line the reader cannot place still comes back as a value, because a reader
  * that throws stops reading and a stdout reader that stops deadlocks the CLI behind a full pipe.
- * A line whose `type` is not one of the twenty-three, or of a known kind but missing a field the declared
+ * A line whose `type` is not one of the twenty-six, or of a known kind but missing a field the declared
  * shape needs, becomes [AgentEvent.UnknownKind] — in both cases the protocol has moved. A line that
  * is not a JSON object at all becomes [AgentEvent.BrokenLine] — damaged bytes rather than a new
  * version, a different thing to go and look at. A line nested deeper than [MAX_DEPTH] is also a
@@ -35,6 +35,7 @@ object StreamJsonCodec {
     private const val SYSTEM = "system"
     private const val CONTROL_REQUEST = "control_request"
     private const val CAN_USE_TOOL = "can_use_tool"
+    private const val ELICITATION = "elicitation"
 
     /**
      * The deepest nesting a line may have (objects and arrays together; the top-level object counts
@@ -109,16 +110,24 @@ object StreamJsonCodec {
     /** Places an already-parsed line, or counts it as unknown when nothing here matches its shape. */
     private fun place(json: JsonObject): AgentEvent {
         val wireType = wireTypeOf(json)
-        if (wireType == CONTROL_REQUEST) {
-            // Only can_use_tool is an approval. Anything else would become a pending approval nobody
-            // can answer, so it is counted as unknown under `control_request/<subtype>` instead.
-            val subtype = (json.get("request") as? JsonObject)?.let { primitiveText(it, "subtype") }
-            if (subtype != CAN_USE_TOOL) {
-                val unplaced = if (subtype == null) CONTROL_REQUEST else "$CONTROL_REQUEST/$subtype"
-                return AgentEvent.UnknownKind(unplaced, RawJson(json.toString()))
-            }
+        if (wireType != CONTROL_REQUEST) return build(AgentEventKind.ofWireType(wireType), json)
+        // Only can_use_tool is an approval and only elicitation is a form to fill. Anything else would
+        // become a pending request nobody can answer, so it is counted as unknown under
+        // `control_request/<subtype>` instead.
+        val subtype = (json.get("request") as? JsonObject)?.let { primitiveText(it, "subtype") }
+        return when (subtype) {
+            CAN_USE_TOOL -> build(AgentEventKind.CONTROL_REQUEST, json)
+            ELICITATION -> build(AgentEventKind.ELICITATION_REQUEST, json)
+            else -> AgentEvent.UnknownKind(wireType + (subtype?.let { "/$it" } ?: ""), RawJson(json.toString()))
         }
-        val build = AgentEventKind.ofWireType(wireType)?.let(BUILDERS::get)
+    }
+
+    private fun build(
+        kind: AgentEventKind?,
+        json: JsonObject,
+    ): AgentEvent {
+        val wireType = kind?.wireType ?: wireTypeOf(json)
+        val build = kind?.let(BUILDERS::get)
         val unknown = AgentEvent.UnknownKind(wireType, RawJson(json.toString()))
         return try {
             build?.invoke(Fields(json)) ?: unknown
@@ -212,7 +221,7 @@ object StreamJsonCodec {
     /**
      * One builder per kind, keyed rather than branched.
      *
-     * A twenty-three-armed `when` would be one unit that grows every time the protocol does; a map keeps
+     * A twenty-six-armed `when` would be one unit that grows every time the protocol does; a map keeps
      * each kind's field list next to that kind alone, and a kind with no entry falls through to
      * unknown instead of to an unreachable branch.
      */
@@ -311,6 +320,7 @@ object StreamJsonCodec {
                     productFeedbackDisabled = f.flag("product_feedback_disabled"),
                     perTurnEffortActive = f.flag("per_turn_effort_active"),
                     fastModeDisabledReason = f.textOrNull("fast_mode_disabled_reason"),
+                    pluginErrors = f.rawOrNull("plugin_errors"),
                 )
             },
             AgentEventKind.RESULT to { f ->
@@ -492,6 +502,30 @@ object StreamJsonCodec {
                     retryDelayMs = f.whole("retry_delay_ms"),
                     errorStatus = f.countOrNull("error_status"),
                     error = f.textOrNull("error"),
+                )
+            },
+            AgentEventKind.CONTROL_CANCEL_REQUEST to { f ->
+                AgentEvent.ControlCancel(requestId = f.text("request_id"))
+            },
+            AgentEventKind.ELICITATION_REQUEST to { f ->
+                val requestObject = requireNotNull(f.nested("request")) { "line has no request object" }
+                // The server and the message are what the card cannot be drawn without.
+                val serverName = requireNotNull(primitiveText(requestObject, "mcp_server_name")) { "no server" }
+                requireNotNull(primitiveText(requestObject, "message")) { "no message" }
+                AgentEvent.Elicitation(
+                    requestId = f.text("request_id"),
+                    serverName = serverName,
+                    mode = primitiveText(requestObject, "mode"),
+                    elicitationId = primitiveText(requestObject, "elicitation_id"),
+                    request = f.raw("request"),
+                )
+            },
+            AgentEventKind.SYSTEM_ELICITATION_COMPLETE to { f ->
+                AgentEvent.SystemElicitationComplete(
+                    uuid = f.text("uuid"),
+                    sessionId = f.text("session_id"),
+                    serverName = f.text("mcp_server_name"),
+                    elicitationId = f.text("elicitation_id"),
                 )
             },
         )

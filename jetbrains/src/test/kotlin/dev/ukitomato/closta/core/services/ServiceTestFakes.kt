@@ -5,6 +5,7 @@ import dev.ukitomato.closta.core.interfaces.Clock
 import dev.ukitomato.closta.core.models.AgentEvent
 import dev.ukitomato.closta.core.models.ApprovalDecision
 import dev.ukitomato.closta.core.models.Attachment
+import dev.ukitomato.closta.core.models.ElicitationDecision
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.asFlow
 import java.time.Instant
@@ -21,12 +22,14 @@ class RecordingAgentSession(
     val sentMessages = mutableListOf<String>()
     val sentAttachments = mutableListOf<List<Attachment>>()
     val approvalResponses = mutableListOf<Pair<ApprovalDecision, String?>>()
+    val elicitationResponses = mutableListOf<Pair<ElicitationDecision, String?>>()
     val acceptedPermissions = mutableListOf<String?>()
     val setModels = mutableListOf<String>()
     val setModelIds = mutableListOf<String>()
     val setModes = mutableListOf<Pair<String, String>>()
     val contextRequests = mutableListOf<String>()
     val usageRequests = mutableListOf<String>()
+    val pluginReloads = mutableListOf<Pair<Boolean, String>>()
     val sentUuids = mutableListOf<String?>()
     val rewinds = mutableListOf<Triple<String, Boolean, String>>()
     var interruptCount = 0
@@ -51,6 +54,13 @@ class RecordingAgentSession(
     ) {
         approvalResponses += decision to payload
         acceptedPermissions += updatedPermissions
+    }
+
+    override suspend fun respondToElicitation(
+        decision: ElicitationDecision,
+        content: String?,
+    ) {
+        elicitationResponses += decision to content
     }
 
     override suspend fun setModel(
@@ -83,8 +93,58 @@ class RecordingAgentSession(
         contextRequests += requestId
     }
 
+    val renames = mutableListOf<Triple<String, String, String>>()
+
+    override suspend fun renameSession(
+        title: String,
+        sessionId: String,
+        requestId: String,
+    ) {
+        renames += Triple(title, sessionId, requestId)
+    }
+
     override suspend fun requestUsage(requestId: String) {
         usageRequests += requestId
+    }
+
+    override suspend fun reloadPlugins(
+        refuseIfBusy: Boolean,
+        requestId: String,
+    ) {
+        pluginReloads += refuseIfBusy to requestId
+    }
+
+    val taskOutputRequests = mutableListOf<Pair<String, String>>()
+
+    override suspend fun requestTaskOutput(
+        taskId: String,
+        requestId: String,
+    ) {
+        taskOutputRequests += taskId to requestId
+    }
+
+    val backgroundRequests = mutableListOf<Pair<String?, String>>()
+
+    override suspend fun backgroundTasks(
+        toolUseId: String?,
+        requestId: String,
+    ) {
+        backgroundRequests += toolUseId to requestId
+    }
+
+    val queuedCancellations = mutableListOf<Pair<String, String>>()
+
+    override suspend fun cancelQueuedMessage(
+        messageUuid: String,
+        requestId: String,
+    ) {
+        queuedCancellations += messageUuid to requestId
+    }
+
+    val permissionRuleRequests = mutableListOf<String>()
+
+    override suspend fun requestPermissionRules(requestId: String) {
+        permissionRuleRequests += requestId
     }
 
     val settingsRequests = mutableListOf<String>()

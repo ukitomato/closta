@@ -35,13 +35,18 @@ import dev.ukitomato.closta.platforms.intellij.ui.plainHtml
 import dev.ukitomato.closta.platforms.intellij.ui.plainTip
 import dev.ukitomato.closta.presenter.view.AskAction
 import dev.ukitomato.closta.presenter.view.AskActions
+import dev.ukitomato.closta.presenter.view.AskCancel
 import dev.ukitomato.closta.presenter.view.AskRow
 import dev.ukitomato.closta.presenter.view.AttachmentRecord
+import dev.ukitomato.closta.presenter.view.BackgroundOffer
+import dev.ukitomato.closta.presenter.view.BackgroundPhase
+import dev.ukitomato.closta.presenter.view.CancelPhase
 import dev.ukitomato.closta.presenter.view.CardRow
 import dev.ukitomato.closta.presenter.view.DividerRow
 import dev.ukitomato.closta.presenter.view.ExploredRow
 import dev.ukitomato.closta.presenter.view.NoticeLevel
 import dev.ukitomato.closta.presenter.view.NoticeRow
+import dev.ukitomato.closta.presenter.view.REQUEST_NOT_SENT
 import dev.ukitomato.closta.presenter.view.SignInRow
 import dev.ukitomato.closta.presenter.view.ThinkingRow
 import dev.ukitomato.closta.presenter.view.ThreadRow
@@ -52,6 +57,7 @@ import dev.ukitomato.closta.presenter.view.ToolLineState
 import dev.ukitomato.closta.presenter.view.ToolRow
 import dev.ukitomato.closta.presenter.view.TurnEndRow
 import dev.ukitomato.closta.presenter.view.shortTokens
+import dev.ukitomato.closta.presenter.view.visible
 import java.awt.BorderLayout
 import java.awt.Component
 import java.awt.Dimension
@@ -84,6 +90,7 @@ import javax.swing.text.Document
  * What the rows ask the surface to do: answer a card, open a sub-agent, measure a row that opened or closed, review a
  * turn, rewind or fork from an ask.
  */
+@Suppress("TooManyFunctions") // one function per thing a row can ask of the surface
 interface RowActions {
     fun answer(answer: CardAnswer)
 
@@ -94,6 +101,12 @@ interface RowActions {
 
     /** Shows what the turn that answered [askKey] changed. */
     fun review(askKey: String)
+
+    /** Withdraws the message the ask [askKey] sent, which the CLI has queued and not started. */
+    fun cancelQueued(askKey: String)
+
+    /** Moves the running call [toolUseId] to the background. */
+    fun moveToBackground(toolUseId: String)
 
     /** What the ask [askKey] offers now, or with [atEnd] what the end of its turn offers. */
     fun askActions(
@@ -295,33 +308,75 @@ class ThreadRowViews(
                     val folded = foldedAsk(row.text)
                     val isOpen = row.key in open
                     val shown = if (folded != null && !isOpen) folded else row.text
-                    add(wrapping(shown).also(::markMentions), BorderLayout.CENTER)
-                    if (folded != null) {
-                        val more =
-                            if (isOpen) {
-                                ClostaBundle.message(
-                                    "thread.ask.collapse",
-                                )
-                            } else {
-                                ClostaBundle.message("thread.ask.showAll")
-                            }
-                        add(
-                            JPanel(FlowLayout(FlowLayout.LEFT, 0, 0)).apply {
-                                isOpaque = false
-                                add(
-                                    ActionLink(more) {
-                                        if (!open.add(row.key)) open.remove(row.key)
-                                        actions.resized(row.key)
-                                    },
-                                )
-                            },
-                            BorderLayout.SOUTH,
-                        )
-                    }
+                    add(wrapping(shown).also(::markMentions).also { dimWithdrawn(it, row.cancel) }, BorderLayout.CENTER)
+                    askSouth(row, folded != null, isOpen)?.let { add(it, BorderLayout.SOUTH) }
                 },
                 BorderLayout.CENTER,
             )
         }
+
+    // Under the ask's words: the link that opens or closes a long one, and what there is to say of withdrawing it.
+    private fun askSouth(
+        row: AskRow,
+        folded: Boolean,
+        isOpen: Boolean,
+    ): JComponent? {
+        val south =
+            JPanel().apply {
+                isOpaque = false
+                layout = BoxLayout(this, BoxLayout.Y_AXIS)
+            }
+        if (folded) {
+            val more =
+                if (isOpen) ClostaBundle.message("thread.ask.collapse") else ClostaBundle.message("thread.ask.showAll")
+            south.add(
+                JPanel(FlowLayout(FlowLayout.LEFT, 0, 0)).apply {
+                    isOpaque = false
+                    add(
+                        ActionLink(more) {
+                            if (!open.add(row.key)) open.remove(row.key)
+                            actions.resized(row.key)
+                        },
+                    )
+                },
+            )
+        }
+        row.cancel?.let { south.add(cancelLine(row.key, it)) }
+        return south.takeIf { it.componentCount > 0 }
+    }
+
+    // Under a message sent during a turn: the link to withdraw it while the CLI still holds it, then what became of it.
+    private fun cancelLine(
+        askKey: String,
+        cancel: AskCancel,
+    ): JComponent =
+        JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(GAP), 0)).apply {
+            isOpaque = false
+            val link = cancel.phase == CancelPhase.OFFER || cancel.phase == CancelPhase.FAILED
+            if (link) add(ActionLink(ClostaBundle.message("thread.ask.cancel")) { actions.cancelQueued(askKey) })
+            val words =
+                when (cancel.phase) {
+                    CancelPhase.OFFER -> null
+                    CancelPhase.WAITING -> ClostaBundle.message("thread.ask.cancelling")
+                    CancelPhase.CANCELLED -> ClostaBundle.message("thread.ask.cancelled")
+                    CancelPhase.TOO_LATE -> ClostaBundle.message("thread.ask.tooLate")
+                    CancelPhase.FAILED ->
+                        if (cancel.detail == REQUEST_NOT_SENT) {
+                            ClostaBundle.message("thread.ask.cancelNotSent")
+                        } else {
+                            ClostaBundle.message("thread.ask.cancelFailed", visible(cancel.detail.orEmpty()).text)
+                        }
+                }
+            words?.let { add(JBLabel(it).noHtml().apply { foreground = ThreadStyle.muted }) }
+        }
+
+    // A withdrawn message is dimmed: it will not run.
+    private fun dimWithdrawn(
+        area: JTextArea,
+        cancel: AskCancel?,
+    ) {
+        if (cancel?.phase == CancelPhase.CANCELLED) area.foreground = ThreadStyle.muted
+    }
 
     // The ask's `@` mentions on a soft mark of the accent, the way the composer shows them.
     private fun markMentions(area: JTextArea) {
@@ -422,7 +477,7 @@ class ThreadRowViews(
     private fun thinking(row: ThinkingRow): JComponent {
         val key = row.key
         val isOpen = key in open
-        val estimate = row.estimate?.takeIf { row.streaming }
+        val estimate = row.estimate
         val sentence =
             when {
                 estimate != null -> ClostaBundle.message("thread.thinking.runningEstimate", shortTokens(estimate))
@@ -450,8 +505,35 @@ class ThreadRowViews(
         val key = row.key
         val isOpen = key in open
         val body = if (isOpen) row.detail?.let(::toolBody) else null
-        return indented(column(toggle(key, isOpen, toolLine(row.line), named), body), row.depth)
+        val header = column(toggle(key, isOpen, toolLine(row.line), named), body)
+        val offer = row.background?.let { backgroundLine(row.toolUseId, it) }
+        return indented(if (offer == null) header else column(header, offer), row.depth)
     }
+
+    // Under a running call: the link to move it to the background, then how the request stands.
+    private fun backgroundLine(
+        toolUseId: String,
+        offer: BackgroundOffer,
+    ): JComponent =
+        JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(GAP), 0)).apply {
+            isOpaque = false
+            border = JBUI.Borders.emptyLeft(ThreadStyle.INDENT)
+            if (offer.phase != BackgroundPhase.WAITING) {
+                add(ActionLink(ClostaBundle.message("thread.tool.background")) { actions.moveToBackground(toolUseId) })
+            }
+            val words =
+                when (offer.phase) {
+                    BackgroundPhase.OFFER -> null
+                    BackgroundPhase.WAITING -> ClostaBundle.message("thread.tool.backgrounding")
+                    BackgroundPhase.FAILED ->
+                        if (offer.detail == REQUEST_NOT_SENT) {
+                            ClostaBundle.message("thread.tool.backgroundNotSent")
+                        } else {
+                            ClostaBundle.message("thread.tool.backgroundFailed", visible(offer.detail.orEmpty()).text)
+                        }
+                }
+            words?.let { add(JBLabel(it).noHtml().apply { foreground = ThreadStyle.muted }) }
+        }
 
     /**
      * A sub-agent as a one-line card: its state, what it was asked to do and how many tools it has called. Pressing it
@@ -495,6 +577,7 @@ class ThreadRowViews(
         return CardPanel(ThreadStyle.cardBorder).apply {
             layout = BorderLayout()
             add(opener, BorderLayout.CENTER)
+            row.background?.let { add(backgroundLine(row.toolUseId, it), BorderLayout.SOUTH) }
         }
     }
 
@@ -708,11 +791,16 @@ class ThreadRowViews(
             EllipsizedLine(
                 ThreadStyle.pieces(line),
                 ThreadStyle.stateIcon(line.state),
-                note = listOfNotNull(what, ThreadStyle.stateWord(line)).joinToString(" — "),
+                note = listOfNotNull(what, ThreadStyle.stateWord(line)).joinToString(" — ").withReported(line),
             ).apply { getAccessibleContext().accessibleName = toolName(line) }
 
+        private fun String.withReported(line: ToolLine): String =
+            ThreadStyle.reportedText(line)?.let { "$this\n$it" } ?: this
+
         /** What a screen reader says of a tool line: what it is, then its state in words. */
-        fun toolName(line: ToolLine): String = "${line.label} ${ThreadStyle.stateWord(line)}"
+        fun toolName(line: ToolLine): String =
+            listOfNotNull(line.label, ThreadStyle.stateWord(line), ThreadStyle.reportedText(line)?.lines()?.first())
+                .joinToString(" ")
 
         /**
          * Monospaced [text] in a soft box, not wrapped: no taller than [CODE_LINES] lines (the rest scrolls inside with

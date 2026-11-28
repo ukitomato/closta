@@ -2,6 +2,7 @@ package dev.ukitomato.closta.platforms.intellij.composer
 
 import dev.ukitomato.closta.platforms.intellij.ClostaBundle
 import dev.ukitomato.closta.presenter.view.SwitchKind
+import java.util.Locale
 
 // What the line under the composer says, decided without the IDE: who said it, and for how long. Free of
 // `com.intellij`.
@@ -85,3 +86,24 @@ val WAITING_FOR_CLI: String get() = ClostaBundle.message("composer.waitingForCli
  * longer than the wait, and the presenter says itself when a sandbox switch fails.
  */
 fun answersLate(kind: SwitchKind): Boolean = kind != SwitchKind.SANDBOX
+
+/** The cost as the button says it: two decimals, and zero while none is known. */
+fun costLabel(costUsd: Double?): String = "%.2f".format(Locale.ROOT, costUsd ?: 0.0)
+
+/** What the context popup shows below the totals. */
+enum class BreakdownBody { ROWS, COUNTING, RECOUNT }
+
+/**
+ * The popup's body: the rows when there are [categories]; else it is counting while the request is [waiting] or was
+ * just made ([forced], before the request is recorded), and offers to count again otherwise.
+ */
+fun breakdownBody(
+    categories: Int,
+    waiting: Boolean,
+    forced: Boolean,
+): BreakdownBody =
+    when {
+        categories > 0 -> BreakdownBody.ROWS
+        waiting || forced -> BreakdownBody.COUNTING
+        else -> BreakdownBody.RECOUNT
+    }

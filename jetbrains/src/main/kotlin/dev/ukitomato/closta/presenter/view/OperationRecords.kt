@@ -40,6 +40,24 @@ enum class ControlKind {
 
     /** `get_usage`, the session's cost and the plan's limits: it waits in a column of its own, as the context does. */
     USAGE,
+
+    /** The running session named by the user; the value is the name, which is kept only until the CLI answers. */
+    RENAME,
+
+    /** `list_permission_rules`, the rules the session runs with: it waits in a column of its own. */
+    PERMISSION_RULES,
+
+    /** A message sent during a turn, withdrawn before the CLI starts it; the value is the message's uuid. */
+    CANCEL_QUEUED,
+
+    /** `reload_plugins`: it waits in a column of its own. */
+    RELOAD_PLUGINS,
+
+    /** `background_tasks`: the value is the tool use id of the call to move, null for every running one. */
+    BACKGROUND,
+
+    /** `get_task_output`: the value is the id of the shell task whose output is read. */
+    TASK_OUTPUT,
 }
 
 /**
@@ -213,15 +231,42 @@ data class OperationRecords(
     val usageWaiting: List<String> = emptyList(),
     /** The last `get_usage` answer that could be read; null before the first. */
     val usage: UsageRecord? = null,
-    /**
-     * How long the prompt cache lives, as the last `result` that read or wrote it says; null before one, and after a
-     * `result` that names no model (`/clear`'s).
-     */
-    val cacheTtlMs: Long? = null,
-    /** The last `result` read or wrote the cache, so the time it is seen at starts the clock again. */
-    val cacheTouched: Boolean = false,
     /** When the host saw the last `result` that had a cache, and how long that cache lives; null when it had none. */
     val cache: CacheRecord? = null,
+    /** The names asked for, by the id of each rename not answered yet, oldest first; see [renameAsked]. */
+    val renameAsks: Map<String, String> = emptyMap(),
+    /** The last rename the CLI refused; null before one, and after a launch. */
+    val renameFailure: RenameFailure? = null,
+    /** The ids of the `list_permission_rules` requests not answered yet. */
+    val rulesWaiting: List<String> = emptyList(),
+    /** The last `list_permission_rules` answer that could be read; null before the first. */
+    val rules: PermissionRulesRecord? = null,
+    /** The CLI's sentence for the last refused request for the rules; null before one, after an answer or a launch. */
+    val rulesFailure: String? = null,
+    /** The message uuid each withdrawal not answered yet asked for, by request id, oldest first; see [cancelAsked]. */
+    val cancelAsks: Map<String, String> = emptyMap(),
+    /** What each withdrawn or withdrawing message says of it, by the message's uuid (the newest [MAX_CANCELS]). */
+    val cancels: Map<String, AskCancel> = emptyMap(),
+    /** The tool use id each `background_tasks` request not answered yet asked for, by request id, oldest first. */
+    val backgroundAsks: Map<String, String> = emptyMap(),
+    /** What the line of a call says of the request to move it to the background, by its tool use id. */
+    val backgrounding: Map<String, BackgroundOffer> = emptyMap(),
+    /** The one `get_task_output` request not answered yet: its id and the task's. Each request replaces it. */
+    val outputAsk: Pair<String, String>? = null,
+    /** The last `get_task_output` answer (or refusal) that could be read; it is of the task it names. */
+    val output: TaskOutputRecord? = null,
+    /** How many CLIs were launched: a task id belongs to the one it was read on. */
+    val launches: Int = 0,
+    /** The CLI process ended and no new one was launched: nothing can be asked of it. */
+    val processEnded: Boolean = false,
+    /** The ids of the `reload_plugins` requests not answered yet. */
+    val reloadWaiting: List<String> = emptyList(),
+    /** The plugins the CLI last listed (`system/init`, or the answer to a reload); null before the first. */
+    val plugins: PluginsRecord? = null,
+    /** Why the last reload did not happen; null before one, after one that did, and after a launch. */
+    val reloadFailure: ReloadFailure? = null,
+    /** The CLI said in `system/init` that it refuses a reload when the session is busy. */
+    val refuseIfBusy: Boolean = false,
 )
 
 /** The prompt cache as of the `result` the host saw at [lastAtMs]: it lives [ttlMs] from then. */
@@ -265,6 +310,7 @@ private const val BYPASS_MODE = "bypassPermissions"
 private const val AUTO_MODE = "auto"
 private const val SANDBOX_ON = "true"
 
+@Suppress("CyclomaticComplexMethod") // one branch per kind of request
 internal fun OperationRecords.control(input: PresenterInput.ControlRequested): OperationRecords {
     if (knows(input.requestId)) return this
     return when (input.kind) {
@@ -281,6 +327,12 @@ internal fun OperationRecords.control(input: PresenterInput.ControlRequested): O
             withSwitch(SwitchRecord(input.requestId, seq + 1, SwitchKind.EFFORT, input.value.orEmpty()))
         ControlKind.SANDBOX ->
             withSwitch(SwitchRecord(input.requestId, seq + 1, SwitchKind.SANDBOX, input.value.orEmpty()))
+        ControlKind.RENAME -> renameAsked(input)
+        ControlKind.PERMISSION_RULES -> copy(rulesWaiting = (rulesWaiting + input.requestId).takeLast(MAX_WAITING))
+        ControlKind.CANCEL_QUEUED -> cancelAsked(input)
+        ControlKind.RELOAD_PLUGINS -> copy(reloadWaiting = (reloadWaiting + input.requestId).takeLast(MAX_WAITING))
+        ControlKind.BACKGROUND -> backgroundAsked(input)
+        ControlKind.TASK_OUTPUT -> taskOutputAsked(input)
     }
 }
 
@@ -329,6 +381,23 @@ internal fun OperationRecords.launched(input: PresenterInput.Launched): Operatio
         mcpWaiting = emptyList(),
         settingsWaiting = emptyList(),
         usageWaiting = emptyList(),
+        renameAsks = emptyMap(),
+        renameFailure = null,
+        rulesWaiting = emptyList(),
+        rulesFailure = null,
+        cancelAsks = emptyMap(),
+        backgroundAsks = emptyMap(),
+        backgrounding = emptyMap(),
+        outputAsk = null,
+        output = null,
+        launches = launches + 1,
+        processEnded = false,
+        reloadWaiting = emptyList(),
+        reloadFailure = null,
+        // The new CLI says it in its own init.
+        refuseIfBusy = false,
+        // A withdrawal that was waiting is no longer asked of anyone; a message withdrawn stays withdrawn.
+        cancels = cancels.filterValues { it.phase == CancelPhase.CANCELLED },
     )
 }
 
@@ -392,6 +461,12 @@ internal fun OperationRecords.sendFailed(requestId: String): OperationRecords =
     rewindSendFailed(requestId) ?: when {
         requestId in waiting -> copy(waiting = waiting - requestId)
         requestId in usageWaiting -> copy(usageWaiting = usageWaiting - requestId)
+        requestId in renameAsks -> copy(renameAsks = renameAsks - requestId)
+        requestId in rulesWaiting -> copy(rulesWaiting = rulesWaiting - requestId)
+        requestId in reloadWaiting -> copy(reloadWaiting = reloadWaiting - requestId)
+        requestId in cancelAsks -> cancelSendFailed(requestId)
+        requestId in backgroundAsks -> backgroundSendFailed(requestId)
+        requestId == outputAsk?.first -> copy(outputAsk = null)
         // A sandbox check that could not be asked waits for the next settings request.
         requestId in settingsWaiting ->
             copy(
@@ -409,7 +484,13 @@ private fun OperationRecords.knows(requestId: String): Boolean =
         requestId in waiting ||
         requestId in mcpWaiting ||
         requestId in settingsWaiting ||
-        requestId in usageWaiting
+        requestId in usageWaiting ||
+        requestId in renameAsks ||
+        requestId in rulesWaiting ||
+        requestId in reloadWaiting ||
+        requestId in cancelAsks ||
+        requestId in backgroundAsks ||
+        requestId == outputAsk?.first
 
 /**
  * The CLI's answer to [event]'s request. An id nobody asked with, or an answer to a settled one, changes nothing.
@@ -423,7 +504,9 @@ internal fun OperationRecords.answered(event: AgentEvent.ControlResponse): Opera
         id in waiting -> {
             val body = (JsonRead.parse(event.response.text) as? JsonObject)?.obj("response")
             val read = if (succeeded) body?.let(::contextOf) else null
-            copy(waiting = waiting - id, context = read ?: context)
+            // The summary form carries no rows: the last whole answer's stay, under the new totals.
+            val kept = read?.takeIf { it.categories.isEmpty() }?.copy(categories = context?.categories.orEmpty())
+            copy(waiting = waiting - id, context = kept ?: read ?: context)
         }
         id in mcpWaiting -> mcpAnswered(id, event)
         id in usageWaiting -> {
@@ -431,6 +514,12 @@ internal fun OperationRecords.answered(event: AgentEvent.ControlResponse): Opera
             copy(usageWaiting = usageWaiting - id, usage = body?.let(::usageOf) ?: usage)
         }
         id in settingsWaiting -> settingsAnswered(id, event)
+        id in renameAsks -> renameAnswered(id, event)
+        id in rulesWaiting -> rulesAnswered(id, event)
+        id in reloadWaiting -> reloadAnswered(id, event)
+        id in cancelAsks -> cancelAnswered(id, event)
+        id in backgroundAsks -> backgroundAnswered(id, event)
+        id == outputAsk?.first -> taskOutputAnswered(event)
         succeeded -> switchApplied(id)
         else ->
             ended(id) {
@@ -438,6 +527,30 @@ internal fun OperationRecords.answered(event: AgentEvent.ControlResponse): Opera
             }
     }
 }
+
+/**
+ * The answer to a `list_permission_rules` request: a success that reads is the rules, and clears the last refusal; a
+ * refusal is kept with the CLI's sentence and leaves the rules. An answer that does not read changes neither.
+ */
+private fun OperationRecords.rulesAnswered(
+    id: String,
+    event: AgentEvent.ControlResponse,
+): OperationRecords {
+    val settled = copy(rulesWaiting = rulesWaiting - id)
+    if (event.subtype != "success") return settled.copy(rulesFailure = plainSentenceOf(event.error))
+    val read = (JsonRead.parse(event.response.text) as? JsonObject)?.obj("response")?.let(::permissionRulesOf)
+    return if (read == null) settled else settled.copy(rules = read, rulesFailure = null)
+}
+
+/** The conversation the breakdown was counted for is over (a clear or a compaction): its rows are no longer true. */
+internal fun OperationRecords.contextReset(): OperationRecords =
+    if (context == null ||
+        context.categories.isEmpty()
+    ) {
+        this
+    } else {
+        copy(context = context.copy(categories = emptyList()))
+    }
 
 /** The CLI took the switch [id]. A switch already over, or one nobody asked for, changes nothing. */
 private fun OperationRecords.switchApplied(id: String): OperationRecords {
